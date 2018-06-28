@@ -129,3 +129,6 @@ data/ssd_dataloader.py
 
 # ssd.pytorch master branch (for merging)
 ssd.pytorch/
+
+# some datasets
+data/VOCdevkit/

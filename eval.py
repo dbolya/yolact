@@ -69,7 +69,7 @@ else:
 annopath = os.path.join(args.voc_root, 'VOC2007', 'Annotations', '%s.xml')
 imgpath = os.path.join(args.voc_root, 'VOC2007', 'JPEGImages', '%s.jpg')
 imgsetpath = os.path.join(args.voc_root, 'VOC2007', 'ImageSets',
-                          'Main', '{:s}.txt')
+                          'Main', '%s.txt')
 YEAR = '2007'
 devkit_path = args.voc_root + 'VOC' + YEAR
 dataset_mean = (104, 117, 123)
@@ -171,7 +171,7 @@ def do_python_eval(output_dir='output', use_07=True):
     for i, cls in enumerate(labelmap):
         filename = get_voc_results_file_template(set_type, cls)
         rec, prec, ap = voc_eval(
-           filename, annopath, imgsetpath.format(set_type), cls, cachedir,
+           filename, annopath, imgsetpath % set_type, cls, cachedir,
            ovthresh=0.5, use_07_metric=use_07_metric)
         aps += [ap]
         print('AP for {} = {:.4f}'.format(cls, ap))
@@ -390,7 +390,7 @@ def test_net(save_folder, net, cuda, dataset, transform, top_k,
             dets = detections[0, j, :]
             mask = dets[:, 0].gt(0.).expand(5, dets.size(0)).t()
             dets = torch.masked_select(dets, mask).view(-1, 5)
-            if dets.dim() == 0:
+            if dets.size(0) == 0:
                 continue
             boxes = dets[:, 1:]
             boxes[:, 0] *= w
@@ -408,6 +408,10 @@ def test_net(save_folder, net, cuda, dataset, transform, top_k,
 
     with open(det_file, 'wb') as f:
         pickle.dump(all_boxes, f, pickle.HIGHEST_PROTOCOL)
+
+    # Uncomment this to resume if it crashed after this point
+    # with open(det_file, 'rb') as f:
+    #     all_boxes = pickle.load(f)
 
     print('Evaluating detections')
     evaluate_detections(all_boxes, output_dir, dataset)
