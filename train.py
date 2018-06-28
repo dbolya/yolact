@@ -6,6 +6,7 @@ import os
 import sys
 import time
 import math
+from pathlib import Path
 import torch
 from torch.autograd import Variable
 import torch.nn as nn
@@ -150,8 +151,9 @@ def train():
                                   pin_memory=True)
     
     
-    save_path = lambda epoch, iteration: args.save_folder + 'ssd300_' + args.dataset + '_' + repr(epoch) + '_' + repr(iteration) + '.pth'
+    save_path = lambda epoch, iteration: args.save_folder + 'ssd300_' + args.dataset + '_' + str(epoch) + '_' + str(iteration) + '.pth'
     
+    print()
     # try-except so you can use ctrl+c to save early and stop training
     try:
         for epoch in range(num_epochs):
@@ -169,10 +171,10 @@ def train():
 
                 if args.cuda:
                     images = Variable(images.cuda())
-                    targets = [Variable(ann.cuda(), volatile=True) for ann in targets]
+                    targets = [Variable(ann.cuda()) for ann in targets]
                 else:
                     images = Variable(images)
-                    targets = [Variable(ann, volatile=True) for ann in targets]
+                    targets = [Variable(ann) for ann in targets]
                 # forward
                 t0 = time.time()
                 out = net(images)
@@ -183,12 +185,12 @@ def train():
                 loss.backward()
                 optimizer.step()
                 t1 = time.time()
-                loc_loss += loss_l.data[0]
-                conf_loss += loss_c.data[0]
+                loc_loss += loss_l.item()
+                conf_loss += loss_c.item()
 
                 if iteration % 10 == 0:
                     print('timer: %.4f sec.' % (t1 - t0))
-                    print('epoch ' + repr(epoch) + ' || iter ' + repr(iteration) + ' || Loss: %.4f ||' % (loss.data[0]), end=' ')
+                    print('epoch ' + repr(epoch) + ' || iter ' + repr(iteration) + ' || Loss: %.4f ||' % (loss.item()), end=' ')
 
                 if args.visdom:
                     update_vis_plot(iteration, loss_l.data[0], loss_c.data[0],
@@ -198,6 +200,7 @@ def train():
 
             if epoch % 10 == 0 and epoch != 0:
                 print('Saving state, iter:', iteration)
+                torch.save(ssd_net.state_dict(), save_path(epoch, iteration))
                 
 
             if args.visdom:
@@ -208,7 +211,12 @@ def train():
                     conf_loss = 0
     except KeyboardInterrupt:
         print('Stopping early. Saving network...')
-        torch.save(ssd_net.state_dict(), save_path(epoch, iteration))
+        
+        # Delete previous copy of the interrupted network so we don't spam the weights folder
+        for p in Path(args.save_folder).glob('*_interrupt.pth'):
+            p.unlink()
+        
+        torch.save(ssd_net.state_dict(), save_path(epoch, repr(iteration) + '_interrupt'))
         exit()
 
     torch.save(ssd_net.state_dict(), save_path(epoch, iteration))
@@ -226,7 +234,7 @@ def adjust_learning_rate(optimizer, gamma, step):
 
 
 def xavier(param):
-    init.xavier_uniform(param)
+    init.xavier_uniform_(param)
 
 
 def weights_init(m):
