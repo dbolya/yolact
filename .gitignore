@@ -132,3 +132,5 @@ ssd.pytorch/
 
 # some datasets
 data/VOCdevkit/
+data/coco/images/
+data/coco/annotations/

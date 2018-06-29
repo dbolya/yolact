@@ -8,7 +8,7 @@ import torchvision.transforms as transforms
 import cv2
 import numpy as np
 
-COCO_ROOT = osp.join('.', 'data/')
+COCO_ROOT = osp.join('.', 'data/coco/')
 IMAGES = 'images'
 ANNOTATIONS = 'annotations'
 COCO_API = 'PythonAPI'
@@ -121,10 +121,11 @@ class COCODetection(data.Dataset):
         target = self.coco.imgToAnns[img_id]
         ann_ids = self.coco.getAnnIds(imgIds=img_id)
 
+        # Target has {'segmentation', 'area', iscrowd', 'image_id', 'bbox', 'category_id'}
         target = self.coco.loadAnns(ann_ids)
         path = osp.join(self.root, self.coco.loadImgs(img_id)[0]['file_name'])
         assert osp.exists(path), 'Image path does not exist: {}'.format(path)
-        img = cv2.imread(osp.join(self.root, path))
+        img = cv2.imread(path)
         height, width, _ = img.shape
         if self.target_transform is not None:
             target = self.target_transform(target, width, height)
