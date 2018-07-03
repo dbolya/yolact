@@ -100,11 +100,11 @@ class COCODetection(data.Dataset):
         Args:
             index (int): Index
         Returns:
-            tuple: Tuple (image, target).
+            tuple: Tuple (image, (target, masks)).
                    target is the object returned by ``coco.loadAnns``.
         """
-        im, gt, h, w = self.pull_item(index)
-        return im, gt
+        im, gt, masks, h, w = self.pull_item(index)
+        return im, (gt, masks)
 
     def __len__(self):
         return len(self.ids)
@@ -114,7 +114,7 @@ class COCODetection(data.Dataset):
         Args:
             index (int): Index
         Returns:
-            tuple: Tuple (image, target, height, width).
+            tuple: Tuple (image, target, masks, height, width).
                    target is the object returned by ``coco.loadAnns``.
         """
         img_id = self.ids[index]
@@ -127,17 +127,24 @@ class COCODetection(data.Dataset):
         assert osp.exists(path), 'Image path does not exist: {}'.format(path)
         img = cv2.imread(path)
         height, width, _ = img.shape
+        
+        # Pool all the masks for this image into one [num_objects,height,width] matrix
+        masks = [self.coco.annToMask(obj).reshape(-1) for obj in target]
+        masks = np.vstack(masks)
+        masks = masks.reshape(-1, height, width)
+
         if self.target_transform is not None:
             target = self.target_transform(target, width, height)
         if self.transform is not None:
             target = np.array(target)
-            img, boxes, labels = self.transform(img, target[:, :4],
-                                                target[:, 4])
+            img, masks, boxes, labels = self.transform(img, masks, target[:, :4],
+                                                       target[:, 4])
             # to rgb
             img = img[:, :, (2, 1, 0)]
 
             target = np.hstack((boxes, np.expand_dims(labels, axis=1)))
-        return torch.from_numpy(img).permute(2, 0, 1), target, height, width
+
+        return torch.from_numpy(img).permute(2, 0, 1), target, masks, height, width
 
     def pull_image(self, index):
         '''Returns the original image object at index in PIL form

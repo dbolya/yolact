@@ -167,21 +167,24 @@ def train():
                     adjust_learning_rate(optimizer, args.gamma, step_index)
 
                 # load train data
-                images, targets = datum
+                images, targets_tuple = datum
+                targets, masks = targets_tuple
 
                 if args.cuda:
                     images = Variable(images.cuda())
                     targets = [Variable(ann.cuda()) for ann in targets]
+                    masks = [Variable(mask.cuda()) for mask in masks]
                 else:
                     images = Variable(images)
                     targets = [Variable(ann) for ann in targets]
+                    masks = [Variable(mask) for mask in masks]
                 # forward
                 t0 = time.time()
                 out = net(images)
                 # backprop
                 optimizer.zero_grad()
-                loss_l, loss_c = criterion(out, targets)
-                loss = loss_l + loss_c
+                loss_l, loss_c, loss_m = criterion(out, targets, masks)
+                loss = loss_l + loss_c + loss_m
                 loss.backward()
                 optimizer.step()
                 t1 = time.time()
@@ -190,7 +193,8 @@ def train():
 
                 if iteration % 10 == 0:
                     print('timer: %.4f sec.' % (t1 - t0))
-                    print('epoch ' + repr(epoch) + ' || iter ' + repr(iteration) + ' || Loss: %.4f ||' % (loss.item()), end=' ')
+                    print('epoch ' + repr(epoch) + ' || iter ' + repr(iteration) + ' || Loss: %.4f || Mask Loss: %.4f'
+                            % (loss.item(), loss_m.item()), end=' ')
 
                 if args.visdom:
                     update_vis_plot(iteration, loss_l.data[0], loss_c.data[0],

@@ -68,7 +68,7 @@ def jaccard(box_a, box_b):
     return inter / union  # [A,B]
 
 
-def match(threshold, truths, priors, variances, labels, loc_t, conf_t, idx):
+def match(threshold, truths, priors, variances, labels, loc_t, conf_t, idx_t, idx):
     """Match each prior box with the ground truth box of the highest jaccard
     overlap, encode the bounding boxes, then return the matched indices
     corresponding to both confidence and location preds.
@@ -81,6 +81,7 @@ def match(threshold, truths, priors, variances, labels, loc_t, conf_t, idx):
         labels: (tensor) All the class labels for the image, Shape: [num_obj].
         loc_t: (tensor) Tensor to be filled w/ endcoded location targets.
         conf_t: (tensor) Tensor to be filled w/ matched indices for conf preds.
+        idx_t: (tensor) Tensor to be filled w/ the index of the matched gt box for each prior.
         idx: (int) current batch index
     Return:
         The matched indices corresponding to 1)location and 2)confidence preds.
@@ -110,6 +111,7 @@ def match(threshold, truths, priors, variances, labels, loc_t, conf_t, idx):
     loc = encode(matches, priors, variances)
     loc_t[idx] = loc    # [num_priors,4] encoded offsets to learn
     conf_t[idx] = conf  # [num_priors] top class label for each prior
+    idx_t[idx] = best_truth_idx # [num_priors] indices for lookup
 
 
 def encode(matched, priors, variances):

@@ -11,20 +11,22 @@ def detection_collate(batch):
     number of associated object annotations (bounding boxes).
 
     Arguments:
-        batch: (tuple) A tuple of tensor images and lists of annotations
+        batch: (tuple) A tuple of tensor images and (lists of annotations, masks)
 
     Return:
         A tuple containing:
             1) (tensor) batch of images stacked on their 0 dim
-            2) (list of tensors) annotations for a given image are stacked on
-                                 0 dim
+            2) (list<tensor>, list<tensor>) annotations for a given image are stacked
+                on 0 dim. The output gt is a tuple of annotations and masks.
     """
     targets = []
     imgs = []
+    masks = []
     for sample in batch:
         imgs.append(sample[0])
-        targets.append(torch.FloatTensor(sample[1]))
-    return torch.stack(imgs, 0), targets
+        targets.append(torch.FloatTensor(sample[1][0]))
+        masks.append(torch.FloatTensor(sample[1][1]))
+    return torch.stack(imgs, 0), (targets, masks)
 
 
 def base_transform(image, size, mean):

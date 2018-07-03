@@ -24,6 +24,7 @@ voc = {
     'variance': [0.1, 0.2],
     'clip': True,
     'name': 'VOC',
+    'mask_size': 16,
 }
 
 coco = {
@@ -39,4 +40,5 @@ coco = {
     'variance': [0.1, 0.2],
     'clip': True,
     'name': 'COCO',
+    'mask_size': 16,
 }
