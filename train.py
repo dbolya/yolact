@@ -198,7 +198,7 @@ def train():
                 
                 iteration += 1
 
-            if epoch % 10 == 0 and epoch != 0:
+            if iteration % 5000 == 0 and iteration != 0:
                 print('Saving state, iter:', iteration)
                 torch.save(ssd_net.state_dict(), save_path(epoch, iteration))
                 
