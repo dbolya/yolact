@@ -61,8 +61,8 @@ rm ../images/val2014.zip
 rm ./annotations_trainval2014.zip
 
 # Download annotations json
-echo "Downloading trainval35k annotations from S3"
-curl -LO https://s3.amazonaws.com/amdegroot-datasets/instances_trainval35k.json.zip
+# echo "Downloading trainval35k annotations from S3"
+# curl -LO https://s3.amazonaws.com/amdegroot-datasets/instances_trainval35k.json.zip
 
 # combine train and val 
 echo "Combining train and val images"
