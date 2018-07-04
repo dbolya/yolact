@@ -53,14 +53,12 @@ unzip ../images/train2014.zip -d ../images
 echo "Extracting val images ..."
 unzip ../images/val2014.zip -d ../images
 echo "Extracting annotations ..."
-unzip ./annotations_trainval2014.zip
+unzip ./annotations_trainval2014.zip -d ..
 
 echo "Removing zip files ..."
 rm ../images/train2014.zip
 rm ../images/val2014.zip
 rm ./annotations_trainval2014.zip
-
-echo "Creating trainval35k dataset..."
 
 # Download annotations json
 echo "Downloading trainval35k annotations from S3"
