@@ -130,7 +130,7 @@ def train():
     # loss counters
     loc_loss = 0
     conf_loss = 0
-    iteration = 0
+    iteration = args.start_iter
     print('Loading the dataset...')
 
     epoch_size = len(dataset) // args.batch_size
@@ -160,7 +160,16 @@ def train():
     # try-except so you can use ctrl+c to save early and stop training
     try:
         for epoch in range(num_epochs):
-            for datum in data_loader:    
+            # Resume from start_iter
+            if (epoch+1)*epoch_size < iteration:
+                continue
+
+            
+            for datum in data_loader:
+                # Stop if we've reached an epoch if we're resuming from start_iter
+                if iteration == (epoch+1)*epoch_size:
+                    break
+
                 # Stop at the configured number of iterations even if mid-epoch
                 if iteration == cfg['max_iter']:
                     break
@@ -194,7 +203,8 @@ def train():
                 loc_loss += loss_l.item()
                 conf_loss += loss_c.item()
 
-                time_avg.add(t1 - t0)
+                if iteration != args.start_iter:
+                    time_avg.add(t1 - t0)
 
                 if iteration % 10 == 0:
                     print('timer: %.4f sec.' % (t1 - t0))
@@ -208,9 +218,9 @@ def train():
                 
                 iteration += 1
 
-            if iteration % 5000 == 0 and iteration != 0:
-                print('Saving state, iter:', iteration)
-                torch.save(ssd_net.state_dict(), save_path(epoch, iteration))
+                if iteration % 5000 == 0 and iteration != args.start_iter:
+                    print('Saving state, iter:', iteration)
+                    torch.save(ssd_net.state_dict(), save_path(epoch, iteration))
                 
 
             if args.visdom:
