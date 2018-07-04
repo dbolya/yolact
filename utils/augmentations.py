@@ -4,6 +4,7 @@ import cv2
 import numpy as np
 import types
 from numpy import random
+from data import coco as cfg
 
 
 def intersect(box_a, box_b):
@@ -422,6 +423,35 @@ class PhotometricDistort(object):
         im, masks, boxes, labels = distort(im, masks, boxes, labels)
         return self.rand_light_noise(im, masks, boxes, labels)
 
+class PrepareMasks(object):
+    def __init__(self, mask_size):
+        self.mask_size = mask_size
+
+    def __call__(self, image, masks, boxes, labels=None):
+        height, width, _ = image.shape
+
+        new_masks = np.zeros((masks.shape[0], self.mask_size ** 2))
+
+        for i in range(len(masks)):
+            x1, y1, x2, y2 = boxes[i, :].astype(np.int32)
+            
+            x1 *= width
+            x2 *= width
+            y1 *= height
+            y2 *= height
+
+            # +1 So that if y1=10.6 and y2=10.9 we still have a bounding box
+            cropped_mask = masks[i, y1:(y2+1), x1:(x2+1)]
+            scaled_mask = cv2.resize(cropped_mask, (self.mask_size, self.mask_size))
+
+            new_masks[i, :] = scaled_mask.reshape(1, -1)
+        
+        # Binarize
+        new_masks[new_masks >  0.5] = 1
+        new_masks[new_masks <= 0.5] = 0
+
+        return image, new_masks, boxes, labels
+
 
 class SSDAugmentation(object):
     def __init__(self, size=300, mean=(104, 117, 123)):
@@ -436,6 +466,7 @@ class SSDAugmentation(object):
             RandomMirror(),
             ToPercentCoords(),
             Resize(self.size),
+            PrepareMasks(cfg['mask_size']),
             SubtractMeans(self.mean)
         ])
 
