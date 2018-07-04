@@ -16,6 +16,7 @@ import torch.nn.init as init
 import torch.utils.data as data
 import numpy as np
 import argparse
+import datetime
 
 
 def str2bool(v):
@@ -153,6 +154,14 @@ def train():
     
     save_path = lambda epoch, iteration: args.save_folder + 'ssd300_' + args.dataset + '_' + str(epoch) + '_' + str(iteration) + '.pth'
     
+    avg_window = []
+
+    get_avg_time = lambda: sum(avg_window) / max(len(avg_window), 1)
+    def push_time(t):
+        avg_window.append(t)
+        if len(avg_window) > 100:
+            avg_window.pop(0)
+
     print()
     # try-except so you can use ctrl+c to save early and stop training
     try:
@@ -191,10 +200,12 @@ def train():
                 loc_loss += loss_l.item()
                 conf_loss += loss_c.item()
 
+                push_time(t1-t0)
+
                 if iteration % 10 == 0:
                     print('timer: %.4f sec.' % (t1 - t0))
-                    print('epoch ' + repr(epoch) + ' || iter ' + repr(iteration) + ' || Loss: %.4f || Mask Loss: %.4f'
-                            % (loss.item(), loss_m.item()), end=' ')
+                    print('epoch ' + repr(epoch) + ' || iter ' + repr(iteration) + ' || Loss: %.4f || Mask Loss: %.4f || ETA: %s ||'
+                            % (loss.item(), loss_m.item(), datetime.timedelta(seconds=(cfg['max_iter']-iteration)*get_avg_time())), end=' ')
 
                 if args.visdom:
                     update_vis_plot(iteration, loss_l.data[0], loss_c.data[0],
