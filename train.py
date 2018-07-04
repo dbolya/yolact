@@ -55,6 +55,8 @@ parser.add_argument('--visdom', default=False, type=str2bool,
                     help='Use visdom for loss visualization')
 parser.add_argument('--save_folder', default='weights/',
                     help='Directory for saving checkpoint models')
+parser.add_argument('--model_name', default='ssd300',
+                    help='The name of the model used for saving checkpoints')
 args = parser.parse_args()
 
 
@@ -82,6 +84,7 @@ def train():
             args.dataset_root = COCO_ROOT
         cfg = coco
         dataset = COCODetection(root=args.dataset_root,
+                                image_set='train2014',
                                 transform=SSDAugmentation(cfg['min_dim'],
                                                           MEANS))
     elif args.dataset == 'VOC':
@@ -153,7 +156,7 @@ def train():
                                   pin_memory=True)
     
     
-    save_path = lambda epoch, iteration: args.save_folder + 'ssd300_' + args.dataset + '_' + str(epoch) + '_' + str(iteration) + '.pth'
+    save_path = lambda epoch, iteration: args.save_folder + args.model_name + '_' + args.dataset + '_' + str(epoch) + '_' + str(iteration) + '.pth'
     time_avg = MovingAverage()
 
     print()
