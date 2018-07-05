@@ -433,12 +433,12 @@ class PrepareMasks(object):
         new_masks = np.zeros((masks.shape[0], self.mask_size ** 2))
 
         for i in range(len(masks)):
-            x1, y1, x2, y2 = boxes[i, :].astype(np.int32)
-            
+            x1, y1, x2, y2 = boxes[i, :]
             x1 *= width
             x2 *= width
             y1 *= height
             y2 *= height
+            x1, y1, x2, y2 = (int(x1), int(y1), int(x2), int(y2))
 
             # +1 So that if y1=10.6 and y2=10.9 we still have a bounding box
             cropped_mask = masks[i, y1:(y2+1), x1:(x2+1)]
