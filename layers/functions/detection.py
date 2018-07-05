@@ -1,14 +1,14 @@
 import torch
 from torch.autograd import Function
 from ..box_utils import decode, nms
-from data import voc as cfg
+from data import coco as cfg
 
 
 class Detect(Function):
     """At test time, Detect is the final layer of SSD.  Decode location preds,
     apply non-maximum suppression to location predictions based on conf
     scores and threshold to a top_k number of output predictions for both
-    confidence score and locations.
+    confidence score and locations, as the predicted masks.
     """
     def __init__(self, num_classes, bkg_label, top_k, conf_thresh, nms_thresh):
         self.num_classes = num_classes
@@ -21,19 +21,24 @@ class Detect(Function):
         self.conf_thresh = conf_thresh
         self.variance = cfg['variance']
 
-    def forward(self, loc_data, conf_data, prior_data):
+    def forward(self, loc_data, conf_data, mask_data, prior_data):
         """
         Args:
-            loc_data: (tensor) Loc preds from loc layers
-                Shape: [batch,num_priors*4]
+             loc_data: (tensor) Loc preds from loc layers
+                Shape: [batch, num_priors, 4]
             conf_data: (tensor) Shape: Conf preds from conf layers
-                Shape: [batch*num_priors,num_classes]
+                Shape: [batch, num_priors, num_classes]
+            mask_data: (tens0r) Mask preds from mask layers
+                Shape: [batch, num_priors, mask_size**2]
             prior_data: (tensor) Prior boxes and variances from priorbox layers
-                Shape: [1,num_priors,4]
+                Shape: [num_priors, 4]
+        
+        Returns:
+            output of shape (batch_size, num_classes, top_k, 1 + 4 + mask_size**2)
         """
         num = loc_data.size(0)  # batch size
         num_priors = prior_data.size(0)
-        output = torch.zeros(num, self.num_classes, self.top_k, 5)
+        output = torch.zeros(num, self.num_classes, self.top_k, 5 + mask_data.size(2))
         conf_preds = conf_data.view(num, num_priors,
                                     self.num_classes).transpose(2, 1)
 
@@ -50,11 +55,12 @@ class Detect(Function):
                     continue
                 l_mask = c_mask.unsqueeze(1).expand_as(decoded_boxes)
                 boxes = decoded_boxes[l_mask].view(-1, 4)
+                masks = mask_data[i, l_mask[:, 0], :]
                 # idx of highest scoring and non-overlapping boxes per class
                 ids, count = nms(boxes, scores, self.nms_thresh, self.top_k)
+                ids = ids[:count]
                 output[i, cl, :count] = \
-                    torch.cat((scores[ids[:count]].unsqueeze(1),
-                               boxes[ids[:count]]), 1)
+                    torch.cat((scores[ids].unsqueeze(1), boxes[ids], masks[ids]), 1)
         flt = output.contiguous().view(num, -1, 5)
         _, idx = flt[:, :, 0].sort(1, descending=True)
         _, rank = idx.sort(1)

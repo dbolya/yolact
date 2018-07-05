@@ -63,9 +63,10 @@ class SSD(nn.Module):
 
             train:
                 list of concat outputs from:
-                    1: confidence layers, Shape: [batch*num_priors,num_classes]
-                    2: localization layers, Shape: [batch,num_priors*4]
-                    3: priorbox layers, Shape: [2,num_priors*4]
+                    1: confidence layers, Shape: [batch,num_priors,num_classes]
+                    2: localization layers, Shape: [batch,num_priors,4]
+                    3: mask layers, Shape: [batch,num_priors,mask_size**2]
+                    4: priorbox layers, Shape: [2,num_priors*4]
         """
         sources = list()
         loc = list()
@@ -103,16 +104,17 @@ class SSD(nn.Module):
 
         if self.phase == "test":
             output = self.detect(
-                loc.view(loc.size(0), -1, 4),                   # loc preds
+                loc.view(loc.size(0), -1, 4),                     # loc preds
                 self.softmax(conf.view(conf.size(0), -1,
-                             self.num_classes)),                # conf preds
-                self.priors.type(type(x.data))                  # default boxes
+                             self.num_classes)),                  # conf preds
+                mask.view(mask.size(0), -1, self.cfg['mask_size']**2), # mask preds
+                self.priors.type(type(x.data))                    # default boxes
             )
         else:
             output = (
                 loc.view(loc.size(0), -1, 4),
                 conf.view(conf.size(0), -1, self.num_classes),
-                mask.view(mask.size(0), -1, coco['mask_size']**2),
+                mask.view(mask.size(0), -1, self.cfg['mask_size']**2),
                 self.priors
             )
         return output
