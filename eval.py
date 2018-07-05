@@ -9,8 +9,9 @@ import torch
 import torch.nn as nn
 import torch.backends.cudnn as cudnn
 from torch.autograd import Variable
-from data import VOC_ROOT, VOCAnnotationTransform, VOCDetection, BaseTransform
+from data import VOC_ROOT, VOCAnnotationTransform, VOCDetection
 from data import VOC_CLASSES as labelmap
+from utils.augmentations import BaseTransform
 import torch.utils.data as data
 
 from ssd import build_ssd

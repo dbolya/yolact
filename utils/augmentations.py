@@ -452,8 +452,24 @@ class PrepareMasks(object):
 
         return image, new_masks, boxes, labels
 
+class BaseTransform(object):
+    """ Transorm to be used when evaluating. """
+
+    def __init__(self, size, mean):
+        self.augment = Compose([
+            ConvertFromInts(),
+            Resize(size),
+            PrepareMasks(cfg['mask_size']),
+            SubtractMeans(mean)
+        ])
+
+    def __call__(self, img, masks=None, boxes=None, labels=None):
+        return self.augment(img, masks, boxes, labels)
+
 
 class SSDAugmentation(object):
+    """ Transform to be used when training. """
+
     def __init__(self, size=300, mean=(104, 117, 123)):
         self.mean = mean
         self.size = size
