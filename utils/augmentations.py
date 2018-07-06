@@ -463,7 +463,7 @@ class BaseTransform(object):
         self.augment = Compose([
             ConvertFromInts(),
             Resize(size),
-            PrepareMasks(cfg['mask_size']),
+            PrepareMasks(cfg['mask_size'], cfg['use_gt_bboxes']),
             SubtractMeans(mean)
         ])
 

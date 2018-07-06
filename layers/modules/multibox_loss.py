@@ -157,14 +157,14 @@ class MultiBoxLoss(nn.Module):
                 pos_masks = cur_masks[pos_lookup, :, :]
                 
                 # Convert bboxes to absolute coordinates
-                num_objs, img_height, img_width = pos_masks.size()
+                num_pos, img_height, img_width = pos_masks.size()
                 pos_bboxes[:, [0,2]] *= img_width
                 pos_bboxes[:, [1,3]] *= img_height
 
                 # Crop each gt mask with the predicted bbox and rescale to the predicted mask size
                 # Note that each bounding box crop is a different size so I don't think we can vectorize this
                 scaled_masks = []
-                for jdx in range(num_objs):
+                for jdx in range(num_pos):
                     x1, x2 = (pos_bboxes[jdx, 0].long(), pos_bboxes[jdx, 2].long())
                     y1, y2 = (pos_bboxes[jdx, 1].long(), pos_bboxes[jdx, 3].long())
                     
@@ -185,7 +185,7 @@ class MultiBoxLoss(nn.Module):
 
                 mask_t = torch.cat(scaled_masks, 0).gt(0.5).float() # Threshold downsampled mask
             
-            pos_mask_data = mask_data[idx, pos_lookup, :]
-            loss_m += F.binary_cross_entropy(pos_mask_data, mask_t, size_average=False) / num_objs
+            pos_mask_data = mask_data[idx, cur_pos_idx_squeezed, :]
+            loss_m += F.binary_cross_entropy(pos_mask_data, mask_t, size_average=True)
 
         return loss_m
