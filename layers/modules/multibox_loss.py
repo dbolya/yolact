@@ -167,8 +167,14 @@ class MultiBoxLoss(nn.Module):
                 for jdx in range(num_objs):
                     x1, x2 = (pos_bboxes[jdx, 0].long(), pos_bboxes[jdx, 2].long())
                     y1, y2 = (pos_bboxes[jdx, 1].long(), pos_bboxes[jdx, 3].long())
+                    
                     # The +1's are to take care of floating point values (e.g. y1=10.6 and y2=10.9)
-                    tmp_mask = pos_masks[jdx, y1:(y2+1), x1:(x2+1)]
+                    try:
+                        tmp_mask = pos_masks[jdx, y1:(y2+1), x1:(x2+1)]
+                    except RuntimeError:
+                        print(pos_masks.size())
+                        print(x1, y1, x2, y2)
+                        continue
 
                     # Restore any dimensions we've left out because our bbox was 1px wide
                     while tmp_mask.dim() < 2:
