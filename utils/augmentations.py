@@ -424,10 +424,14 @@ class PhotometricDistort(object):
         return self.rand_light_noise(im, masks, boxes, labels)
 
 class PrepareMasks(object):
-    def __init__(self, mask_size):
+    def __init__(self, mask_size, use_gt_bboxes):
         self.mask_size = mask_size
+        self.use_gt_bboxes = use_gt_bboxes
 
     def __call__(self, image, masks, boxes, labels=None):
+        if not self.use_gt_bboxes:
+            return image, masks, boxes, labels
+        
         height, width, _ = image.shape
 
         new_masks = np.zeros((masks.shape[0], self.mask_size ** 2))
@@ -482,7 +486,7 @@ class SSDAugmentation(object):
             RandomMirror(),
             ToPercentCoords(),
             Resize(self.size),
-            PrepareMasks(cfg['mask_size']),
+            PrepareMasks(cfg['mask_size'], cfg['use_gt_bboxes']),
             SubtractMeans(self.mean)
         ])
 

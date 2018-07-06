@@ -45,6 +45,7 @@ class MultiBoxLoss(nn.Module):
         self.neg_overlap = neg_overlap
         self.variance = cfg['variance']
         self.mask_size = cfg['mask_size']
+        self.use_gt_bboxes = cfg['use_gt_bboxes']
 
 
     def forward(self, predictions, targets, masks):
@@ -101,12 +102,15 @@ class MultiBoxLoss(nn.Module):
         loss_l = F.smooth_l1_loss(loc_p, loc_t, size_average=False)
 
         # Mask Loss
-        pos_masks = []
-        for idx in range(num):
-            pos_masks.append(masks[idx][idx_t[idx, pos[idx]]])
-        masks_t = torch.cat(pos_masks, 0)
-        masks_p = mask_data[pos, :].view(-1, self.mask_size**2)
-        loss_m = F.binary_cross_entropy(masks_p, masks_t, size_average=True)*100
+        if self.use_gt_bboxes:
+            pos_masks = []
+            for idx in range(num):
+                pos_masks.append(masks[idx][idx_t[idx, pos[idx]]])
+            masks_t = torch.cat(pos_masks, 0)
+            masks_p = mask_data[pos, :].view(-1, self.mask_size**2)
+            loss_m = F.binary_cross_entropy(masks_p, masks_t, size_average=True)*100
+        else:
+            loss_m = self.mask_loss(pos_idx, idx_t, loc_data, mask_data, priors, masks)
 
         # Compute max conf across batch for hard negative mining
         batch_conf = conf_data.view(-1, self.num_classes)
@@ -135,3 +139,47 @@ class MultiBoxLoss(nn.Module):
         loss_c /= N
         loss_m /= N
         return loss_l, loss_c, loss_m
+    
+    def mask_loss(self, pos_idx, idx_t, loc_data, mask_data, priors, masks):
+        """ Crops the gt masks using the predicted bboxes, scales them down, and outputs the BCE loss. """
+        loss_m = 0
+        for idx in range(mask_data.size(0)):
+            with torch.no_grad():
+                cur_pos_idx = pos_idx[idx, :, :]
+                cur_pos_idx_squeezed = cur_pos_idx[:, 1]
+
+                # Shape: [num_priors, 4], decoded predicted bboxes
+                pos_bboxes = decode(loc_data[idx, :, :], priors.data, self.variance)
+                pos_bboxes = pos_bboxes[cur_pos_idx].view(-1, 4).clamp(0, 1)
+                pos_lookup = idx_t[idx, cur_pos_idx_squeezed]
+
+                cur_masks = masks[idx]
+                pos_masks = cur_masks[pos_lookup, :, :]
+                
+                # Convert bboxes to absolute coordinates
+                num_objs, img_height, img_width = pos_masks.size()
+                pos_bboxes[:, [0,2]] *= img_width
+                pos_bboxes[:, [1,3]] *= img_height
+
+                # Crop each gt mask with the predicted bbox and rescale to the predicted mask size
+                # Note that each bounding box crop is a different size so I don't think we can vectorize this
+                scaled_masks = []
+                for jdx in range(num_objs):
+                    x1, x2 = (pos_bboxes[jdx, 0].long(), pos_bboxes[jdx, 2].long())
+                    y1, y2 = (pos_bboxes[jdx, 1].long(), pos_bboxes[jdx, 3].long())
+                    # The +1's are to take care of floating point values (e.g. y1=10.6 and y2=10.9)
+                    tmp_mask = pos_masks[jdx, y1:(y2+1), x1:(x2+1)]
+
+                    # Restore any dimensions we've left out because our bbox was 1px wide
+                    while tmp_mask.dim() < 2:
+                        tmp_mask = tmp_mask.unsqueeze(0)
+
+                    new_mask = F.adaptive_avg_pool2d(tmp_mask.unsqueeze(0), self.mask_size)
+                    scaled_masks.append(new_mask.view(1, -1))
+
+                mask_t = torch.cat(scaled_masks, 0).gt(0.5).float() # Threshold downsampled mask
+            
+            pos_mask_data = mask_data[idx, pos_lookup, :]
+            loss_m += F.binary_cross_entropy(pos_mask_data, mask_t, size_average=False) / num_objs
+
+        return loss_m

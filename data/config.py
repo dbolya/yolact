@@ -41,4 +41,5 @@ coco = {
     'clip': True,
     'name': 'COCO',
     'mask_size': 16,
+    'use_gt_bboxes': False,
 }
