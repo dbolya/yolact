@@ -186,6 +186,6 @@ class MultiBoxLoss(nn.Module):
                 mask_t = torch.cat(scaled_masks, 0).gt(0.5).float() # Threshold downsampled mask
             
             pos_mask_data = mask_data[idx, cur_pos_idx_squeezed, :]
-            loss_m += F.binary_cross_entropy(pos_mask_data, mask_t, size_average=True)
+            loss_m += F.binary_cross_entropy(pos_mask_data, mask_t, size_average=True)*100
 
         return loss_m
