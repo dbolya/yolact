@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import torch
+from utils import timer
 
 
 def point_form(boxes):
@@ -186,6 +187,7 @@ def nms(boxes, scores, overlap=0.5, top_k=200):
         The indices of the kept boxes with respect to num_priors.
     """
 
+    timer.start('NMS')
     keep = scores.new(scores.size(0)).zero_().long()
     if boxes.numel() == 0:
         return keep
@@ -238,4 +240,5 @@ def nms(boxes, scores, overlap=0.5, top_k=200):
         IoU = inter/union  # store result in iou
         # keep only elements with an IoU <= overlap
         idx = idx[IoU.le(overlap)]
+    timer.stop('NMS')
     return keep, count

@@ -5,6 +5,7 @@ from torch.autograd import Variable
 from layers import *
 from data import voc, coco
 import os
+from utils import timer
 
 
 class SSD(nn.Module):
@@ -73,6 +74,7 @@ class SSD(nn.Module):
         conf = list()
         mask = list()
 
+        timer.start('Forward Pass')
         # apply vgg up to conv4_3 relu
         for k in range(23):
             x = self.vgg[k](x)
@@ -101,6 +103,7 @@ class SSD(nn.Module):
         conf = torch.cat([o.view(o.size(0), -1) for o in conf], 1)
         mask = torch.cat([o.view(o.size(0), -1) for o in mask], 1)
         mask = F.sigmoid(mask)
+        timer.stop('Forward Pass')
 
         if self.phase == "test":
             output = self.detect(
