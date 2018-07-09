@@ -140,6 +140,23 @@ class MultiBoxLoss(nn.Module):
         loss_m /= N
         return loss_l, loss_c, loss_m
     
+    def sanitize_coordinates(self, _x1, _x2, img_size):
+        """
+        Sanitizes the input coordinates so that x1 < x2, x1 != x2, x1 >= 0, and x2 <= image_size.
+        Also converts from relative to absolute coordinates and casts the results to long tensors.
+        """
+        _x1 *= img_size
+        _x2 *= img_size
+        _x1 = _x1.long()
+        _x2 = _x2.long()
+        x1 = torch.min(_x1, _x2)
+        x2 = torch.max(_x1, _x2)
+        x1 = torch.clamp(x1-1, min=0)
+        x2 = torch.clamp(x2+1, max=img_size)
+
+        return x1, x2
+
+
     def mask_loss(self, pos_idx, idx_t, loc_data, mask_data, priors, masks):
         """ Crops the gt masks using the predicted bboxes, scales them down, and outputs the BCE loss. """
         loss_m = 0
@@ -158,23 +175,16 @@ class MultiBoxLoss(nn.Module):
                 
                 # Convert bboxes to absolute coordinates
                 num_pos, img_height, img_width = pos_masks.size()
-                pos_bboxes[:, [0,2]] *= img_width
-                pos_bboxes[:, [1,3]] *= img_height
+
+                # Take care of all the bad behavior that can be caused by out of bounds coordinates
+                x1, x2 = self.sanitize_coordinates(pos_bboxes[:, 0], pos_bboxes[:, 2], img_width)
+                y1, y2 = self.sanitize_coordinates(pos_bboxes[:, 1], pos_bboxes[:, 3], img_height)
 
                 # Crop each gt mask with the predicted bbox and rescale to the predicted mask size
                 # Note that each bounding box crop is a different size so I don't think we can vectorize this
                 scaled_masks = []
                 for jdx in range(num_pos):
-                    x1, x2 = (pos_bboxes[jdx, 0].long(), pos_bboxes[jdx, 2].long())
-                    y1, y2 = (pos_bboxes[jdx, 1].long(), pos_bboxes[jdx, 3].long())
-                    
-                    # The +1's are to take care of floating point values (e.g. y1=10.6 and y2=10.9)
-                    try:
-                        tmp_mask = pos_masks[jdx, y1:(y2+1), x1:(x2+1)]
-                    except RuntimeError:
-                        print(pos_masks.size())
-                        print(x1, y1, x2, y2)
-                        continue
+                    tmp_mask = pos_masks[jdx, y1[jdx]:y2[jdx], x1[jdx]:x2[jdx]]
 
                     # Restore any dimensions we've left out because our bbox was 1px wide
                     while tmp_mask.dim() < 2:
