@@ -2,6 +2,9 @@ from data import coco as cfg
 from data import COCO_ROOT, COCODetection, MEANS, COLORS, COCO_CLASSES
 from ssd import build_ssd
 from utils.augmentations import BaseTransform
+from utils.functions import MovingAverage
+from layers.box_utils import jaccard
+from utils import timer
 
 import numpy as np
 import torch
@@ -9,6 +12,8 @@ import torch.backends.cudnn as cudnn
 from torch.autograd import Variable
 import argparse
 import time
+import random
+import cProfile
 
 import matplotlib.pyplot as plt
 import cv2
@@ -29,6 +34,14 @@ parser.add_argument('--cuda', default=True, type=str2bool,
                     help='Use cuda to evaulate model')
 parser.add_argument('--coco_root', default=COCO_ROOT,
                     help='Location of VOC root directory')
+parser.add_argument('--cross_class_nms', default=True, type=str2bool,
+                    help='Whether to use cross-class nms (faster) or do nms per class')
+parser.add_argument('--display_masks', default=True, type=str2bool,
+                    help='Whether or not to display masks over bounding boxes')
+parser.add_argument('--display_bboxes', default=True, type=str2bool,
+                    help='Whether or not to display bboxes around masks')
+parser.add_argument('--display_gt_bboxes', default=False, type=str2bool,
+                    help='Whether or not to display thin lines representing gt bboxes in addition to the predicted ones.')
 
 args = parser.parse_args()
 
@@ -67,47 +80,67 @@ def overlay_image_alpha(img, img_overlay, pos, alpha_mask):
                                 alpha_inv * img[y1:y2, x1:x2, c])
 
 def evaluate(net, dataset):
+    frame_times = MovingAverage()
+    first_time = True
+
     try:
-        for i in range(len(dataset)):
+        dataset_indices = list(range(len(dataset)))
+        # random.shuffle(dataset_indices)
+        for i, it in zip(dataset_indices, list(range(len(dataset)))):
+            timer.reset()
+
+            # timer.start('Loading Data')
             img, gt, gt_masks, h, w = dataset.pull_item(i)
+            # timer.stop('Loading Data')
+            
+            gt_bboxes = torch.FloatTensor(gt[:, :4]).cpu()
+            gt_bboxes[:, 0] *= w
+            gt_bboxes[:, 2] *= w
+            gt_bboxes[:, 1] *= h
+            gt_bboxes[:, 3] *= h
+
             img_numpy = cv2.resize((img.permute(1, 2, 0).cpu().numpy() / 255.0 + np.array(MEANS) / 255.0).astype(np.float32), (w, h))
+            img_numpy = np.clip(img_numpy, 0, 1)
 
             batch = Variable(img.unsqueeze(0))
             if args.cuda:
                 batch = batch.cuda()
 
-            time_start = time.time()
             preds = net(batch).data
 
+            timer.start('Postprocessing')
             all_boxes = []
+            dets = preds[0, :]
 
-            for j in range(1, preds.size(1)):
-                dets = preds[0, j, :]
-                mask = dets[:, 0].gt(0.0).expand(preds.size(3), dets.size(0)).t()
-                dets = torch.masked_select(dets, mask).view(-1, preds.size(3))
-                if dets.size(0) == 0:
-                    continue
+            classes = dets[:, 0]
+            boxes = dets[:, 2:6]
+            boxes[:, [0, 2]] *= w
+            boxes[:, [1, 3]] *= h
+            scores = list(dets[:, 1].cpu().numpy())
+            masks = dets[:, 6:].cpu().numpy()
 
-                boxes = dets[:, 1:5]
-                boxes[:, 0] *= w
-                boxes[:, 2] *= w
-                boxes[:, 1] *= h
-                boxes[:, 3] *= h
-                scores = dets[:, 0].cpu().numpy()
-                masks = dets[:, 5:].cpu().numpy()
-            
-                for k in range(boxes.size(0)):
-                    x1, y1, x2, y2 = boxes[k].cpu().numpy().astype(np.int32)
-                    all_boxes.append({
-                        'score': float(scores[k]),
-                        'p1': (x1, y1),
-                        'p2': (x2, y2),
-                        'class': COCO_CLASSES[j-1],
-                        'mask': masks[k, :].reshape(cfg['mask_size'], cfg['mask_size'])
-                    })
+            score_idx = list(range(len(scores)))
+            score_idx.sort(key=lambda x: -scores[x])
+        
+            for k in score_idx[:args.top_k]:
+                x1, y1, x2, y2 = boxes[k].cpu().numpy().astype(np.int32)
+                
+                box_test = boxes[k].cpu().view([-1, 4])
+                match_idx = torch.max(jaccard(box_test, gt_bboxes), 1)[1].item()
+                    
+                all_boxes.append({
+                    'score': float(scores[k]),
+                    'p1': (x1, y1),
+                    'p2': (x2, y2),
+                    'class': COCO_CLASSES[classes[k].long().item()],
+                    'mask': masks[k, :].reshape(cfg['mask_size'], cfg['mask_size']),
+                    'b1': (gt_bboxes[match_idx, 0], gt_bboxes[match_idx, 1]),
+                    'b2': (gt_bboxes[match_idx, 2], gt_bboxes[match_idx, 3])
+                })
 
-            all_boxes.sort(key=lambda x: -x['score'])
-            
+            timer.stop('Postprocessing')
+
+            # timer.start('Drawing Image')
             for j in reversed(range(args.top_k)):
                 box_obj = all_boxes[j]
                 p1, p2 = (box_obj['p1'], box_obj['p2'])
@@ -115,16 +148,30 @@ def evaluate(net, dataset):
                 text_pt = (p1[0], p2[1] - 5)
                 color = COLORS[j % len(COLORS)]
 
-                mask = cv2.resize(box_obj['mask'], (mask_w, mask_h), interpolation=cv2.INTER_NEAREST)
-                mask_alpha = (mask > np.average(mask)).astype(np.float32) * 0.005
+                mask = cv2.resize(box_obj['mask'], (mask_w, mask_h), interpolation=cv2.INTER_LINEAR)
+                mask_alpha = (mask > np.average(mask)).astype(np.float32) * 0.0015
                 color_np = np.array(color[:3]).reshape(1, 1, 3)
                 mask_overlay = np.tile(color_np, (mask.shape[0], mask.shape[1], 1))
                 
-                cv2.rectangle(img_numpy, p1, p2, color, 2)
-                overlay_image_alpha(img_numpy, mask_overlay, p1, mask_alpha)
+                if args.display_bboxes:
+                    cv2.rectangle(img_numpy, p1, p2, color, 2)
+                
+                if args.display_gt_bboxes:
+                    cv2.rectangle(img_numpy, box_obj['b1'], box_obj['b2'], color, 1)
+
+                if args.display_masks:
+                    overlay_image_alpha(img_numpy, mask_overlay, p1, mask_alpha)
+                
                 cv2.putText(img_numpy, box_obj['class'], text_pt, cv2.FONT_HERSHEY_PLAIN, 1.5, color, 2, cv2.LINE_AA)
+            # timer.stop('Drawing Image')
             
-            plt.imshow(img_numpy)
+            timer.print_stats()
+            
+            if it > 1:
+                frame_times.add(timer.total_time())
+                print('Avg FPS: %.4f' % (1 / frame_times.get_avg()))
+            
+            plt.imshow(np.clip(img_numpy, 0, 1))
             plt.show()
     except KeyboardInterrupt:
         print('Stopping...')
@@ -147,6 +194,8 @@ if __name__ == '__main__':
         torch.set_default_tensor_type('torch.cuda.FloatTensor')
     else:
         torch.set_default_tensor_type('torch.FloatTensor')
+    
+    net.detect.cross_class_nms = args.cross_class_nms
 
     evaluate(net, dataset)
 

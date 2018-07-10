@@ -175,7 +175,7 @@ def log_sum_exp(x):
 # Original author: Francisco Massa:
 # https://github.com/fmassa/object-detection.torch
 # Ported to PyTorch by Max deGroot (02/01/2017)
-def nms(boxes, scores, overlap=0.5, top_k=200):
+def nms(boxes, scores, overlap=0.5, top_k=200, force_cpu=True):
     """Apply non-maximum suppression at test time to avoid detecting too many
     overlapping bounding boxes for a given object.
     Args:
@@ -186,6 +186,12 @@ def nms(boxes, scores, overlap=0.5, top_k=200):
     Return:
         The indices of the kept boxes with respect to num_priors.
     """
+
+    cuda_enabled = boxes.is_cuda
+
+    if force_cpu:
+        boxes = boxes.cpu()
+        scores = scores.cpu()
 
     timer.start('NMS')
     keep = scores.new(scores.size(0)).zero_().long()
@@ -240,5 +246,9 @@ def nms(boxes, scores, overlap=0.5, top_k=200):
         IoU = inter/union  # store result in iou
         # keep only elements with an IoU <= overlap
         idx = idx[IoU.le(overlap)]
+        
+    if cuda_enabled:
+        keep = keep.cuda()
+
     timer.stop('NMS')
     return keep, count
