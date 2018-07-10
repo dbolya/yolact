@@ -23,7 +23,7 @@ def start(fn_name):
 def stop(fn_name):
 	""" Stop timing the specific function and add it to the total. """
 	if _start_times[fn_name] > -1:
-		_total_times[fn_name] = time.time() - _start_times[fn_name]
+		_total_times[fn_name] += time.time() - _start_times[fn_name]
 	else:
 		print('Warning: timer for %s stopped before starting!' % fn_name)
 
