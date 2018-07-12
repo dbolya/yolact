@@ -222,6 +222,9 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w):
         mask_w = x2 - x1
         mask_h = y2 - y1
 
+        if mask_w * mask_h == 0:
+            continue
+
         pred_mask = masks[i, :].reshape(cfg['mask_size'], cfg['mask_size'], 1)
         local_mask = cv2.resize(pred_mask, (mask_w, mask_h), interpolation=cv2.INTER_LINEAR)
         local_mask = (local_mask > np.average(local_mask)).astype(np.float32)
@@ -383,7 +386,8 @@ def evaluate(net, dataset):
                 else: fps = 0
                 progress = (it+1) / dataset_size * 100
                 progress_bar.set_val(it+1)
-                print('Processing Images  %s %6d / %6d (%5.2f%%)    %5.2f fps' % (repr(progress_bar), it+1, dataset_size, progress, fps), end='\r')
+                print('Processing Images  %s %6d / %6d (%5.2f%%)    %5.2f fps        '
+                    % (repr(progress_bar), it+1, dataset_size, progress, fps), end='\r')
                 # timer.print_stats()
 
         if not args.display:
