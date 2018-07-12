@@ -222,13 +222,13 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w):
         mask_w = x2 - x1
         mask_h = y2 - y1
 
-        if mask_w * mask_h == 0:
+        try:
+            pred_mask = masks[i, :].reshape(cfg['mask_size'], cfg['mask_size'], 1)
+            local_mask = cv2.resize(pred_mask, (mask_w, mask_h), interpolation=cv2.INTER_LINEAR)
+            local_mask = (local_mask > np.average(local_mask)).astype(np.float32)
+            full_masks[i, y1:y2, x1:x2] = torch.Tensor(local_mask)
+        except cv2.error:
             continue
-
-        pred_mask = masks[i, :].reshape(cfg['mask_size'], cfg['mask_size'], 1)
-        local_mask = cv2.resize(pred_mask, (mask_w, mask_h), interpolation=cv2.INTER_LINEAR)
-        local_mask = (local_mask > np.average(local_mask)).astype(np.float32)
-        full_masks[i, y1:y2, x1:x2] = torch.Tensor(local_mask)
 
     masks = full_masks.view(-1, h*w)
     timer.stop('Scale masks')
