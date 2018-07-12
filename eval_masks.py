@@ -60,6 +60,8 @@ parser.add_argument('--ap_data_file', default='ap_data.pkl', type=str,
                     help='In quantitative mode, the file to save detections before calculating mAP.')
 parser.add_argument('--resume', dest='resume', action='store_true')
 parser.set_defaults(resume=False)
+parser.add_argument('--max_images', default=-1, type=int,
+                    help='The maximum number of images from the dataset to consider. Use -1 for all.')
 
 args = parser.parse_args()
 
@@ -324,7 +326,7 @@ class APDataObject:
 
 def evaluate(net, dataset):
     frame_times = MovingAverage()
-    dataset_size = 100 # len(dataset)
+    dataset_size = len(dataset) if args.max_images < 0 else args.max_images
 
     try:
         if not args.display:
