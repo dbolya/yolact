@@ -54,16 +54,17 @@ parser.add_argument('--display_scores', default=False, type=str2bool,
                     help='Whether or not to display scores in addition to classes')
 parser.add_argument('--display', dest='display', action='store_true',
                     help='Display qualitative results instead of quantitative ones.')
-parser.set_defaults(display=False)
 parser.add_argument('--shuffle', default=False, type=str2bool,
                     help='Shuffles the images when displaying them. Doesn\'t have much of an effect when display is off though.')
 parser.add_argument('--ap_data_file', default='ap_data.pkl', type=str,
                     help='In quantitative mode, the file to save detections before calculating mAP.')
 parser.add_argument('--resume', dest='resume', action='store_true',
-                    help='If display is off, this resumes mAP calculations from the ap_data_file.')
-parser.set_defaults(resume=False)
+                    help='If display not set, this resumes mAP calculations from the ap_data_file.')
 parser.add_argument('--max_images', default=-1, type=int,
                     help='The maximum number of images from the dataset to consider. Use -1 for all.')
+
+parser.set_defaults(display=False)
+parser.set_defaults(resume=False)
 
 args = parser.parse_args()
 
