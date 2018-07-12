@@ -103,22 +103,24 @@ class ToPercentCoords(object):
 
 
 class Resize(object):
-    def __init__(self, size=300):
+    def __init__(self, size=300, resize_masks=True):
         self.size = size
+        self.resize_masks = resize_masks
 
     def __call__(self, image, masks, boxes=None, labels=None):
         image = cv2.resize(image, (self.size,
                                  self.size))
         
-        # Act like each object is a color channel
-        masks = masks.transpose((1, 2, 0))
-        masks = cv2.resize(masks, (self.size, self.size))
-        
-        # OpenCV resizes a (w,h,1) array to (s,s), so fix that
-        if len(masks.shape) == 2:
-            masks = np.expand_dims(masks, 0)
-        else:
-            masks = masks.transpose((2, 0, 1))
+        if self.resize_masks:
+            # Act like each object is a color channel
+            masks = masks.transpose((1, 2, 0))
+            masks = cv2.resize(masks, (self.size, self.size))
+            
+            # OpenCV resizes a (w,h,1) array to (s,s), so fix that
+            if len(masks.shape) == 2:
+                masks = np.expand_dims(masks, 0)
+            else:
+                masks = masks.transpose((2, 0, 1))
 
 
         return image, masks, boxes, labels
@@ -462,8 +464,8 @@ class BaseTransform(object):
     def __init__(self, size, mean):
         self.augment = Compose([
             ConvertFromInts(),
-            Resize(size),
-            PrepareMasks(cfg['mask_size'], cfg['use_gt_bboxes']),
+            Resize(size, resize_masks=False),
+            # PrepareMasks(cfg['mask_size'], cfg['use_gt_bboxes']),
             SubtractMeans(mean)
         ])
 
