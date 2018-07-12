@@ -52,13 +52,15 @@ parser.add_argument('--display_gt_bboxes', default=False, type=str2bool,
                     help='Whether or not to display thin lines representing gt bboxes in addition to the predicted ones')
 parser.add_argument('--display_scores', default=False, type=str2bool,
                     help='Whether or not to display scores in addition to classes')
-parser.add_argument('--display', default=False, type=str2bool,
-                    help='Whether or not to display the qualitative results')
+parser.add_argument('--display', dest='display', action='store_true',
+                    help='Display qualitative results instead of quantitative ones.')
+parser.set_defaults(display=False)
 parser.add_argument('--shuffle', default=False, type=str2bool,
                     help='Shuffles the images when displaying them. Doesn\'t have much of an effect when display is off though.')
 parser.add_argument('--ap_data_file', default='ap_data.pkl', type=str,
                     help='In quantitative mode, the file to save detections before calculating mAP.')
-parser.add_argument('--resume', dest='resume', action='store_true')
+parser.add_argument('--resume', dest='resume', action='store_true',
+                    help='If display is off, this resumes mAP calculations from the ap_data_file.')
 parser.set_defaults(resume=False)
 parser.add_argument('--max_images', default=-1, type=int,
                     help='The maximum number of images from the dataset to consider. Use -1 for all.')
@@ -341,6 +343,8 @@ def evaluate(net, dataset):
             }
             progress_bar = ProgressBar(30, dataset_size)
             print()
+        else:
+            timer.disable('Load Data')
 
         dataset_indices = list(range(dataset_size))
         if args.shuffle:
@@ -349,9 +353,9 @@ def evaluate(net, dataset):
         for i, it in zip(dataset_indices, range(dataset_size)):
             timer.reset()
 
-            # timer.start('Load Data')
+            timer.start('Load Data')
             img, gt, gt_masks, h, w = dataset.pull_item(i)
-            # timer.stop('Load Data')
+            timer.stop('Load Data')
 
             batch = Variable(img.unsqueeze(0))
             if args.cuda:
