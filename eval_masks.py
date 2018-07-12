@@ -193,7 +193,6 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w):
     gt_boxes = torch.Tensor(gt[:, :4])
     gt_boxes[:, [0, 2]] *= w
     gt_boxes[:, [1, 3]] *= h
-    gt_boxes = gt_boxes.long()
     gt_classes = list(gt[:, 4].astype(int))
     gt_masks = torch.Tensor(gt_masks).view(-1, h*w)
     timer.stop('Prepare gt')
@@ -207,8 +206,8 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w):
     classes = list(dets[:, 0].cpu().numpy().astype(int))
     scores = list(dets[:, 1].cpu().numpy().astype(float))
     boxes = dets[:, 2:6]
-    x1, x2 = sanitize_coordinates(boxes[:, 0], boxes[:, 2], w)
-    y1, y2 = sanitize_coordinates(boxes[:, 1], boxes[:, 3], h)
+    x1, x2 = sanitize_coordinates(boxes[:, 0], boxes[:, 2], w, cast=False)
+    y1, y2 = sanitize_coordinates(boxes[:, 1], boxes[:, 3], h, cast=False)
     boxes = torch.stack((x1, y1, x2, y2), dim=1)
     masks = dets[:, 6:].cpu().numpy()
     full_masks = torch.zeros(masks.shape[0], h, w)
@@ -217,18 +216,19 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w):
     # Scale up the predicted masks to be comparable to the gt masks
     timer.start('Scale masks')
     for i in range(masks.shape[0]):
-        x1, y1, x2, y2 = boxes[i, :].cpu().numpy()
+        x1, y1, x2, y2 = boxes[i, :].cpu().numpy().astype(np.int32)
 
         mask_w = x2 - x1
         mask_h = y2 - y1
 
-        try:
-            pred_mask = masks[i, :].reshape(cfg['mask_size'], cfg['mask_size'], 1)
-            local_mask = cv2.resize(pred_mask, (mask_w, mask_h), interpolation=cv2.INTER_LINEAR)
-            local_mask = (local_mask > np.average(local_mask)).astype(np.float32)
-            full_masks[i, y1:y2, x1:x2] = torch.Tensor(local_mask)
-        except cv2.error:
+        # I don't know how this can happen (since they're sanitized to begin with), but it can
+        if mask_w * mask_h <= 0 or mask_w < 0:
             continue
+
+        pred_mask = masks[i, :].reshape(cfg['mask_size'], cfg['mask_size'], 1)
+        local_mask = cv2.resize(pred_mask, (mask_w, mask_h), interpolation=cv2.INTER_LINEAR)
+        local_mask = (local_mask > np.average(local_mask)).astype(np.float32)
+        full_masks[i, y1:y2, x1:x2] = torch.Tensor(local_mask)
 
     masks = full_masks.view(-1, h*w)
     timer.stop('Scale masks')
@@ -349,9 +349,9 @@ def evaluate(net, dataset):
         for i, it in zip(dataset_indices, range(dataset_size)):
             timer.reset()
 
-            timer.start('Load Data')
+            # timer.start('Load Data')
             img, gt, gt_masks, h, w = dataset.pull_item(i)
-            timer.stop('Load Data')
+            # timer.stop('Load Data')
 
             batch = Variable(img.unsqueeze(0))
             if args.cuda:
@@ -378,7 +378,8 @@ def evaluate(net, dataset):
                 frame_times.add(timer.total_time())
             
             if args.display:
-                print('Avg FPS: %.4f' % (1 / frame_times.get_avg()))
+                if it > 1:
+                    print('Avg FPS: %.4f' % (1 / frame_times.get_avg()))
                 plt.imshow(np.clip(img_numpy, 0, 1))
                 plt.show()
             else:
