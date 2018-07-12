@@ -16,6 +16,7 @@ import argparse
 import time
 import random
 import cProfile
+import pickle
 
 import matplotlib.pyplot as plt
 import cv2
@@ -55,6 +56,10 @@ parser.add_argument('--display', default=False, type=str2bool,
                     help='Whether or not to display the qualitative results')
 parser.add_argument('--shuffle', default=False, type=str2bool,
                     help='Shuffles the images when displaying them. Doesn\'t have much of an effect when display is off though.')
+parser.add_argument('--ap_data_file', default='ap_data.pkl', type=str,
+                    help='In quantitative mode, the file to save detections before calculating mAP.')
+parser.add_argument('--resume', dest='resume', action='store_true')
+parser.set_defaults(resume=False)
 
 args = parser.parse_args()
 
@@ -183,9 +188,10 @@ def mask_iou(mask1, mask2):
 def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w):
     """ Returns a list of APs for this image, wich each element being for a class  """
     timer.start('Prepare gt')
-    gt_boxes = torch.Tensor(gt[:, :4]).long()
+    gt_boxes = torch.Tensor(gt[:, :4])
     gt_boxes[:, [0, 2]] *= w
     gt_boxes[:, [1, 3]] *= h
+    gt_boxes = gt_boxes.long()
     gt_classes = list(gt[:, 4].astype(int))
     gt_masks = torch.Tensor(gt_masks).view(-1, h*w)
     timer.stop('Prepare gt')
@@ -226,7 +232,7 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w):
     num_gt   = len(gt_classes)
 
     mask_iou_cache = mask_iou(masks, gt_masks)
-    bbox_iou_cache = jaccard(boxes, gt_boxes)
+    bbox_iou_cache = jaccard(boxes.float(), gt_boxes.float())
 
     iou_types = [
         ('box',  lambda i,j: bbox_iou_cache[i, j].item()),
@@ -296,6 +302,9 @@ class APDataObject:
         num_false = 0
         ap = 0
 
+        if self.num_gt_positives == 0:
+            return 0
+
         self.data_points.sort(key=lambda x: -x[0])
 
         for datum in self.data_points:
@@ -315,6 +324,7 @@ class APDataObject:
 
 def evaluate(net, dataset):
     frame_times = MovingAverage()
+    dataset_size = 100 # len(dataset)
 
     try:
         if not args.display:
@@ -324,14 +334,14 @@ def evaluate(net, dataset):
                 'box' : [[APDataObject() for _ in COCO_CLASSES] for _ in iou_thresholds],
                 'mask': [[APDataObject() for _ in COCO_CLASSES] for _ in iou_thresholds]
             }
-            progress_bar = ProgressBar(30, len(dataset))
+            progress_bar = ProgressBar(30, dataset_size)
             print()
 
-        dataset_indices = list(range(len(dataset)))
+        dataset_indices = list(range(dataset_size))
         if args.shuffle:
             random.shuffle(dataset_indices)
         
-        for i, it in zip(dataset_indices, range(len(dataset))):
+        for i, it in zip(dataset_indices, range(dataset_size)):
             timer.reset()
 
             timer.start('Load Data')
@@ -369,35 +379,47 @@ def evaluate(net, dataset):
             else:
                 if it > 1: fps = 1 / frame_times.get_avg()
                 else: fps = 0
-                progress = it / len(dataset) * 100
-                progress_bar.set_val(it)
-                print('%s %6d / %6d (%5.2f%%)    %5.2f fps' % (repr(progress_bar), it, len(dataset), progress, fps), end='\r')
+                progress = (it+1) / dataset_size * 100
+                progress_bar.set_val(it+1)
+                print('Processing Images  %s %6d / %6d (%5.2f%%)    %5.2f fps' % (repr(progress_bar), it+1, dataset_size, progress, fps), end='\r')
                 # timer.print_stats()
 
         if not args.display:
             print()
-            print('Calculating mAP...')
-            aps = {'box': [], 'mask': []}
+            print('Saving data...')
+            with open(args.ap_data_file, 'wb') as f:
+                pickle.dump(ap_data, f)
 
-            for _class in range(len(COCO_CLASSES)):
-                for iouIdx in range(len(iou_thresholds)):
-                    for iou_type in ('box', 'mask'):
-                        ap_obj = ap_data[iou_type][iouIdx][_class]
-
-                        if not ap_obj.is_empty():
-                            aps[iou_type].append(ap_obj.get_ap())
-
-            print()
-            print('BBox mAP: %.4f' % (sum(aps['box'])  / len(aps['box'])))
-            print('Mask mAP: %.4f' % (sum(aps['mask']) / len(aps['mask'])))
+            calc_map(ap_data)
 
     except KeyboardInterrupt:
         print('Stopping...')
 
+def calc_map(ap_data):
+    print('Calculating mAP...')
+    aps = {'box': [], 'mask': []}
+
+    for _class in range(len(COCO_CLASSES)):
+        for iouIdx in range(len(iou_thresholds)):
+            for iou_type in ('box', 'mask'):
+                ap_obj = ap_data[iou_type][iouIdx][_class]
+
+                if not ap_obj.is_empty():
+                    aps[iou_type].append(ap_obj.get_ap())
+
+    print('BBox mAP: %.4f' % (sum(aps['box'])  / len(aps['box'])))
+    print('Mask mAP: %.4f' % (sum(aps['mask']) / len(aps['mask'])))
 
 
 if __name__ == '__main__':
     
+    if args.resume and not args.display:   
+        if args.resume:
+            with open(args.ap_data_file, 'rb') as f:
+                ap_data = pickle.load(f)
+            calc_map(ap_data)
+            exit()
+
     print('Loading model...')
     net = build_ssd('test', 300, cfg['num_classes'])
     net.load_state_dict(torch.load(args.trained_model))
