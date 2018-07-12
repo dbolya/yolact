@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 from data import coco as cfg
 from ..box_utils import match, log_sum_exp, decode
+from utils.functions import sanitize_coordinates
 
 
 class MultiBoxLoss(nn.Module):
@@ -139,22 +140,6 @@ class MultiBoxLoss(nn.Module):
         loss_c /= N
         loss_m /= N
         return loss_l, loss_c, loss_m
-    
-    def sanitize_coordinates(self, _x1, _x2, img_size):
-        """
-        Sanitizes the input coordinates so that x1 < x2, x1 != x2, x1 >= 0, and x2 <= image_size.
-        Also converts from relative to absolute coordinates and casts the results to long tensors.
-        """
-        _x1 *= img_size
-        _x2 *= img_size
-        _x1 = _x1.long()
-        _x2 = _x2.long()
-        x1 = torch.min(_x1, _x2)
-        x2 = torch.max(_x1, _x2)
-        x1 = torch.clamp(x1-1, min=0)
-        x2 = torch.clamp(x2+1, max=img_size)
-
-        return x1, x2
 
 
     def mask_loss(self, pos_idx, idx_t, loc_data, mask_data, priors, masks):
@@ -177,8 +162,8 @@ class MultiBoxLoss(nn.Module):
                 num_pos, img_height, img_width = pos_masks.size()
 
                 # Take care of all the bad behavior that can be caused by out of bounds coordinates
-                x1, x2 = self.sanitize_coordinates(pos_bboxes[:, 0], pos_bboxes[:, 2], img_width)
-                y1, y2 = self.sanitize_coordinates(pos_bboxes[:, 1], pos_bboxes[:, 3], img_height)
+                x1, x2 = sanitize_coordinates(pos_bboxes[:, 0], pos_bboxes[:, 2], img_width)
+                y1, y2 = sanitize_coordinates(pos_bboxes[:, 1], pos_bboxes[:, 3], img_height)
 
                 # Crop each gt mask with the predicted bbox and rescale to the predicted mask size
                 # Note that each bounding box crop is a different size so I don't think we can vectorize this
