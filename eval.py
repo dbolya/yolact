@@ -6,7 +6,7 @@ from utils.functions import MovingAverage, ProgressBar
 from layers.box_utils import jaccard
 from utils import timer
 from utils.functions import sanitize_coordinates
-from pycocotools import cocoeval
+import pycocotools
 
 import numpy as np
 import torch
@@ -17,6 +17,8 @@ import time
 import random
 import cProfile
 import pickle
+import json
+import os
 
 import matplotlib.pyplot as plt
 import cv2
@@ -56,15 +58,20 @@ parser.add_argument('--display', dest='display', action='store_true',
                     help='Display qualitative results instead of quantitative ones.')
 parser.add_argument('--shuffle', default=False, type=str2bool,
                     help='Shuffles the images when displaying them. Doesn\'t have much of an effect when display is off though.')
-parser.add_argument('--ap_data_file', default='ap_data.pkl', type=str,
+parser.add_argument('--ap_data_file', default='results/ap_data.pkl', type=str,
                     help='In quantitative mode, the file to save detections before calculating mAP.')
 parser.add_argument('--resume', dest='resume', action='store_true',
                     help='If display not set, this resumes mAP calculations from the ap_data_file.')
 parser.add_argument('--max_images', default=-1, type=int,
                     help='The maximum number of images from the dataset to consider. Use -1 for all.')
+parser.add_argument('--output_coco_json', dest='output_coco_json', action='store_true',
+                    help='If display is not set, instead of processing IoU values, this just dumps detections into the coco json file.')
+parser.add_argument('--bbox_det_file', default='results/bbox_detections.json', type=str,
+                    help='The output file for coco bbox results if --coco_results is set.')
+parser.add_argument('--mask_det_file', default='results/mask_detections.json', type=str,
+                    help='The output file for coco mask results if --coco_results is set.')
 
-parser.set_defaults(display=False)
-parser.set_defaults(resume=False)
+parser.set_defaults(display=False, resume=False, output_coco_json=False)
 
 args = parser.parse_args()
 
@@ -177,6 +184,49 @@ def prep_display(dets, img, gt, gt_masks, h, w):
 
     return img_numpy
 
+class Detections:
+
+    def __init__(self):
+        self.bbox_data = []
+        self.mask_data = []
+
+    def add_bbox(self, image_id:int, category_id:int, bbox:list, score:float):
+        """ Note that bbox should be a list or tuple of (x1, y1, x2, y2) """
+        bbox = [bbox[0], bbox[1], bbox[2]-bbox[0], bbox[3]-bbox[1]]
+
+        # Round to the nearest 10th to avoid huge file sizes, as COCO suggests
+        bbox = [round(float(x)*10)/10 for x in bbox]
+
+        self.bbox_data.append({
+            'image_id': int(image_id),
+            'category_id': int(category_id),
+            'bbox': bbox,
+            'score': float(score)
+        })
+
+    def add_mask(self, image_id:int, category_id:int, segmentation:np.ndarray, score:float):
+        """ The segmentation should be the full mask, the size of the image and with size [h, w]. """
+        rle = pycocotools.mask.encode(np.asfortranarray(segmentation.astype(np.uint8)))
+        rle['counts'] = rle['counts'].decode('ascii') # json.dump doesn't like bytes strings
+
+        self.mask_data.append({
+            'image_id': int(image_id),
+            'category_id': int(category_id),
+            'segmentation': rle,
+            'score': float(score)
+        })
+    
+    def dump(self):
+        dump_arguments = [
+            (self.bbox_data, args.bbox_det_file),
+            (self.mask_data, args.mask_det_file)
+        ]
+
+        for data, path in dump_arguments:
+            with open(path, 'w') as f:
+                json.dump(data, f)
+        
+
 def mask_iou(mask1, mask2):
     """ Inputs inputs are matricies of size _ x N. Output is size _1 x _2."""
     timer.start('Mask IoU')
@@ -190,20 +240,21 @@ def mask_iou(mask1, mask2):
     timer.stop('Mask IoU')
     return ret.cpu()
 
-def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w):
+def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, image_id, detections:Detections=None):
     """ Returns a list of APs for this image, wich each element being for a class  """
-    timer.start('Prepare gt')
-    gt_boxes = torch.Tensor(gt[:, :4])
-    gt_boxes[:, [0, 2]] *= w
-    gt_boxes[:, [1, 3]] *= h
-    gt_classes = list(gt[:, 4].astype(int))
-    gt_masks = torch.Tensor(gt_masks).view(-1, h*w)
-    timer.stop('Prepare gt')
+    if not args.output_coco_json:
+        timer.start('Prepare gt')
+        gt_boxes = torch.Tensor(gt[:, :4])
+        gt_boxes[:, [0, 2]] *= w
+        gt_boxes[:, [1, 3]] *= h
+        gt_classes = list(gt[:, 4].astype(int))
+        gt_masks = torch.Tensor(gt_masks).view(-1, h*w)
+        timer.stop('Prepare gt')
 
-    timer.start('Sort')
-    _, sort_idx = dets[:, 1].sort(0, descending=True)
-    dets = dets[sort_idx, :]
-    timer.stop('Sort')
+        timer.start('Sort')
+        _, sort_idx = dets[:, 1].sort(0, descending=True)
+        dets = dets[sort_idx, :]
+        timer.stop('Sort')
 
     timer.start('Prepare pred')
     classes = list(dets[:, 0].cpu().numpy().astype(int))
@@ -235,6 +286,16 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w):
 
     masks = full_masks.view(-1, h*w)
     timer.stop('Scale masks')
+
+    if args.output_coco_json:
+        boxes = boxes.cpu().numpy()
+        masks = masks.view(-1, h, w).cpu().numpy()
+        for i in range(masks.shape[0]):
+            # Make sure that the bounding box actually makes sense and a mask was produced
+            if (boxes[i, 3] - boxes[i, 1]) * (boxes[i, 2] - boxes[i, 0]) > 0:
+                detections.add_bbox(image_id, classes[i], boxes[i,:],   scores[i])
+                detections.add_mask(image_id, classes[i], masks[i,:,:], scores[i])
+        return
     
     num_pred = len(classes)
     num_gt   = len(gt_classes)
@@ -343,6 +404,7 @@ def evaluate(net, dataset):
                 'mask': [[APDataObject() for _ in COCO_CLASSES] for _ in iou_thresholds]
             }
             progress_bar = ProgressBar(30, dataset_size)
+            detections = Detections()
             print()
         else:
             timer.disable('Load Data')
@@ -377,7 +439,7 @@ def evaluate(net, dataset):
             if args.display:
                 img_numpy = prep_display(dets, img, gt, gt_masks, h, w)
             else:
-                prep_metrics(ap_data, dets, img, gt, gt_masks, h, w)
+                prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, dataset.ids[i], detections)
             
             if it > 1:
                 frame_times.add(timer.total_time())
@@ -398,11 +460,15 @@ def evaluate(net, dataset):
 
         if not args.display:
             print()
-            print('Saving data...')
-            with open(args.ap_data_file, 'wb') as f:
-                pickle.dump(ap_data, f)
+            if args.output_coco_json:
+                print('Dumping detections...')
+                detections.dump()
+            else:
+                print('Saving data...')
+                with open(args.ap_data_file, 'wb') as f:
+                    pickle.dump(ap_data, f)
 
-            calc_map(ap_data)
+                calc_map(ap_data)
 
     except KeyboardInterrupt:
         print('Stopping...')
@@ -424,7 +490,10 @@ def calc_map(ap_data):
 
 
 if __name__ == '__main__':
-    
+
+    if not os.path.exists('results'):
+        os.makedirs('results')
+
     if args.resume and not args.display:   
         if args.resume:
             with open(args.ap_data_file, 'rb') as f:
