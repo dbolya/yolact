@@ -344,7 +344,8 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, image_id, detections:De
                     if classes[i] != _class:
                         continue
                     
-                    is_true = False
+                    max_iou_found = iou_threshold
+                    max_match_idx = -1
                     for j in range(num_gt):
                         if gt_used[j] or gt_classes[j] != _class:
                             continue
@@ -353,12 +354,15 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, image_id, detections:De
                         iou = iou_func(i, j)
                         timer.start('Main loop')
 
-                        if iou > iou_threshold:
-                            gt_used[j] = True
-                            is_true = True
-                            break
+                        if iou > max_iou_found:
+                            max_iou_found = iou
+                            max_match_idx = j
                     
-                    ap_obj.push(scores[i], is_true)
+                    if max_match_idx >= 0:
+                        gt_used[max_match_idx] = True
+                        ap_obj.push(scores[i], True)
+                    else:
+                        ap_obj.push(scores[i], False)
     timer.stop('Main loop')
 
 
@@ -431,11 +435,11 @@ def evaluate(net, dataset):
         if args.shuffle:
             random.shuffle(dataset_indices)
         
-        for i, it in zip(dataset_indices, range(dataset_size)):
+        for it, image_idx in enumerate(dataset_indices):
             timer.reset()
 
             timer.start('Load Data')
-            img, gt, gt_masks, h, w = dataset.pull_item(i)
+            img, gt, gt_masks, h, w = dataset.pull_item(image_idx)
             timer.stop('Load Data')
 
             batch = Variable(img.unsqueeze(0))
@@ -457,7 +461,7 @@ def evaluate(net, dataset):
             if args.display:
                 img_numpy = prep_display(dets, img, gt, gt_masks, h, w)
             else:
-                prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, dataset.ids[i], detections)
+                prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, dataset.ids[image_idx], detections)
             
             if it > 1:
                 frame_times.add(timer.total_time())
