@@ -76,6 +76,7 @@ parser.set_defaults(display=False, resume=False, output_coco_json=False)
 args = parser.parse_args()
 
 iou_thresholds = [x / 100 for x in range(50, 100, 5)]
+coco_cats = [] # Call prep_coco_cats to fill this
 
 def overlay_image_alpha(img, img_overlay, pos, alpha_mask):
     """
@@ -184,6 +185,23 @@ def prep_display(dets, img, gt, gt_masks, h, w):
 
     return img_numpy
 
+def prep_coco_cats(cats):
+    """ Prepare inverted table for category id lookup given a coco cats object. """
+    name_lookup = {}
+
+    for _id, cat_obj in cats.items():
+        name_lookup[cat_obj['name']] = _id
+
+    # Bit of a roundabout way to do this but whatever
+    for i in range(len(COCO_CLASSES)):
+        coco_cats.append(name_lookup[COCO_CLASSES[i]])
+
+
+def get_coco_cat(transformed_cat_id):
+    """ transformed_cat_id is [0,80) as indices in COCO_CLASSES """
+    return coco_cats[transformed_cat_id]
+
+
 class Detections:
 
     def __init__(self):
@@ -199,7 +217,7 @@ class Detections:
 
         self.bbox_data.append({
             'image_id': int(image_id),
-            'category_id': int(category_id),
+            'category_id': get_coco_cat(int(category_id)),
             'bbox': bbox,
             'score': float(score)
         })
@@ -211,7 +229,7 @@ class Detections:
 
         self.mask_data.append({
             'image_id': int(image_id),
-            'category_id': int(category_id),
+            'category_id': get_coco_cat(int(category_id)),
             'segmentation': rle,
             'score': float(score)
         })
@@ -491,6 +509,7 @@ def calc_map(ap_data):
 
 if __name__ == '__main__':
 
+
     if not os.path.exists('results'):
         os.makedirs('results')
 
@@ -508,6 +527,8 @@ if __name__ == '__main__':
 
     dataset = COCODetection(args.coco_root, 'val2014', 
                             BaseTransform(net.size, MEANS))
+    
+    prep_coco_cats(dataset.coco.cats)
 
     if args.cuda:
         net = net.cuda()
