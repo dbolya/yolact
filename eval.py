@@ -70,6 +70,8 @@ parser.add_argument('--bbox_det_file', default='results/bbox_detections.json', t
                     help='The output file for coco bbox results if --coco_results is set.')
 parser.add_argument('--mask_det_file', default='results/mask_detections.json', type=str,
                     help='The output file for coco mask results if --coco_results is set.')
+parser.add_argument('--max_num_detections', default=100, type=int,
+                    help='The maximum number of detections to consider for each image for mAP scoring. COCO uses 100.')
 
 parser.set_defaults(display=False, resume=False, output_coco_json=False)
 
@@ -269,12 +271,14 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, image_id, detections:De
         gt_masks = torch.Tensor(gt_masks).view(-1, h*w)
         timer.stop('Prepare gt')
 
-        timer.start('Sort')
-        _, sort_idx = dets[:, 1].sort(0, descending=True)
-        dets = dets[sort_idx, :]
-        timer.stop('Sort')
+    timer.start('Sort')
+    _, sort_idx = dets[:, 1].sort(0, descending=True)
+    dets = dets[sort_idx, :]
+    timer.stop('Sort')
 
     timer.start('Prepare pred')
+    if dets.size(0) > args.max_num_detections:
+        dets = dets[:args.max_num_detections]
     classes = list(dets[:, 0].cpu().numpy().astype(int))
     scores = list(dets[:, 1].cpu().numpy().astype(float))
     boxes = dets[:, 2:6]
@@ -384,10 +388,11 @@ class APDataObject:
         self.num_gt_positives += num_positives
 
     def is_empty(self) -> bool:
-        return len(self.data_points) == 0
+        return len(self.data_points) == 0 and self.num_gt_positives == 0
 
     def get_ap(self) -> float:
         """ Warning: result not cached. """
+        last_precision = 1
         last_recall = 0
         num_true  = 0
         num_false = 0
@@ -396,19 +401,48 @@ class APDataObject:
         if self.num_gt_positives == 0:
             return 0
 
+        # Sort descending by score
         self.data_points.sort(key=lambda x: -x[0])
 
+        precisions = []
+        recalls    = []
+
         for datum in self.data_points:
+            # datum[1] is whether the detection a true or false positive
             if datum[1]: num_true += 1
             else: num_false += 1
             
             precision = num_true / (num_true + num_false)
             recall = num_true / self.num_gt_positives
 
-            ap += precision * (recall - last_recall)
-            last_recall = recall
-        
-        return ap
+            # Use trapazoid rule for better integral accuracy
+            # ap += ((precision + last_precision) / 2) * (recall - last_recall)
+            precisions.append(precision)
+            recalls.append(recall)
+            
+            # last_precision = precision
+            # last_recall = recall
+
+        for i in range(len(precisions)-1, 0, -1):
+            if precisions[i] > precisions[i-1]:
+                precisions[i-1] = precisions[i]
+
+        integral_bars = [0] * 101 # idx 0 is recall == 0.0 and idx 100 is recall == 1.00
+        # bar_idx = 0 # bar_idx corresponds to a recall of bar_idx / 100
+
+        # for i in range(len(precisions)):
+        #     if recalls[i]*100 > bar_idx:
+        #         integral_bars[bar_idx] = precisions[i]
+        #         bar_idx += 1
+        test_range = np.array([x / 100 for x in range(101)])
+        recalls = np.array(recalls)
+        indices = np.searchsorted(recalls, test_range, side='left')
+
+        for bar_idx, precision_idx in enumerate(indices):
+            if precision_idx < len(precisions):
+                integral_bars[bar_idx] = precisions[precision_idx]
+
+        return sum(integral_bars) / len(integral_bars)
 
 
 
@@ -497,18 +531,34 @@ def evaluate(net, dataset):
 
 def calc_map(ap_data):
     print('Calculating mAP...')
-    aps = {'box': [], 'mask': []}
+    aps = [{'box': [], 'mask': []} for _ in iou_thresholds]
 
     for _class in range(len(COCO_CLASSES)):
-        for iouIdx in range(len(iou_thresholds)):
+        for iou_idx in range(len(iou_thresholds)):
             for iou_type in ('box', 'mask'):
-                ap_obj = ap_data[iou_type][iouIdx][_class]
+                ap_obj = ap_data[iou_type][iou_idx][_class]
 
                 if not ap_obj.is_empty():
-                    aps[iou_type].append(ap_obj.get_ap())
+                    aps[iou_idx][iou_type].append(ap_obj.get_ap())
 
-    print('BBox mAP: %.4f' % (sum(aps['box'])  / len(aps['box'])))
-    print('Mask mAP: %.4f' % (sum(aps['mask']) / len(aps['mask'])))
+    all_maps = {'box': [], 'mask': []}
+
+    for i, threshold in enumerate(iou_thresholds):
+        print('\nWith IoU Threshold %.2f:' % threshold)
+        
+        bbox_map = sum(aps[i]['box'])  / len(aps[i]['box'])
+        mask_map = sum(aps[i]['mask']) / len(aps[i]['mask'])
+        
+        print('BBox mAP: %.4f' % bbox_map)
+        print('Mask mAP: %.4f' % mask_map)
+
+        all_maps['box'].append(bbox_map)
+        all_maps['mask'].append(mask_map)
+    
+    print('\nTotal mAPs:')
+    print('BBox mAP: %.4f' % (sum(all_maps['box'])  / len(all_maps['box'])))
+    print('Mask mAP: %.4f' % (sum(all_maps['mask']) / len(all_maps['mask'])))
+
 
 
 if __name__ == '__main__':
