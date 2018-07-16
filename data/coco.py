@@ -7,6 +7,7 @@ import torch.utils.data as data
 import torchvision.transforms as transforms
 import cv2
 import numpy as np
+from pycocotools import mask as maskUtils
 
 COCO_ROOT = osp.join('.', 'data/coco/')
 IMAGES = 'images'
@@ -37,6 +38,21 @@ def get_label_map(label_file):
         label_map[int(ids[0])] = int(ids[1])
     return label_map
 
+def segm_to_RLE(segm, h, w):
+    """ Copied from coco.annToRLE, this is needed for parsing raw ann['segmentation'] objects. """
+    if type(segm) == list:
+        # polygon -- a single object might consist of multiple parts
+        # we merge all parts into one mask rle code
+        rles = maskUtils.frPyObjects(segm, h, w)
+        rle = maskUtils.merge(rles)
+    elif type(segm['counts']) == list:
+        # uncompressed RLE
+        rle = maskUtils.frPyObjects(segm, h, w)
+    else:
+        # rle
+        rle = ann['segmentation']
+    return rle
+
 
 class COCOAnnotationTransform(object):
     """Transforms a COCO annotation into a Tensor of bbox coords and label index
@@ -45,7 +61,7 @@ class COCOAnnotationTransform(object):
     def __init__(self):
         self.label_map = get_label_map(osp.join(COCO_ROOT, 'coco_labels.txt'))
 
-    def __call__(self, target, width, height):
+    def __call__(self, target, width, height, include_mask=False):
         """
         Args:
             target (dict): COCO target json annotation as a python dict
@@ -64,7 +80,10 @@ class COCOAnnotationTransform(object):
                 label_idx = self.label_map[obj['category_id']] - 1
                 final_box = list(np.array(bbox)/scale)
                 final_box.append(label_idx)
+                if include_mask:
+                    final_box.append(maskUtils.decode(segm_to_RLE(obj['segmentation'], height, width)))
                 res += [final_box]  # [xmin, ymin, xmax, ymax, label_idx]
+                # If include_mask [xmin, ymin, xmax, ymax, label_idx, np.array(h, w) mask]
             else:
                 print("no bbox problem!")
 
@@ -80,10 +99,11 @@ class COCODetection(data.Dataset):
                                         raw images`
         target_transform (callable, optional): A function/transform that takes
         in the target (bbox) and transforms it.
+        prep_crowds (bool): Whether or not to prepare crowds for the evaluation step.
     """
 
     def __init__(self, root, image_set='trainval35k', transform=None,
-                 target_transform=COCOAnnotationTransform(), dataset_name='MS COCO'):
+                 target_transform=COCOAnnotationTransform(), dataset_name='MS COCO', prep_crowds=False):
         sys.path.append(osp.join(root, COCO_API))
         from pycocotools.coco import COCO
         self.root = osp.join(root, IMAGES, image_set)
@@ -93,6 +113,7 @@ class COCODetection(data.Dataset):
         self.transform = transform
         self.target_transform = target_transform
         self.name = dataset_name
+        self.prep_crowds=prep_crowds
 
     def __getitem__(self, index):
         """
@@ -102,7 +123,7 @@ class COCODetection(data.Dataset):
             tuple: Tuple (image, (target, masks)).
                    target is the object returned by ``coco.loadAnns``.
         """
-        im, gt, masks, h, w = self.pull_item(index)
+        im, gt, masks, h, w, crowd = self.pull_item(index)
         return im, (gt, masks)
 
     def __len__(self):
@@ -113,8 +134,9 @@ class COCODetection(data.Dataset):
         Args:
             index (int): Index
         Returns:
-            tuple: Tuple (image, target, masks, height, width).
+            tuple: Tuple (image, target, masks, height, width, crowd).
                    target is the object returned by ``coco.loadAnns``.
+            Note that if no crowd annotations exist, crowd will be None
         """
         img_id = self.ids[index]
         target = self.coco.imgToAnns[img_id]
@@ -124,6 +146,10 @@ class COCODetection(data.Dataset):
         target = self.coco.loadAnns(ann_ids)
 
         # Filter out annotations with 'iscrowd'=True because they're not for this task
+        # But the way COCOEval is implemented, we need crowd annotations for evaluation
+        crowd = None
+        if self.prep_crowds:
+            crowd = [x for x in target if  ('iscrowd' in x and x['iscrowd'])]
         target = [x for x in target if not ('iscrowd' in x and x['iscrowd'])]
 
         path = osp.join(self.root, self.coco.loadImgs(img_id)[0]['file_name'])
@@ -138,6 +164,12 @@ class COCODetection(data.Dataset):
 
         if self.target_transform is not None:
             target = self.target_transform(target, width, height)
+            
+            if self.prep_crowds:
+                if len(crowd) > 0:
+                    crowd = self.target_transform(crowd, width, height, include_mask=True)
+                else: crowd = None
+
         if self.transform is not None:
             target = np.array(target)
             img, masks, boxes, labels = self.transform(img, masks, target[:, :4],
@@ -147,7 +179,7 @@ class COCODetection(data.Dataset):
 
             target = np.hstack((boxes, np.expand_dims(labels, axis=1)))
 
-        return torch.from_numpy(img).permute(2, 0, 1), target, masks, height, width
+        return torch.from_numpy(img).permute(2, 0, 1), target, masks, height, width, crowd
 
     def pull_image(self, index):
         '''Returns the original image object at index in PIL form

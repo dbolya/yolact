@@ -48,7 +48,7 @@ def intersect(box_a, box_b):
     return inter[:, :, 0] * inter[:, :, 1]
 
 
-def jaccard(box_a, box_b):
+def jaccard(box_a, box_b, iscrowd=False):
     """Compute the jaccard overlap of two sets of boxes.  The jaccard overlap
     is simply the intersection over union of two boxes.  Here we operate on
     ground truth boxes and default boxes.
@@ -66,7 +66,11 @@ def jaccard(box_a, box_b):
     area_b = ((box_b[:, 2]-box_b[:, 0]) *
               (box_b[:, 3]-box_b[:, 1])).unsqueeze(0).expand_as(inter)  # [A,B]
     union = area_a + area_b - inter
-    return inter / union  # [A,B]
+
+    if iscrowd:
+        return inter / area_a
+    else:
+        return inter / union  # [A,B]
 
 
 def match(threshold, truths, priors, variances, labels, loc_t, conf_t, idx_t, idx):

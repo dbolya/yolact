@@ -247,8 +247,11 @@ class Detections:
                 json.dump(data, f)
         
 
-def mask_iou(mask1, mask2):
-    """ Inputs inputs are matricies of size _ x N. Output is size _1 x _2."""
+def mask_iou(mask1, mask2, iscrowd=False):
+    """
+    Inputs inputs are matricies of size _ x N. Output is size _1 x _2.
+    Note: if iscrowd is True, then mask2 should be the crowd.
+    """
     timer.start('Mask IoU')
 
     intersection = torch.matmul(mask1, mask2.t())
@@ -256,11 +259,20 @@ def mask_iou(mask1, mask2):
     area2 = torch.sum(mask2, dim=1).view(1, -1)
     union = (area1.t() + area2) - intersection
 
-    ret = intersection / union
+    if iscrowd:
+        ret = intersection / area1.t()
+    else:
+        ret = intersection / union
     timer.stop('Mask IoU')
     return ret.cpu()
 
-def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, image_id, detections:Detections=None):
+def bbox_iou(bbox1, bbox2, iscrowd=False):
+    timer.start('BBox IoU')
+    ret = jaccard(bbox1, bbox2, iscrowd)
+    timer.stop('BBox IoU')
+    return ret.cpu()
+
+def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, crowd, image_id, detections:Detections=None):
     """ Returns a list of APs for this image, wich each element being for a class  """
     if not args.output_coco_json:
         timer.start('Prepare gt')
@@ -269,6 +281,12 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, image_id, detections:De
         gt_boxes[:, [1, 3]] *= h
         gt_classes = list(gt[:, 4].astype(int))
         gt_masks = torch.Tensor(gt_masks).view(-1, h*w)
+
+        if crowd is not None:
+            crowd_masks = torch.Tensor([x[5].reshape(-1) for x in crowd])
+            crowd_boxes = torch.Tensor([x[:4] for x in crowd])
+            crowd_classes = [int(x[4]) for x in crowd]
+
         timer.stop('Prepare gt')
 
     timer.start('Sort')
@@ -325,9 +343,16 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, image_id, detections:De
     mask_iou_cache = mask_iou(masks, gt_masks)
     bbox_iou_cache = jaccard(boxes.float(), gt_boxes.float())
 
+    if crowd is not None:
+        crowd_mask_iou_cache = mask_iou(masks, crowd_masks, iscrowd=True)
+        crowd_bbox_iou_cache = jaccard(boxes.float(), crowd_boxes.float(), iscrowd=True)
+    else:
+        crowd_mask_iou_cache = None
+        crowd_bbox_iou_cache = None
+
     iou_types = [
-        ('box',  lambda i,j: bbox_iou_cache[i, j].item()),
-        ('mask', lambda i,j: mask_iou_cache[i, j].item())
+        ('box',  lambda i,j: bbox_iou_cache[i, j].item(), lambda i,j: crowd_bbox_iou_cache[i,j].item()),
+        ('mask', lambda i,j: mask_iou_cache[i, j].item(), lambda i,j: crowd_mask_iou_cache[i,j].item())
     ]
 
     timer.start('Main loop')
@@ -338,7 +363,7 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, image_id, detections:De
         for iouIdx in range(len(iou_thresholds)):
             iou_threshold = iou_thresholds[iouIdx]
 
-            for iou_type, iou_func in iou_types:
+            for iou_type, iou_func, crowd_func in iou_types:
                 gt_used = [False] * len(gt_classes)
                 
                 ap_obj = ap_data[iou_type][iouIdx][_class]
@@ -366,7 +391,27 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, image_id, detections:De
                         gt_used[max_match_idx] = True
                         ap_obj.push(scores[i], True)
                     else:
-                        ap_obj.push(scores[i], False)
+                        # If the detection matches a crowd, we can just ignore it
+                        matched_crowd = False
+
+                        if crowd is not None:
+                            for j in range(len(crowd_classes)):
+                                if crowd_classes[j] != _class:
+                                    continue
+                                
+                                timer.stop('Main loop')
+                                iou = crowd_func(i, j)
+                                timer.start('Main loop')
+
+                                if iou > iou_threshold:
+                                    matched_crowd = True
+                                    break
+                        
+                        # All this crowd code so that we can make sure that our eval code gives the
+                        # same result as COCOEval. There aren't even that many crowd annotations to
+                        # begin with, but accuracy is of the utmost importance.
+                        if not matched_crowd:
+                            ap_obj.push(scores[i], False)
     timer.stop('Main loop')
 
 
@@ -473,7 +518,7 @@ def evaluate(net, dataset):
             timer.reset()
 
             timer.start('Load Data')
-            img, gt, gt_masks, h, w = dataset.pull_item(image_idx)
+            img, gt, gt_masks, h, w, crowd = dataset.pull_item(image_idx)
             timer.stop('Load Data')
 
             batch = Variable(img.unsqueeze(0))
@@ -495,7 +540,7 @@ def evaluate(net, dataset):
             if args.display:
                 img_numpy = prep_display(dets, img, gt, gt_masks, h, w)
             else:
-                prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, dataset.ids[image_idx], detections)
+                prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, crowd, dataset.ids[image_idx], detections)
             
             if it > 1:
                 frame_times.add(timer.total_time())
@@ -542,7 +587,7 @@ def calc_map(ap_data):
                     aps[iou_idx][iou_type].append(ap_obj.get_ap())
 
     all_maps = {'box': [], 'mask': []}
-
+    
     for i, threshold in enumerate(iou_thresholds):
         print('\nWith IoU Threshold %.2f:' % threshold)
         
@@ -575,14 +620,16 @@ if __name__ == '__main__':
             exit()
 
     dataset = COCODetection(args.coco_root, 'val2014', 
-                            BaseTransform(cfg['min_dim'], MEANS))
+                            BaseTransform(cfg['min_dim'], MEANS,),
+                            prep_crowds=True)
     
     prep_coco_cats(dataset.coco.cats)
 
-    print('Loading model...')
+    print('Loading model...', end='')
     net = build_ssd('test', cfg['min_dim'], cfg['num_classes'])
     net.load_state_dict(torch.load(args.trained_model))
     net.eval()
+    print(' Done.')
 
     if args.cuda:
         net = net.cuda()
