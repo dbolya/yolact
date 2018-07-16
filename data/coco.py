@@ -122,6 +122,10 @@ class COCODetection(data.Dataset):
 
         # Target has {'segmentation', 'area', iscrowd', 'image_id', 'bbox', 'category_id'}
         target = self.coco.loadAnns(ann_ids)
+
+        # Filter out annotations with 'iscrowd'=True because they're not for this task
+        target = [x for x in target if not ('iscrowd' in x and x['iscrowd'])]
+
         path = osp.join(self.root, self.coco.loadImgs(img_id)[0]['file_name'])
         assert osp.exists(path), 'Image path does not exist: {}'.format(path)
         img = cv2.imread(path)

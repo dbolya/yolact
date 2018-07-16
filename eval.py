@@ -574,15 +574,15 @@ if __name__ == '__main__':
             calc_map(ap_data)
             exit()
 
-    print('Loading model...')
-    net = build_ssd('test', 300, cfg['num_classes'])
-    net.load_state_dict(torch.load(args.trained_model))
-    net.eval()
-
     dataset = COCODetection(args.coco_root, 'val2014', 
-                            BaseTransform(net.size, MEANS))
+                            BaseTransform(cfg['min_dim'], MEANS))
     
     prep_coco_cats(dataset.coco.cats)
+
+    print('Loading model...')
+    net = build_ssd('test', cfg['min_dim'], cfg['num_classes'])
+    net.load_state_dict(torch.load(args.trained_model))
+    net.eval()
 
     if args.cuda:
         net = net.cuda()
