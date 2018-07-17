@@ -260,6 +260,7 @@ def mask_iou(mask1, mask2, iscrowd=False):
     union = (area1.t() + area2) - intersection
 
     if iscrowd:
+        # Make sure to brodcast to the right dimension
         ret = intersection / area1.t()
     else:
         ret = intersection / union
@@ -285,6 +286,8 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, crowd, image_id, detect
         if crowd is not None:
             crowd_masks = torch.Tensor([x[5].reshape(-1) for x in crowd])
             crowd_boxes = torch.Tensor([x[:4] for x in crowd])
+            crowd_boxes[:, [0, 2]] *= w
+            crowd_boxes[:, [1, 3]] *= h
             crowd_classes = [int(x[4]) for x in crowd]
 
         timer.stop('Prepare gt')
@@ -341,11 +344,11 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, crowd, image_id, detect
     num_gt   = len(gt_classes)
 
     mask_iou_cache = mask_iou(masks, gt_masks)
-    bbox_iou_cache = jaccard(boxes.float(), gt_boxes.float())
+    bbox_iou_cache = bbox_iou(boxes.float(), gt_boxes.float())
 
     if crowd is not None:
         crowd_mask_iou_cache = mask_iou(masks, crowd_masks, iscrowd=True)
-        crowd_bbox_iou_cache = jaccard(boxes.float(), crowd_boxes.float(), iscrowd=True)
+        crowd_bbox_iou_cache = bbox_iou(boxes.float(), crowd_boxes.float(), iscrowd=True)
     else:
         crowd_mask_iou_cache = None
         crowd_bbox_iou_cache = None
@@ -406,7 +409,7 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, crowd, image_id, detect
                                 if iou > iou_threshold:
                                     matched_crowd = True
                                     break
-                        
+
                         # All this crowd code so that we can make sure that our eval code gives the
                         # same result as COCOEval. There aren't even that many crowd annotations to
                         # begin with, but accuracy is of the utmost importance.
