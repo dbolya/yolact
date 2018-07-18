@@ -56,7 +56,7 @@ parser.add_argument('--display_scores', default=False, type=str2bool,
                     help='Whether or not to display scores in addition to classes')
 parser.add_argument('--display', dest='display', action='store_true',
                     help='Display qualitative results instead of quantitative ones.')
-parser.add_argument('--shuffle', default=False, type=str2bool,
+parser.add_argument('--shuffle', dest='shuffle', action='store_true',
                     help='Shuffles the images when displaying them. Doesn\'t have much of an effect when display is off though.')
 parser.add_argument('--ap_data_file', default='results/ap_data.pkl', type=str,
                     help='In quantitative mode, the file to save detections before calculating mAP.')
@@ -73,7 +73,7 @@ parser.add_argument('--mask_det_file', default='results/mask_detections.json', t
 parser.add_argument('--max_num_detections', default=100, type=int,
                     help='The maximum number of detections to consider for each image for mAP scoring. COCO uses 100.')
 
-parser.set_defaults(display=False, resume=False, output_coco_json=False)
+parser.set_defaults(display=False, resume=False, output_coco_json=False, shuffle=False)
 
 args = parser.parse_args()
 
@@ -166,7 +166,7 @@ def prep_display(dets, img, gt, gt_masks, h, w):
         color = COLORS[j % len(COLORS)]
 
         mask = cv2.resize(box_obj['mask'], (mask_w, mask_h), interpolation=cv2.INTER_LINEAR)
-        mask_alpha = (mask > np.average(mask)).astype(np.float32) * 0.0015
+        mask_alpha = (mask > 0.5).astype(np.float32) * 0.0015
         color_np = np.array(color[:3]).reshape(1, 1, 3)
         mask_overlay = np.tile(color_np, (mask.shape[0], mask.shape[1], 1))
         
@@ -324,7 +324,7 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, crowd, image_id, detect
 
         pred_mask = masks[i, :].reshape(cfg['mask_size'], cfg['mask_size'], 1)
         local_mask = cv2.resize(pred_mask, (mask_w, mask_h), interpolation=cv2.INTER_LINEAR)
-        local_mask = (local_mask > np.average(local_mask)).astype(np.float32)
+        local_mask = (local_mask > 0.5).astype(np.float32)
         full_masks[i, y1:y2, x1:x2] = torch.Tensor(local_mask)
 
     masks = full_masks.view(-1, h*w)
@@ -558,8 +558,8 @@ def evaluate(net, dataset):
                 else: fps = 0
                 progress = (it+1) / dataset_size * 100
                 progress_bar.set_val(it+1)
-                print('Processing Images  %s %6d / %6d (%5.2f%%)    %5.2f fps        '
-                    % (repr(progress_bar), it+1, dataset_size, progress, fps), end='\r')
+                print('\rProcessing Images  %s %6d / %6d (%5.2f%%)    %5.2f fps        '
+                    % (repr(progress_bar), it+1, dataset_size, progress, fps), end='')
                 # timer.print_stats()
 
         if not args.display:
