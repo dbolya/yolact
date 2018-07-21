@@ -4,7 +4,9 @@ import cv2
 import numpy as np
 import types
 from numpy import random
-from data import coco as cfg
+
+from data import get_cfg
+cfg = get_cfg()
 
 
 def intersect(box_a, box_b):
@@ -102,26 +104,78 @@ class ToPercentCoords(object):
         return image, masks, boxes, labels
 
 
-class Resize(object):
-    def __init__(self, size=300, resize_masks=True):
-        self.size = size
-        self.resize_masks = resize_masks
+class Pad(object):
+    """
+    Pads the image to the input width and height, filling the
+    background with mean and putting the image in the top-left.
+
+    Note: this expects im_w <= width and im_h <= height
+    """
+    def __init__(self, width, height, mean=(104, 117, 123)):
+        self.mean = mean
+        self.width = width
+        self.height = height
 
     def __call__(self, image, masks, boxes=None, labels=None):
-        image = cv2.resize(image, (self.size,
-                                 self.size))
+        im_h, im_w, depth = image.shape
+
+        expand_image = np.zeros(
+            (self.height, self.width, depth),
+            dtype=image.dtype)
+        expand_image[:, :, :] = self.mean
+        expand_image[:im_h, :im_w] = image
+
+        expand_masks = np.zeros(
+            (masks.shape[0], self.height, self.width),
+            dtype=masks.dtype)
+        expand_masks[:,:im_h,:im_w] = masks
+        masks = expand_masks
+
+        return expand_image, expand_masks, boxes, labels
+
+
+class Resize(object):
+    """
+    The same resizing scheme as used in faster R-CNN
+    https://arxiv.org/pdf/1506.01497.pdf
+
+    We resize the image so that the shorter side is min_size.
+    If the longer side is then over max_size, we instead resize
+    the image so the long side is max_size.
+    """
+
+    def __init__(self, resize_masks=True):
+        self.resize_masks = resize_masks
+        self.min_size = cfg.min_size
+        self.max_size = cfg.max_size
+
+    def __call__(self, image, masks, boxes=None, labels=None):
+        height, width, depth = image.shape
+
+        min_scale = self.min_size / min(width, height)
+        width  *= min_scale
+        height *= min_scale
+
+        max_scale = self.max_size / max(width, height)
+        if max_scale < 1: # If a size is greater than max_size
+            width  *= max_scale
+            height *= max_scale
+        
+        width = int(width)
+        height = int(height)
+
+        image = cv2.resize(image, (width, height))
         
         if self.resize_masks:
             # Act like each object is a color channel
             masks = masks.transpose((1, 2, 0))
-            masks = cv2.resize(masks, (self.size, self.size))
+            masks = cv2.resize(masks, (width, height))
             
             # OpenCV resizes a (w,h,1) array to (s,s), so fix that
             if len(masks.shape) == 2:
                 masks = np.expand_dims(masks, 0)
             else:
                 masks = masks.transpose((2, 0, 1))
-
 
         return image, masks, boxes, labels
 
@@ -461,11 +515,10 @@ class PrepareMasks(object):
 class BaseTransform(object):
     """ Transorm to be used when evaluating. """
 
-    def __init__(self, size, mean):
+    def __init__(self, mean):
         self.augment = Compose([
             ConvertFromInts(),
-            Resize(size, resize_masks=False),
-            # PrepareMasks(cfg['mask_size'], cfg['use_gt_bboxes']),
+            Resize(resize_masks=False),
             SubtractMeans(mean)
         ])
 
@@ -476,9 +529,8 @@ class BaseTransform(object):
 class SSDAugmentation(object):
     """ Transform to be used when training. """
 
-    def __init__(self, size=300, mean=(104, 117, 123)):
+    def __init__(self, mean=(104, 117, 123)):
         self.mean = mean
-        self.size = size
         self.augment = Compose([
             ConvertFromInts(),
             ToAbsoluteCoords(),
@@ -486,9 +538,10 @@ class SSDAugmentation(object):
             Expand(self.mean),
             RandomSampleCrop(),
             RandomMirror(),
+            Resize(),
+            Pad(cfg.max_size, cfg.max_size, self.mean),
             ToPercentCoords(),
-            Resize(self.size),
-            PrepareMasks(cfg['mask_size'], cfg['use_gt_bboxes']),
+            PrepareMasks(cfg.mask_size, cfg.use_gt_bboxes),
             SubtractMeans(self.mean)
         ])
 

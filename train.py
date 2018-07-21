@@ -2,7 +2,7 @@ from data import *
 from utils.augmentations import SSDAugmentation
 from utils.functions import MovingAverage
 from layers.modules import MultiBoxLoss
-from ssd import build_ssd
+from yolact import Yolact
 import os
 import sys
 import time
@@ -25,14 +25,9 @@ def str2bool(v):
 
 
 parser = argparse.ArgumentParser(
-    description='Single Shot MultiBox Detector Training With Pytorch')
-train_set = parser.add_mutually_exclusive_group()
-parser.add_argument('--dataset', default='COCO', choices=['VOC', 'COCO'],
-                    type=str, help='VOC or COCO')
+    description='Yolact Training Script')
 parser.add_argument('--dataset_root', default=COCO_ROOT,
                     help='Dataset root directory path')
-parser.add_argument('--basenet', default='vgg16_reducedfc.pth',
-                    help='Pretrained base model')
 parser.add_argument('--batch_size', default=32, type=int,
                     help='Batch size for training')
 parser.add_argument('--resume', default=None, type=str,
@@ -55,7 +50,7 @@ parser.add_argument('--visdom', default=False, type=str2bool,
                     help='Use visdom for loss visualization')
 parser.add_argument('--save_folder', default='weights/',
                     help='Directory for saving checkpoint models')
-parser.add_argument('--model_name', default='ssd300',
+parser.add_argument('--model_name', default='yolact',
                     help='The name of the model used for saving checkpoints')
 args = parser.parse_args()
 
@@ -70,82 +65,53 @@ if torch.cuda.is_available():
 else:
     torch.set_default_tensor_type('torch.FloatTensor')
 
-if not os.path.exists(args.save_folder):
-    os.mkdir(args.save_folder)
-
-
 def train():
-    if args.dataset == 'COCO':
-        if args.dataset_root == VOC_ROOT:
-            if not os.path.exists(COCO_ROOT):
-                parser.error('Must specify dataset_root if specifying dataset')
-            print("WARNING: Using default COCO dataset_root because " +
-                  "--dataset_root was not specified.")
-            args.dataset_root = COCO_ROOT
-        cfg = coco
-        dataset = COCODetection(root=args.dataset_root,
-                                image_set='train2014',
-                                transform=SSDAugmentation(cfg['min_dim'],
-                                                          MEANS))
-    elif args.dataset == 'VOC':
-        if args.dataset_root == COCO_ROOT:
-            parser.error('Must specify dataset if specifying dataset_root')
-        cfg = voc
-        dataset = VOCDetection(root=args.dataset_root,
-                               transform=SSDAugmentation(cfg['min_dim'],
-                                                         MEANS))
+    if not os.path.exists(args.save_folder):
+        os.mkdir(args.save_folder)
+
+    cfg = get_cfg()
+    dataset = COCODetection(root=args.dataset_root,
+                            image_set=cfg.dataset.split,
+                            transform=SSDAugmentation(MEANS))
 
     if args.visdom:
         import visdom
-        viz = visdom.Visdom()
+        global viz
+        viz = visdom.Visdom(port=8091)
 
-    ssd_net = build_ssd('train', cfg['min_dim'], cfg['num_classes'])
-    net = ssd_net
-
-    if args.cuda:
-        net = torch.nn.DataParallel(ssd_net)
-        cudnn.benchmark = True
+    # Parallel wraps the underlying module, but when saving and loading we don't want that
+    yolact_net = Yolact()
+    net = yolact_net
 
     if args.resume:
         print('Resuming training, loading {}...'.format(args.resume))
-        ssd_net.load_weights(args.resume)
+        yolact_net.load_weights(args.resume)
     else:
-        vgg_weights = torch.load(args.save_folder + args.basenet)
         print('Loading base network...')
-        ssd_net.vgg.load_state_dict(vgg_weights)
+        yolact_net.load_state_dict(torch.load(args.save_folder + cfg.backbone.path), strict=False)
 
     if args.cuda:
-        net = net.cuda()
-
-    if not args.resume:
-        print('Initializing weights...')
-        # initialize newly added layers' weights with xavier method
-        ssd_net.extras.apply(weights_init)
-        ssd_net.loc.apply(weights_init)
-        ssd_net.conf.apply(weights_init)
+        cudnn.benchmark = True
+        net = torch.nn.DataParallel(net).cuda()
 
     optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=args.momentum,
                           weight_decay=args.weight_decay)
-    criterion = MultiBoxLoss(cfg['num_classes'], 0.5, True, 0, True, 3, 0.5,
-                             False, args.cuda)
+    criterion = MultiBoxLoss(cfg.num_classes, 0.5, True, 0, True, 3, 0.5, False, args.cuda)
 
     net.train()
+
     # loss counters
     loc_loss = 0
     conf_loss = 0
     iteration = args.start_iter
-    print('Loading the dataset...')
 
     epoch_size = len(dataset) // args.batch_size
-    num_epochs = math.ceil(cfg['max_iter'] / epoch_size)
-    print('Training SSD on:', dataset.name)
-    print('Using the specified args:')
-    print(args)
-
+    num_epochs = math.ceil(cfg.max_iter / epoch_size)
+    
     step_index = 0
 
     if args.visdom:
-        vis_title = 'SSD.PyTorch on ' + dataset.name
+        vis_title = 'Training yolact with config %s' % cfg.name
         vis_legend = ['Loc Loss', 'Conf Loss', 'Total Loss']
         iter_plot = create_vis_plot('Iteration', 'Loss', vis_title, vis_legend)
         epoch_plot = create_vis_plot('Epoch', 'Loss', vis_title, vis_legend)
@@ -156,9 +122,10 @@ def train():
                                   pin_memory=True)
     
     
-    save_path = lambda epoch, iteration: args.save_folder + args.model_name + '_' + args.dataset + '_' + str(epoch) + '_' + str(iteration) + '.pth'
+    save_path = lambda epoch, iteration: args.save_folder + cfg.name + '_' + str(epoch) + '_' + str(iteration) + '.pth'
     time_avg = MovingAverage()
 
+    print('Begin training!')
     print()
     # try-except so you can use ctrl+c to save early and stop training
     try:
@@ -174,10 +141,10 @@ def train():
                     break
 
                 # Stop at the configured number of iterations even if mid-epoch
-                if iteration == cfg['max_iter']:
+                if iteration == cfg.max_iter:
                     break
 
-                if iteration in cfg['lr_steps']:
+                if iteration in cfg.lr_steps:
                     step_index += 1
                     adjust_learning_rate(optimizer, args.gamma, step_index)
 
@@ -211,19 +178,19 @@ def train():
 
                 if iteration % 10 == 0:
                     print('timer: %.4f sec.' % (t1 - t0))
-                    eta_str = datetime.timedelta(seconds=(cfg['max_iter']-iteration) * time_avg.get_avg())
+                    eta_str = datetime.timedelta(seconds=(cfg.max_iter-iteration) * time_avg.get_avg())
                     print('epoch ' + repr(epoch) + ' || iter ' + repr(iteration) + ' || Loss: %.4f || Mask Loss: %.4f || ETA: %s ||'
                             % (loss.item(), loss_m.item(), eta_str), end=' ')
 
                 if args.visdom:
-                    update_vis_plot(iteration, loss_l.data[0], loss_c.data[0],
+                    update_vis_plot(iteration, loss_l.item(), loss_c.item(),
                                     iter_plot, epoch_plot, 'append')
                 
                 iteration += 1
 
-                if iteration % 5000 == 0 and iteration != args.start_iter:
+                if iteration % 10000 == 0 and iteration != args.start_iter:
                     print('Saving state, iter:', iteration)
-                    torch.save(ssd_net.state_dict(), save_path(epoch, iteration))
+                    yolact_net.save_weights(save_path(epoch, iteration))
                 
 
             if args.visdom:
@@ -239,10 +206,10 @@ def train():
         for p in Path(args.save_folder).glob('*_interrupt.pth'):
             p.unlink()
         
-        torch.save(ssd_net.state_dict(), save_path(epoch, repr(iteration) + '_interrupt'))
+        yolact_net.save_weights(save_path(epoch, repr(iteration) + '_interrupt'))
         exit()
 
-    torch.save(ssd_net.state_dict(), save_path(epoch, iteration))
+    yolact_net.save_weights(save_path(epoch, iteration))
 
 
 def adjust_learning_rate(optimizer, gamma, step):

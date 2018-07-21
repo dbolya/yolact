@@ -1,12 +1,14 @@
-from data import coco as cfg
 from data import COCO_ROOT, COCODetection, MEANS, COLORS, COCO_CLASSES
-from ssd import build_ssd
+from yolact import Yolact
 from utils.augmentations import BaseTransform
 from utils.functions import MovingAverage, ProgressBar
 from layers.box_utils import jaccard
 from utils import timer
 from utils.functions import sanitize_coordinates
 import pycocotools
+
+from data import get_cfg
+cfg = get_cfg()
 
 import numpy as np
 import torch
@@ -146,7 +148,7 @@ def prep_display(dets, img, gt, gt_masks, h, w):
             'p1': (x1, y1),
             'p2': (x2, y2),
             'class': COCO_CLASSES[classes[k].long().item()],
-            'mask': masks[k, :].reshape(cfg['mask_size'], cfg['mask_size']),
+            'mask': masks[k, :].reshape(cfg.mask_size, cfg.mask_size),
             'b1': (gt_bboxes[match_idx, 0], gt_bboxes[match_idx, 1]),
             'b2': (gt_bboxes[match_idx, 2], gt_bboxes[match_idx, 3])
         })
@@ -322,7 +324,7 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, crowd, image_id, detect
         if mask_w * mask_h <= 0 or mask_w < 0:
             continue
 
-        pred_mask = masks[i, :].reshape(cfg['mask_size'], cfg['mask_size'], 1)
+        pred_mask = masks[i, :].reshape(cfg.mask_size, cfg.mask_size, 1)
         local_mask = cv2.resize(pred_mask, (mask_w, mask_h), interpolation=cv2.INTER_LINEAR)
         local_mask = (local_mask > 0.5).astype(np.float32)
         full_masks[i, y1:y2, x1:x2] = torch.Tensor(local_mask)
@@ -623,13 +625,13 @@ if __name__ == '__main__':
             exit()
 
     dataset = COCODetection(args.coco_root, 'val2014', 
-                            BaseTransform(cfg['min_dim'], MEANS,),
+                            BaseTransform(MEANS),
                             prep_crowds=True)
     
     prep_coco_cats(dataset.coco.cats)
 
     print('Loading model...', end='')
-    net = build_ssd('test', cfg['min_dim'], cfg['num_classes'])
+    net = Yolact()
     net.load_state_dict(torch.load(args.trained_model))
     net.eval()
     print(' Done.')

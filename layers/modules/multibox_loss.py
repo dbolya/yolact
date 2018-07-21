@@ -3,10 +3,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
-from data import coco as cfg
 from ..box_utils import match, log_sum_exp, decode
 from utils.functions import sanitize_coordinates
 
+from data import get_cfg
+cfg = get_cfg()
 
 class MultiBoxLoss(nn.Module):
     """SSD Weighted Loss Function
@@ -44,9 +45,8 @@ class MultiBoxLoss(nn.Module):
         self.do_neg_mining = neg_mining
         self.negpos_ratio = neg_pos
         self.neg_overlap = neg_overlap
-        self.variance = cfg['variance']
-        self.mask_size = cfg['mask_size']
-        self.use_gt_bboxes = cfg['use_gt_bboxes']
+        self.mask_size = cfg.mask_size
+        self.use_gt_bboxes = cfg.use_gt_bboxes
 
 
     def forward(self, predictions, targets, masks):
@@ -80,7 +80,7 @@ class MultiBoxLoss(nn.Module):
             truths = targets[idx][:, :-1].data
             labels = targets[idx][:, -1].data
             defaults = priors.data
-            match(self.threshold, truths, defaults, self.variance, labels,
+            match(self.threshold, truths, defaults, labels,
                   loc_t, conf_t, idx_t, idx)
         if self.use_gpu:
             loc_t = loc_t.cuda()
@@ -151,7 +151,7 @@ class MultiBoxLoss(nn.Module):
                 cur_pos_idx_squeezed = cur_pos_idx[:, 1]
 
                 # Shape: [num_priors, 4], decoded predicted bboxes
-                pos_bboxes = decode(loc_data[idx, :, :], priors.data, self.variance)
+                pos_bboxes = decode(loc_data[idx, :, :], priors.data)
                 pos_bboxes = pos_bboxes[cur_pos_idx].view(-1, 4).clamp(0, 1)
                 pos_lookup = idx_t[idx, cur_pos_idx_squeezed]
 

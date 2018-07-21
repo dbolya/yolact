@@ -1,5 +1,6 @@
 
 import torch
+import os
 
 class MovingAverage():
 	""" Keeps an average window of the specified number of items. """
@@ -16,6 +17,10 @@ class MovingAverage():
 
 		if len(self.window) > self.max_window_size:
 			self.sum -= self.window.pop(0)
+	
+	def append(self, elem):
+		""" Same as add just more pythonic. """
+		self.add(elem)
 
 	def get_avg(self):
 		""" Returns the average of the elements in the window. """
@@ -65,9 +70,6 @@ class ProgressBar():
 	def __str__(self):
 		return self.string
 
-
-
-
 def sanitize_coordinates(_x1, _x2, img_size, cast=True):
 	"""
 	Sanitizes the input coordinates so that x1 < x2, x1 != x2, x1 >= 0, and x2 <= image_size.
@@ -87,3 +89,11 @@ def sanitize_coordinates(_x1, _x2, img_size, cast=True):
 
 	return x1, x2
 
+
+def init_console():
+	"""
+	Initialize the console to be able to use ANSI escape characters on Windows.
+	"""
+	if os.name == 'nt':
+		from colorama import init
+		init()

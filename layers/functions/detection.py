@@ -1,9 +1,10 @@
 import torch
 from torch.autograd import Function
 from ..box_utils import decode, nms
-from data import coco as cfg
 from utils import timer
 
+from data import get_cfg
+cfg = get_cfg()
 
 
 class Detect(Function):
@@ -21,7 +22,6 @@ class Detect(Function):
         if nms_thresh <= 0:
             raise ValueError('nms_threshold must be non negative.')
         self.conf_thresh = conf_thresh
-        self.variance = cfg['variance']
         
         self.cross_class_nms = False
 
@@ -44,24 +44,21 @@ class Detect(Function):
             Note that the outputs are sorted only if cross_class_nms is False
         """
 
-        timer.start('Detect')
-        
-        num = loc_data.size(0)  # batch size
-        num_priors = prior_data.size(0)
-        output = torch.zeros(num, self.top_k, 1 + 1 + 4 + mask_data.size(2))
-        conf_preds = conf_data.view(num, num_priors,
-                                    self.num_classes).transpose(2, 1)
+        with timer.env('Detect'):
+            num = loc_data.size(0)  # batch size
+            num_priors = prior_data.size(0)
+            output = torch.zeros(num, self.top_k, 1 + 1 + 4 + mask_data.size(2))
+            conf_preds = conf_data.view(num, num_priors,
+                                        self.num_classes).transpose(2, 1)
 
-        # Decode predictions into bboxes.
-        for i in range(num):
-            decoded_boxes = decode(loc_data[i], prior_data, self.variance)
-            
-            if self.cross_class_nms:
-                self.detect_cross_class(i, conf_preds, decoded_boxes, mask_data, output)
-            else:
-                self.detect_per_class(i, conf_preds, decoded_boxes, mask_data, output)
-        
-        timer.stop('Detect')
+            # Decode predictions into bboxes.
+            for i in range(num):
+                decoded_boxes = decode(loc_data[i], prior_data)
+                
+                if self.cross_class_nms:
+                    self.detect_cross_class(i, conf_preds, decoded_boxes, mask_data, output)
+                else:
+                    self.detect_per_class(i, conf_preds, decoded_boxes, mask_data, output)
         
         return output
 
@@ -80,9 +77,7 @@ class Detect(Function):
         boxes = decoded_boxes[l_mask].view(-1, 4)
         masks = mask_data[batch_idx, l_mask[:, 0], :]
         # idx of highest scoring and non-overlapping boxes per class
-        timer.stop('Detect')
         ids, count = nms(boxes, scores, self.nms_thresh, self.top_k)
-        timer.start('Detect')
         ids = ids[:count]
         output[batch_idx, :count] = \
             torch.cat((classes[ids].unsqueeze(1).float(), scores[ids].unsqueeze(1), boxes[ids], masks[ids]), 1)
@@ -101,9 +96,7 @@ class Detect(Function):
             boxes = decoded_boxes[l_mask].view(-1, 4)
             masks = mask_data[batch_idx, l_mask[:, 0], :]
             # idx of highest scoring and non-overlapping boxes per class
-            timer.stop('Detect')
             ids, count = nms(boxes, scores, self.nms_thresh, self.top_k)
-            timer.start('Detect')
             ids = ids[:count]
             classes = torch.ones(count, 1).float()*(cl-1)
             tmp_output[cl-1, :count] = \

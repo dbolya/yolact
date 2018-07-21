@@ -1,12 +1,12 @@
 # You Only Look (a couple times)
-<pre style='padding: 0; margin: 0; line-height: 18px; font-size: 16px; '>
+```
     ██╗   ██╗ ██████╗ ██╗      █████╗  ██████╗████████╗
     ╚██╗ ██╔╝██╔═══██╗██║     ██╔══██╗██╔════╝╚══██╔══╝
      ╚████╔╝ ██║   ██║██║     ███████║██║        ██║   
       ╚██╔╝  ██║   ██║██║     ██╔══██║██║        ██║   
        ██║   ╚██████╔╝███████╗██║  ██║╚██████╗   ██║   
        ╚═╝    ╚═════╝ ╚══════╝╚═╝  ╚═╝ ╚═════╝   ╚═╝ 
-</pre>
+```
 
 This README is in progress. Nothing is final. Read at your own risk. The following sections are more for our own bookkeeping than for your eyes.
 

@@ -23,8 +23,8 @@ def center_size(boxes):
     Return:
         boxes: (tensor) Converted xmin, ymin, xmax, ymax form of boxes.
     """
-    return torch.cat((boxes[:, 2:] + boxes[:, :2])/2,  # cx, cy
-                     boxes[:, 2:] - boxes[:, :2], 1)  # w, h
+    return torch.cat(( (boxes[:, 2:] + boxes[:, :2])/2,     # cx, cy
+                        boxes[:, 2:] - boxes[:, :2]  ), 1)  # w, h
 
 
 def intersect(box_a, box_b):
@@ -73,7 +73,7 @@ def jaccard(box_a, box_b, iscrowd=False):
         return inter / union  # [A,B]
 
 
-def match(threshold, truths, priors, variances, labels, loc_t, conf_t, idx_t, idx):
+def match(threshold, truths, priors, labels, loc_t, conf_t, idx_t, idx):
     """Match each prior box with the ground truth box of the highest jaccard
     overlap, encode the bounding boxes, then return the matched indices
     corresponding to both confidence and location preds.
@@ -81,8 +81,6 @@ def match(threshold, truths, priors, variances, labels, loc_t, conf_t, idx_t, id
         threshold: (float) The overlap threshold used when mathing boxes.
         truths: (tensor) Ground truth boxes, Shape: [num_obj, num_priors].
         priors: (tensor) Prior boxes from priorbox layers, Shape: [n_priors,4].
-        variances: (tensor) Variances corresponding to each prior coord,
-            Shape: [num_priors, 4].
         labels: (tensor) All the class labels for the image, Shape: [num_obj].
         loc_t: (tensor) Tensor to be filled w/ endcoded location targets.
         conf_t: (tensor) Tensor to be filled w/ matched indices for conf preds.
@@ -113,56 +111,71 @@ def match(threshold, truths, priors, variances, labels, loc_t, conf_t, idx_t, id
     matches = truths[best_truth_idx]          # Shape: [num_priors,4]
     conf = labels[best_truth_idx] + 1         # Shape: [num_priors]
     conf[best_truth_overlap < threshold] = 0  # label as background
-    loc = encode(matches, priors, variances)
+    loc = encode(matches, priors)
     loc_t[idx] = loc    # [num_priors,4] encoded offsets to learn
     conf_t[idx] = conf  # [num_priors] top class label for each prior
     idx_t[idx] = best_truth_idx # [num_priors] indices for lookup
 
 
-def encode(matched, priors, variances):
-    """Encode the variances from the priorbox layers into the ground truth boxes
-    we have matched (based on jaccard overlap) with the prior boxes.
+def encode(matched, priors):
+    """
+    Encode bboxes matched with each prior into the format
+    produced by the network. See decode for more details on
+    this format. Note that encode(decode(x, p), p) = x.
+    
     Args:
-        matched: (tensor) Coords of ground truth for each prior in point-form
-            Shape: [num_priors, 4].
-        priors: (tensor) Prior boxes in center-offset form
-            Shape: [num_priors,4].
-        variances: (list[float]) Variances of priorboxes
-    Return:
-        encoded boxes (tensor), Shape: [num_priors, 4]
+        - matched: A tensor of bboxes in point form with shape [num_priors, 4]
+        - priors:  The tensor of all priors with shape [num_priors, 4]
+    Return: A tensor with encoded relative coordinates in the format
+            outputted by the network (see decode). Size: [num_priors, 4]
     """
 
-    # dist b/t match center and prior's center
-    g_cxcy = (matched[:, :2] + matched[:, 2:])/2 - priors[:, :2]
-    # encode variance
-    g_cxcy /= (variances[0] * priors[:, 2:])
-    # match wh / prior wh
-    g_wh = (matched[:, 2:] - matched[:, :2]) / priors[:, 2:]
-    g_wh = torch.log(g_wh) / variances[1]
-    # return target for smooth_l1_loss
-    return torch.cat([g_cxcy, g_wh], 1)  # [num_priors,4]
+    # Exactly the reverse of what we did in decode
+    # In fact encode(decode(x, p), p) should be x
+    boxes = center_size(matched)
+
+    loc = torch.cat((
+        boxes[:, :2] - priors[:, :2],
+        torch.log(boxes[:, 2:] / priors[:, 2:])
+    ), 1)
+
+    return loc
 
 
-# Adapted from https://github.com/Hakuyume/chainer-ssd
-def decode(loc, priors, variances):
-    """Decode locations from predictions using priors to undo
-    the encoding we did for offset regression at train time.
+def decode(loc, priors):
+    """
+    Decode predicted bbox coordinates using the same scheme
+    employed by Yolov2: https://arxiv.org/pdf/1612.08242.pdf
+
+        b_x = (sigmoid(pred_x) - .5) / conv_w + prior_x
+        b_y = (sigmoid(pred_y) - .5) / conv_h + prior_y
+        b_w = prior_w * exp(loc_w)
+        b_h = prior_h * exp(loc_h)
+    
+    Note that loc is inputed as [(s(x)-.5)/conv_w, (s(y)-.5)/conv_h, w, h]
+    while priors are inputed as [x, y, w, h] where each coordinate
+    is relative to size of the image (even sigmoid(x)). We do this
+    in the network by dividing by the 'cell size', which is just
+    the size of the convouts.
+    
+    Also note that prior_x and prior_y are center coordinates which
+    is why we have to subtract .5 from sigmoid(pred_x and pred_y).
+    
     Args:
-        loc (tensor): location predictions for loc layers,
-            Shape: [num_priors,4]
-        priors (tensor): Prior boxes in center-offset form.
-            Shape: [num_priors,4].
-        variances: (list[float]) Variances of priorboxes
-    Return:
-        decoded bounding box predictions
+        - loc:    The predicted bounding boxes of size [num_priors, 4]
+        - priors: The priorbox coords with size [num_priors, 4]
+    
+    Returns: A tensor of decoded relative coordinates in point form 
+             form with size [num_priors, 4]
     """
 
+    # Decoded boxes in center-size notation
     boxes = torch.cat((
-        priors[:, :2] + loc[:, :2] * variances[0] * priors[:, 2:],
-        priors[:, 2:] * torch.exp(loc[:, 2:] * variances[1])), 1)
-    boxes[:, :2] -= boxes[:, 2:] / 2
-    boxes[:, 2:] += boxes[:, :2]
-    return boxes
+        loc[:, :2] + priors[:, :2],
+        priors[:, 2:] * torch.exp(loc[:, 2:])
+    ), 1)
+
+    return point_form(boxes)
 
 
 def log_sum_exp(x):
@@ -254,5 +267,5 @@ def nms(boxes, scores, overlap=0.5, top_k=200, force_cpu=True):
     if cuda_enabled:
         keep = keep.cuda()
 
-    timer.stop('NMS')
+    timer.stop()
     return keep, count
