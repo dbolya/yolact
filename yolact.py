@@ -111,12 +111,21 @@ class PredictionModule(nn.Module):
                                               self.aspect_ratios,
                                               self.scales)).T.reshape(-1, 4)
                 
+                # The predictions will be in the order conv_h, conv_w, num_priors, but I don't
+                # know if meshgrid ordering is deterministic, so let's sort it here to make sure
+                # the elements are in this order. aspect_ratios and scales are interchangable
+                # because the network can just learn which is which, but conv_h and conv_w orders
+                # have to match or the network will get priors for a cell that is in the complete
+                # wrong place in the image. Note: the sort order is from last to first (so 1, 0, etc.)
+                ind = np.lexsort((priors[:,3],priors[:,2],priors[:,0],priors[:,1]), axis=0)
+                priors = priors[ind]
+                
                 # Priors are in center-size form
                 priors[:, [0, 1]] += 0.5
 
                 # Compute the correct width and height of each bounding box
-                aspect_ratios = priors[:, 2] # In the form w / h
-                scales = priors[:, 3]
+                aspect_ratios = priors[:, 2].copy() # In the form w / h
+                scales        = priors[:, 3].copy()
                 priors[:, 2] = scales * aspect_ratios # p_w = (scale / h) * w
                 priors[:, 3] = scales / aspect_ratios # p_h = (scale / w) * h
 
@@ -154,8 +163,8 @@ class Yolact(ResNet):
     """
 
     def __init__(self, selected_layers=range(2,7), conv_channels=1024,
-                       pred_scales=[[.5, 1]]+[[1]]*4+[[1, 2]],
-                       pred_aspect_ratios=[[1.13, 0.68, 0.41, 2.12],
+                       pred_scales=[[.5, 1]]+[[1]]*3+[[1, 2]],
+                       pred_aspect_ratios=[[1.05, 0.62],
                                            [1.29, 0.79, 0.47, 2.33, 0.27],
                                            [1.19, 0.72, 0.43, 2.13, 0.25],
                                            [1.34, 0.84, 0.52, 2.38, 0.30],
@@ -183,7 +192,7 @@ class Yolact(ResNet):
                                                            aspect_ratios=pred_aspect_ratios[idx], scales=pred_scales[idx]))
 
         # For use in evaluation
-        self.detect = Detect(cfg.num_classes, 0, 200, 0.01, 0.45)
+        self.detect = Detect(cfg.num_classes, bkg_label=0, top_k=200, conf_thresh=0.01, nms_thresh=0.45)
         
         # We don't need these where we're going
         del self.fc

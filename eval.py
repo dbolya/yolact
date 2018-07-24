@@ -121,8 +121,9 @@ def prep_display(dets, img, gt, gt_masks, h, w):
     gt_bboxes[:, [0, 2]] *= w
     gt_bboxes[:, [1, 3]] *= h
     
-    img_numpy = cv2.resize((img.permute(1, 2, 0).cpu().numpy() / 255.0 + np.array(MEANS) / 255.0).astype(np.float32), (w, h))
+    img_numpy = (img.permute(1, 2, 0).cpu().numpy() / 255.0 + np.array(MEANS) / 255.0).astype(np.float32)
     img_numpy = np.clip(img_numpy, 0, 1)
+    h, w, _ = img_numpy.shape # The padded size is different
     
     timer.start('Postprocessing')
     
@@ -442,6 +443,7 @@ class APDataObject:
 
     def get_ap(self) -> float:
         """ Warning: result not cached. """
+        # TODO: clean up this function
         last_precision = 1
         last_recall = 0
         num_true  = 0
@@ -612,39 +614,38 @@ def calc_map(ap_data):
 
 
 if __name__ == '__main__':
+    with torch.no_grad():
+        if not os.path.exists('results'):
+            os.makedirs('results')
 
+        if args.resume and not args.display:   
+            if args.resume:
+                with open(args.ap_data_file, 'rb') as f:
+                    ap_data = pickle.load(f)
+                calc_map(ap_data)
+                exit()
 
-    if not os.path.exists('results'):
-        os.makedirs('results')
+        dataset = COCODetection(args.coco_root, 'val2014', 
+                                BaseTransform(MEANS),
+                                prep_crowds=True)
+        
+        prep_coco_cats(dataset.coco.cats)
 
-    if args.resume and not args.display:   
-        if args.resume:
-            with open(args.ap_data_file, 'rb') as f:
-                ap_data = pickle.load(f)
-            calc_map(ap_data)
-            exit()
+        print('Loading model...', end='')
+        net = Yolact()
+        net.load_state_dict(torch.load(args.trained_model))
+        net.eval()
+        print(' Done.')
 
-    dataset = COCODetection(args.coco_root, 'val2014', 
-                            BaseTransform(MEANS),
-                            prep_crowds=True)
-    
-    prep_coco_cats(dataset.coco.cats)
+        if args.cuda:
+            net = net.cuda()
+            cudnn.benchmark = True
+            torch.set_default_tensor_type('torch.cuda.FloatTensor')
+        else:
+            torch.set_default_tensor_type('torch.FloatTensor')
+        
+        net.detect.cross_class_nms = args.cross_class_nms
 
-    print('Loading model...', end='')
-    net = Yolact()
-    net.load_state_dict(torch.load(args.trained_model))
-    net.eval()
-    print(' Done.')
-
-    if args.cuda:
-        net = net.cuda()
-        cudnn.benchmark = True
-        torch.set_default_tensor_type('torch.cuda.FloatTensor')
-    else:
-        torch.set_default_tensor_type('torch.FloatTensor')
-    
-    net.detect.cross_class_nms = args.cross_class_nms
-
-    evaluate(net, dataset)
+        evaluate(net, dataset)
 
 

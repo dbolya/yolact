@@ -518,7 +518,8 @@ class BaseTransform(object):
     def __init__(self, mean):
         self.augment = Compose([
             ConvertFromInts(),
-            Resize(resize_masks=False),
+            Resize(),
+            Pad(cfg.max_size, cfg.max_size, mean),
             SubtractMeans(mean)
         ])
 
