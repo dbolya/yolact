@@ -168,6 +168,9 @@ def prep_display(dets, img, gt, gt_masks, h, w):
         text_pt = (p1[0], p2[1] - 5)
         color = COLORS[j % len(COLORS)]
 
+        if mask_w <= 0 or mask_h <= 0:
+            continue
+
         mask = cv2.resize(box_obj['mask'], (mask_w, mask_h), interpolation=cv2.INTER_LINEAR)
         mask_alpha = (mask > 0.5).astype(np.float32) * 0.0015
         color_np = np.array(color[:3]).reshape(1, 1, 3)
