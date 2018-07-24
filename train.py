@@ -80,15 +80,12 @@ def train():
         viz = visdom.Visdom(port=8091)
 
     # Parallel wraps the underlying module, but when saving and loading we don't want that
-    yolact_net = Yolact()
+    yolact_net = Yolact(backbone_path=args.save_folder+cfg.backbone.path)
     net = yolact_net
 
     if args.resume:
         print('Resuming training, loading {}...'.format(args.resume))
         yolact_net.load_weights(args.resume)
-    else:
-        print('Loading base network...')
-        yolact_net.load_state_dict(torch.load(args.save_folder + cfg.backbone.path), strict=False)
 
     if args.cuda:
         cudnn.benchmark = True
@@ -153,13 +150,13 @@ def train():
                 targets, masks = targets_tuple
 
                 if args.cuda:
-                    images = Variable(images.cuda())
-                    targets = [Variable(ann.cuda()) for ann in targets]
-                    masks = [Variable(mask.cuda()) for mask in masks]
+                    images = Variable(images.cuda(), requires_grad=False)
+                    targets = [Variable(ann.cuda(), requires_grad=False) for ann in targets]
+                    masks = [Variable(mask.cuda(), requires_grad=False) for mask in masks]
                 else:
-                    images = Variable(images)
-                    targets = [Variable(ann) for ann in targets]
-                    masks = [Variable(mask) for mask in masks]
+                    images = Variable(images, requires_grad=False)
+                    targets = [Variable(ann, requires_grad=False) for ann in targets]
+                    masks = [Variable(mask, requires_grad=False) for mask in masks]
                 # forward
                 t0 = time.time()
                 out = net(images)

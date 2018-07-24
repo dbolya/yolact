@@ -159,7 +159,7 @@ class Yolact(ResNet):
         - pred_scales:     A list with len(selected_layers) containing tuples of scales (see PredictionModule)
         - pred_aspect_ratios: A list of lists of aspect ratios with len(selected_layers) (see PredictionModule)
         - block:           The resnet block style to use. You probably shouldn't change this.
-
+        - backbone_path:   If not None, the path of the backbone network to load in for training.
     """
 
     def __init__(self, selected_layers=range(2,7), conv_channels=1024,
@@ -169,10 +169,17 @@ class Yolact(ResNet):
                                            [1.19, 0.72, 0.43, 2.13, 0.25],
                                            [1.34, 0.84, 0.52, 2.38, 0.30],
                                            [1.40, 0.95, 0.64, 2.16]],
-                       block=Bottleneck):
+                       block=Bottleneck, backbone_path=None):
         
         self.channels = [] # Populated by self._make_layer
         super().__init__(block, [3, 4, 23, 3])
+
+        # We don't need these where we're going
+        del self.fc
+        del self.avgpool
+
+        if backbone_path is not None:
+            self.load_state_dict(torch.load(backbone_path))
 
         self.layers = nn.ModuleList([
             self.layer1, # conv2_x
@@ -193,10 +200,7 @@ class Yolact(ResNet):
 
         # For use in evaluation
         self.detect = Detect(cfg.num_classes, bkg_label=0, top_k=200, conf_thresh=0.01, nms_thresh=0.45)
-        
-        # We don't need these where we're going
-        del self.fc
-        del self.avgpool
+
         # Now that we've stored them in self.layers, we don't need them under us, so remove these
         del self.layer1
         del self.layer2
@@ -250,14 +254,13 @@ if __name__ == '__main__':
     from utils.functions import init_console
     init_console()
 
-    net = Yolact()
-    # net.load_state_dict(torch.load('weights/resnet101_reducedfc.pth'), strict=False)
+    net = Yolact(backbone_path='weights/resnet101_reducedfc.pth')
     net.train()
 
     # GPU
-    net = net.cuda()
-    cudnn.benchmark = True
-    torch.set_default_tensor_type('torch.cuda.FloatTensor')
+    # net = net.cuda()
+    # cudnn.benchmark = True
+    # torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
     x = torch.zeros((1, 3, 600, 600))
 
