@@ -148,21 +148,26 @@ class Resize(object):
         self.resize_masks = resize_masks
         self.min_size = cfg.min_size
         self.max_size = cfg.max_size
+        self.preserve_aspect_ratio = cfg.preserve_aspect_ratio
 
     def __call__(self, image, masks, boxes=None, labels=None):
-        height, width, depth = image.shape
+        if self.preserve_aspect_ratio:
+            height, width, depth = image.shape
 
-        min_scale = self.min_size / min(width, height)
-        width  *= min_scale
-        height *= min_scale
+            min_scale = self.min_size / min(width, height)
+            width  *= min_scale
+            height *= min_scale
 
-        max_scale = self.max_size / max(width, height)
-        if max_scale < 1: # If a size is greater than max_size
-            width  *= max_scale
-            height *= max_scale
-        
-        width = int(width)
-        height = int(height)
+            max_scale = self.max_size / max(width, height)
+            if max_scale < 1: # If a size is greater than max_size
+                width  *= max_scale
+                height *= max_scale
+            
+            width  = int(width)
+            height = int(height)
+        else:
+            width  = self.max_size
+            height = self.max_size
 
         image = cv2.resize(image, (width, height))
         

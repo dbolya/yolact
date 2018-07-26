@@ -38,7 +38,7 @@ parser.add_argument('--num_workers', default=4, type=int,
                     help='Number of workers used in dataloading')
 parser.add_argument('--cuda', default=True, type=str2bool,
                     help='Use CUDA to train model')
-parser.add_argument('--lr', '--learning-rate', default=1e-3, type=float,
+parser.add_argument('--lr', '--learning_rate', default=1e-3, type=float,
                     help='initial learning rate')
 parser.add_argument('--momentum', default=0.9, type=float,
                     help='Momentum value for optim')
@@ -52,6 +52,8 @@ parser.add_argument('--save_folder', default='weights/',
                     help='Directory for saving checkpoint models')
 parser.add_argument('--model_name', default='yolact',
                     help='The name of the model used for saving checkpoints')
+parser.add_argument('--save_interval', default=10000, type=int,
+                    help='The number of iterations between saving the model.')
 args = parser.parse_args()
 
 
@@ -80,12 +82,16 @@ def train():
         viz = visdom.Visdom(port=8091)
 
     # Parallel wraps the underlying module, but when saving and loading we don't want that
-    yolact_net = Yolact(backbone_path=args.save_folder+cfg.backbone.path)
+    yolact_net = Yolact()
     net = yolact_net
+    net.train()
 
     if args.resume:
         print('Resuming training, loading {}...'.format(args.resume))
         yolact_net.load_weights(args.resume)
+    else:
+        print('Initializing weights...')
+        yolact_net.init_weights(backbone_path=args.save_folder + cfg.backbone.path)
 
     if args.cuda:
         cudnn.benchmark = True
@@ -93,9 +99,15 @@ def train():
 
     optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=args.momentum,
                           weight_decay=args.weight_decay)
-    criterion = MultiBoxLoss(cfg.num_classes, 0.5, True, 0, True, 3, 0.5, False, args.cuda)
-
-    net.train()
+    criterion = MultiBoxLoss(num_classes=cfg.num_classes,
+                             overlap_thresh=0.5,
+                             prior_for_matching=True,
+                             bkg_label=0,
+                             neg_mining=True,
+                             neg_pos=3,
+                             neg_overlap=0.5,
+                             encode_target=False,
+                             use_gpu=args.cuda)
 
     # loss counters
     loc_loss = 0
@@ -121,6 +133,7 @@ def train():
     
     save_path = lambda epoch, iteration: args.save_folder + cfg.name + '_' + str(epoch) + '_' + str(iteration) + '.pth'
     time_avg = MovingAverage()
+    loss_m_avg, loss_l_avg, loss_c_avg = (MovingAverage(), MovingAverage(), MovingAverage())
 
     print('Begin training!')
     print()
@@ -169,6 +182,9 @@ def train():
                 t1 = time.time()
                 loc_loss += loss_l.item()
                 conf_loss += loss_c.item()
+                loss_c_avg.add(loss_c.item())
+                loss_l_avg.add(loss_l.item())
+                loss_m_avg.add(loss_m.item())
 
                 if iteration != args.start_iter:
                     time_avg.add(t1 - t0)
@@ -176,8 +192,8 @@ def train():
                 if iteration % 10 == 0:
                     print('timer: %.4f sec.' % (t1 - t0))
                     eta_str = datetime.timedelta(seconds=(cfg.max_iter-iteration) * time_avg.get_avg())
-                    print('epoch ' + repr(epoch) + ' || iter ' + repr(iteration) + ' || Loss: %.4f || Mask Loss: %.4f || ETA: %s ||'
-                            % (loss.item(), loss_m.item(), eta_str), end=' ')
+                    print('epoch ' + repr(epoch) + ' || iter ' + repr(iteration) + ' || Bbox Loss: %.4f || Conf Loss: %.4f || ETA: %s ||'
+                            % (loss_l_avg.get_avg(), loss_c_avg.get_avg(), eta_str), end=' ')
 
                 if args.visdom:
                     update_vis_plot(iteration, loss_l.item(), loss_c.item(),
@@ -185,7 +201,7 @@ def train():
                 
                 iteration += 1
 
-                if iteration % 10000 == 0 and iteration != args.start_iter:
+                if iteration % args.save_interval == 0 and iteration != args.start_iter:
                     print('Saving state, iter:', iteration)
                     yolact_net.save_weights(save_path(epoch, iteration))
                 

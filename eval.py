@@ -170,11 +170,6 @@ def prep_display(dets, img, gt, gt_masks, h, w):
 
         if mask_w <= 0 or mask_h <= 0:
             continue
-
-        mask = cv2.resize(box_obj['mask'], (mask_w, mask_h), interpolation=cv2.INTER_LINEAR)
-        mask_alpha = (mask > 0.5).astype(np.float32) * 0.0015
-        color_np = np.array(color[:3]).reshape(1, 1, 3)
-        mask_overlay = np.tile(color_np, (mask.shape[0], mask.shape[1], 1))
         
         if args.display_bboxes:
             cv2.rectangle(img_numpy, p1, p2, color, 2)
@@ -183,6 +178,11 @@ def prep_display(dets, img, gt, gt_masks, h, w):
             cv2.rectangle(img_numpy, box_obj['b1'], box_obj['b2'], color, 1)
 
         if args.display_masks:
+            mask = cv2.resize(box_obj['mask'], (mask_w, mask_h), interpolation=cv2.INTER_LINEAR)
+            mask_alpha = (mask > 0.5).astype(np.float32) * 0.0015
+            color_np = np.array(color[:3]).reshape(1, 1, 3)
+            mask_overlay = np.tile(color_np, (mask.shape[0], mask.shape[1], 1))
+
             overlay_image_alpha(img_numpy, mask_overlay, p1, mask_alpha)
         
         text_str = '%s (%.2f)' % (box_obj['class'],box_obj['score']) if args.display_scores else box_obj['class']

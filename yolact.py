@@ -1,11 +1,12 @@
 import torch, torchvision
 import torch.nn as nn
 import torch.nn.functional as F
-from torchvision.models.resnet import Bottleneck, ResNet
+from torchvision.models.resnet import Bottleneck
 import numpy as np
 
 from data.config import get_cfg
 from layers import Detect
+from backbone import construct_backbone
 
 import torch.backends.cudnn as cudnn
 from utils import timer
@@ -47,12 +48,12 @@ class PredictionModule(nn.Module):
         self.mask_size   = mask_size
         self.num_priors  = len(aspect_ratios) * len(scales)
 
-        self.block = Bottleneck(in_channels, out_channels // 4)
-        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=True)
-        self.bn = nn.BatchNorm2d(out_channels)
+        # self.block = Bottleneck(in_channels, out_channels // 4)
+        # self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=True)
+        # self.bn = nn.BatchNorm2d(out_channels)
 
-        self.bbox_layer = nn.Conv2d(out_channels, self.num_priors * 4, kernel_size=3, padding=1)
-        self.conf_layer = nn.Conv2d(out_channels, self.num_priors * num_classes, kernel_size=3, padding=1)
+        self.bbox_layer = nn.Conv2d(out_channels, self.num_priors * 4,              kernel_size=3, padding=1)
+        self.conf_layer = nn.Conv2d(out_channels, self.num_priors * num_classes,    kernel_size=3, padding=1)
         self.mask_layer = nn.Conv2d(out_channels, self.num_priors * (mask_size**2), kernel_size=3, padding=1)
 
         self.aspect_ratios = aspect_ratios
@@ -77,14 +78,14 @@ class PredictionModule(nn.Module):
         conv_w = x.size(3)
         
         # The two branches of PM design (c)
-        a = self.block(x)
+        # a = self.block(x)
         
-        b = self.conv(x)
-        b = self.bn(b)
-        b = F.relu(b)
+        # b = self.conv(x)
+        # b = self.bn(b)
+        # b = F.relu(b)
         
-        # TODO: Possibly switch this out for a product
-        x = a + b
+        # # TODO: Possibly switch this out for a product
+        # x = a + b
 
         bbox = self.bbox_layer(x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, 4)
         conf = self.conf_layer(x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, self.num_classes)
@@ -94,7 +95,8 @@ class PredictionModule(nn.Module):
         bbox[:, :, :2] = F.sigmoid(bbox[:, :, :2]) - 0.5
         bbox[:, :, 0] /= conv_w
         bbox[:, :, 1] /= conv_h
-        
+
+
         mask = F.sigmoid(mask)
         
         priors = self.make_priors(conv_h, conv_w)
@@ -109,7 +111,7 @@ class PredictionModule(nn.Module):
                 priors = np.array(np.meshgrid(list(range(conv_w)),
                                               list(range(conv_h)),
                                               self.aspect_ratios,
-                                              self.scales)).T.reshape(-1, 4)
+                                              self.scales), dtype=np.float32).T.reshape(-1, 4)
                 
                 # The predictions will be in the order conv_h, conv_w, num_priors, but I don't
                 # know if meshgrid ordering is deterministic, so let's sort it here to make sure
@@ -141,7 +143,7 @@ class PredictionModule(nn.Module):
 
 
 
-class Yolact(ResNet):
+class Yolact(nn.Module):
     """
 
 
@@ -153,92 +155,33 @@ class Yolact(ResNet):
        ╚═╝    ╚═════╝ ╚══════╝╚═╝  ╚═╝ ╚═════╝   ╚═╝ 
 
 
-    Args:
+    You can set the arguments by chainging them in the backbone config object in config.py.
+
+    Parameters (in cfg.backbone):
         - selected_layers: The indices of the conv layers to use for prediction.
-        - conv_channels:   The number of output channels for the added blocks.
         - pred_scales:     A list with len(selected_layers) containing tuples of scales (see PredictionModule)
         - pred_aspect_ratios: A list of lists of aspect ratios with len(selected_layers) (see PredictionModule)
-        - block:           The resnet block style to use. You probably shouldn't change this.
-        - backbone_path:   If not None, the path of the backbone network to load in for training.
     """
 
-    def __init__(self, selected_layers=range(2,7), conv_channels=1024,
-                       pred_scales=[[.5, 1]]+[[1]]*3+[[1, 2]],
-                       pred_aspect_ratios=[[1.05, 0.62],
-                                           [1.29, 0.79, 0.47, 2.33, 0.27],
-                                           [1.19, 0.72, 0.43, 2.13, 0.25],
-                                           [1.34, 0.84, 0.52, 2.38, 0.30],
-                                           [1.40, 0.95, 0.64, 2.16]],
-                       block=Bottleneck, backbone_path=None):
-        
-        self.channels = [] # Populated by self._make_layer
-        super().__init__(block, [3, 4, 23, 3])
+    def __init__(self):
+        super().__init__()
 
-        # We don't need these where we're going
-        del self.fc
-        del self.avgpool
+        selected_layers    = cfg.backbone.selected_layers
+        pred_scales        = cfg.backbone.pred_scales
+        pred_aspect_ratios = cfg.backbone.pred_aspect_ratios
 
-        if backbone_path is not None:
-            self.load_state_dict(torch.load(backbone_path))
-
-        self.layers = nn.ModuleList([
-            self.layer1, # conv2_x
-            self.layer2, # conv3_x
-            self.layer3, # conv4_x
-            self.layer4, # conv5_x
-            self._make_layer(block, conv_channels // 4, 1, stride=2),
-            self._make_layer(block, conv_channels // 4, 1, stride=2),
-            self._make_layer(block, conv_channels // 4, 1, stride=2),
-        ])
+        self.backbone = construct_backbone(cfg.backbone)     
 
         self.selected_layers = selected_layers
         self.prediction_layers = nn.ModuleList()
 
         for idx, layer_idx in enumerate(self.selected_layers):
-            self.prediction_layers.append(PredictionModule(self.channels[layer_idx], self.channels[layer_idx],
-                                                           aspect_ratios=pred_aspect_ratios[idx], scales=pred_scales[idx]))
+            pred = PredictionModule(self.backbone.channels[layer_idx], self.backbone.channels[layer_idx],
+                                    aspect_ratios=pred_aspect_ratios[idx], scales=pred_scales[idx])
+            self.prediction_layers.append(pred)
 
         # For use in evaluation
         self.detect = Detect(cfg.num_classes, bkg_label=0, top_k=200, conf_thresh=0.01, nms_thresh=0.45)
-
-        # Now that we've stored them in self.layers, we don't need them under us, so remove these
-        del self.layer1
-        del self.layer2
-        del self.layer3
-        del self.layer4
-    
-    def _make_layer(self, block, planes, blocks, stride=1):
-        self.channels.append(planes * block.expansion)
-        return super()._make_layer(block, planes, blocks, stride)
-
-    def forward(self, x):
-        """ The input should be of size [batch_size, 3, img_h, img_w] """
-        with timer.env('pass1'):
-            x = self.conv1(x)
-            x = self.bn1(x)
-            x = self.relu(x)
-            x = self.maxpool(x)
-
-            outs = []
-            for layer in self.layers:
-                x = layer(x)
-                outs.append(x)
-
-        with timer.env('pass2'):
-            pred_outs = ([], [], [], [])
-            for idx, pred_layer in zip(self.selected_layers, self.prediction_layers):
-                p = pred_layer(outs[idx])
-                for out, pred in zip(pred_outs, p):
-                    out.append(pred)
-
-        with timer.env('cat'):
-            pred_outs = [torch.cat(x, -2) for x in pred_outs]
-
-        if self.training:
-            return pred_outs
-        else:
-            pred_outs[1] = F.softmax(pred_outs[1], -1) # Softmax the conf output
-            return self.detect(*pred_outs)
 
     def save_weights(self, path):
         """ Saves the model's weights using compression because the file sizes were getting too big. """
@@ -248,14 +191,46 @@ class Yolact(ResNet):
         """ Loads weights from a compressed save file. """
         self.load_state_dict(torch.load(path))
 
+    def init_weights(self, backbone_path):
+        """ Initialize weights for training. """
+        # Initialize the backbone with the pretrained weights.
+        self.backbone.init_backbone(backbone_path)
+
+        # Initialize the rest of the conv layers with xavier
+        for module in self.modules():
+            if isinstance(module, nn.Conv2d) and module not in self.backbone.backbone_modules:
+                nn.init.xavier_uniform_(module.weight.data)
+                if module.bias is not None:
+                    module.bias.data.zero_()
+
+    def forward(self, x):
+        """ The input should be of size [batch_size, 3, img_h, img_w] """
+        with timer.env('pass1'):
+            outs = self.backbone(x)
+
+        with timer.env('pass2'):
+            pred_outs = ([], [], [], [])
+            for idx, pred_layer in zip(self.selected_layers, self.prediction_layers):
+                p = pred_layer(outs[idx])
+                for out, pred in zip(pred_outs, p):
+                    out.append(pred)
+
+        pred_outs = [torch.cat(x, -2) for x in pred_outs]
+
+        if self.training:
+            return pred_outs
+        else:
+            pred_outs[1] = F.softmax(pred_outs[1], -1) # Softmax the conf output
+            return self.detect(*pred_outs)
 
 
 if __name__ == '__main__':
     from utils.functions import init_console
     init_console()
 
-    net = Yolact(backbone_path='weights/resnet101_reducedfc.pth')
+    net = Yolact()
     net.train()
+    net.init_weights(backbone_path='weights/' + cfg.backbone.path)
 
     # GPU
     # net = net.cuda()
@@ -267,7 +242,7 @@ if __name__ == '__main__':
     y = net(x)
 
     for a in y:
-        print(a.size())
+        print(a.size(), torch.sum(a))
     exit()
     
     net(x)

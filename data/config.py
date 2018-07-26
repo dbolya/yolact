@@ -15,7 +15,9 @@ MEANS = (104, 117, 123)
 class Config(object):
     """
     Holds the config for various networks.
-    To get the currently active config, call get_cfg()
+    To get the currently active config, call get_cfg().
+
+    To use, just do cfg.x instead of cfg['x'].
     """
 
     def __init__(self, config_dict):
@@ -43,14 +45,40 @@ coco_dataset = Config({
 })
 
 # Backbones
+from backbone import ResNetBackbone, VGGBackbone
+from torchvision.models.vgg import cfg as vggcfg
+
 resnet101_backbone = Config({
     'name': 'ResNet101',
-    'path': 'resnet101_reducedfc.pth'
+    'path': 'resnet101_reducedfc.pth',
+    'type': ResNetBackbone,
+    'args': ([3, 4, 23, 3],),
+
+    'selected_layers': list(range(2, 7)),
+    'pred_scales': [[.5, 1], [1], [1], [1], [1, 2]],
+    'pred_aspect_ratios': [[1.05, 0.62],
+                           [1.29, 0.79, 0.47, 2.33, 0.27],
+                           [1.19, 0.72, 0.43, 2.13, 0.25],
+                           [1.34, 0.84, 0.52, 2.38, 0.30],
+                           [1.40, 0.95, 0.64, 2.16]],
+})
+
+resnet50_backbone = resnet101_backbone.copy({
+    'name': 'ResNet50',
+    'path': 'resnet50-19c8e357.pth',
+    'type': ResNetBackbone,
+    'args': ([3, 4, 6, 3],),
 })
 
 vgg16_backbone = Config({
     'name': 'VGG16',
-    'path': 'vgg16_reducedfc.pth'
+    'path': 'vgg16_reducedfc.pth',
+    'type': VGGBackbone,
+    'args': (vggcfg['D'],),
+
+    'selected_layers': list(range(3, 8)),
+    'pred_scales': [[2, 3]]*5,
+    'pred_aspect_ratios': [[1]]*5,
 })
 
 # Configs
@@ -61,18 +89,17 @@ coco_base_config = Config({
     'max_iter': 400000,
     'mask_size': 16,
     'use_gt_bboxes': False,
+    'min_size': 200,
+    'max_size': 300,
+    'preserve_aspect_ratio': False,
     
     'backbone': None,
     'name': 'base_config',
-    'min_size': 0,
-    'max_size': 0,
 })
 
 yolact_resnet101_config = coco_base_config.copy({
     'name': 'yolact_resnet101',
-    'min_size': 400,
-    'max_size': 600,
-    'backbone': resnet101_backbone,
+    'backbone': vgg16_backbone,
 })
 
 def get_cfg():
