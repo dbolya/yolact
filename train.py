@@ -1,6 +1,6 @@
 from data import *
 from utils.augmentations import SSDAugmentation
-from utils.functions import MovingAverage
+from utils.functions import MovingAverage, SavePath
 from layers.modules import MultiBoxLoss
 from yolact import Yolact
 import os
@@ -31,9 +31,11 @@ parser.add_argument('--dataset_root', default=COCO_ROOT,
 parser.add_argument('--batch_size', default=32, type=int,
                     help='Batch size for training')
 parser.add_argument('--resume', default=None, type=str,
-                    help='Checkpoint state_dict file to resume training from')
+                    help='Checkpoint state_dict file to resume training from. If this is "interrupt"'\
+                         ', the model will resume training from the interrupt file.')
 parser.add_argument('--start_iter', default=0, type=int,
-                    help='Resume training at this iter')
+                    help='Resume training at this iter. If this is -1, the iteration will be'\
+                         'determined from the file name.')
 parser.add_argument('--num_workers', default=4, type=int,
                     help='Number of workers used in dataloading')
 parser.add_argument('--cuda', default=True, type=str2bool,
@@ -87,8 +89,13 @@ def train():
     net.train()
 
     if args.resume:
+        if args.resume == 'interrupt':
+            args.resume = SavePath.get_interrupt(args.save_folder)
         print('Resuming training, loading {}...'.format(args.resume))
         yolact_net.load_weights(args.resume)
+
+        if args.start_iter == -1:
+            args.start_iter = SavePath.from_str(args.resume).iteration
     else:
         print('Initializing weights...')
         yolact_net.init_weights(backbone_path=args.save_folder + cfg.backbone.path)
@@ -131,7 +138,7 @@ def train():
                                   pin_memory=True)
     
     
-    save_path = lambda epoch, iteration: args.save_folder + cfg.name + '_' + str(epoch) + '_' + str(iteration) + '.pth'
+    save_path = lambda epoch, iteration: SavePath(cfg.name, epoch, iteration).get_path(root=args.save_folder)
     time_avg = MovingAverage()
     loss_m_avg, loss_l_avg, loss_c_avg = (MovingAverage(), MovingAverage(), MovingAverage())
 
@@ -216,8 +223,7 @@ def train():
         print('Stopping early. Saving network...')
         
         # Delete previous copy of the interrupted network so we don't spam the weights folder
-        for p in Path(args.save_folder).glob('*_interrupt.pth'):
-            p.unlink()
+        SavePath.remove_interrupt(args.save_folder)
         
         yolact_net.save_weights(save_path(epoch, repr(iteration) + '_interrupt'))
         exit()

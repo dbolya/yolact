@@ -4,7 +4,7 @@ from utils.augmentations import BaseTransform
 from utils.functions import MovingAverage, ProgressBar
 from layers.box_utils import jaccard
 from utils import timer
-from utils.functions import sanitize_coordinates
+from utils.functions import sanitize_coordinates, SavePath
 import pycocotools
 
 from data import get_cfg
@@ -37,7 +37,7 @@ parser = argparse.ArgumentParser(
     description='YOLACT COCO Evaluation')
 parser.add_argument('--trained_model',
                     default='weights/ssd300_mAP_77.43_v2.pth', type=str,
-                    help='Trained state_dict file path to open')
+                    help='Trained state_dict file path to open. If "interrupt", this will open the interrupt file.')
 parser.add_argument('--confidence_threshold', default=0.01, type=float,
                     help='Detection confidence threshold')
 parser.add_argument('--top_k', default=5, type=int,
@@ -637,6 +637,9 @@ if __name__ == '__main__':
                                 prep_crowds=True)
         
         prep_coco_cats(dataset.coco.cats)
+
+        if args.trained_model == 'interrupt':
+            args.trained_model = SavePath.get_interrupt('weights/')
 
         print('Loading model...', end='')
         net = Yolact()
