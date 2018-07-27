@@ -76,9 +76,9 @@ vgg16_backbone = Config({
     'type': VGGBackbone,
     'args': (vggcfg['D'],),
 
-    'selected_layers': list(range(3, 8)),
-    'pred_scales': [[2, 3]]*5,
-    'pred_aspect_ratios': [[1]]*5,
+    'selected_layers': list(range(3, 9)),
+    'pred_scales': [[4]]*6,
+    'pred_aspect_ratios': [[1, 1.414, 0.707, 0.577, 1.73][:n] for n in [4, 6, 6, 6, 4, 4]],
 })
 
 # Configs

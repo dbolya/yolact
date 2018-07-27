@@ -107,6 +107,7 @@ class VGGBackbone(nn.Module):
 				cur_layer_idx = self.total_layer_count + len(layers)
 				self.state_dict_lookup[cur_layer_idx] = '%d.%d' % (len(self.layers), len(layers))
 
+				# Add the layers
 				layers.append(nn.Conv2d(self.in_channels, v, kernel_size=3, padding=1))
 				layers.append(nn.ReLU())
 				self.in_channels = v
@@ -131,17 +132,18 @@ class VGGBackbone(nn.Module):
 		
 		return outs
 
+	def transform_key(self, k):
+		""" Transform e.g. features.24.bias to layers.4.1.bias """
+		vals = k.split('.')
+		if int(vals[0]) in (31, 33):
+			return k
+		layerIdx = self.state_dict_lookup[int(vals[0])]
+		return 'layers.%s.%s' % (layerIdx, vals[1])
+
 	def init_backbone(self, path):
 		""" Initializes the backbone weights for training. """
-		
-		def transform_key(k):
-			""" Transform e.g. features.24.bias to layers.4.1.bias """
-			vals = k.split('.')
-			layerIdx = self.state_dict_lookup[int(vals[1])]
-			return 'layers.%s.%s' % (layerIdx, vals[2])
-
 		state_dict = torch.load(path)
-		state_dict = OrderedDict([(transform_key(k), v) for k,v in state_dict.items()])
+		state_dict = OrderedDict([(self.transform_key(k), v) for k,v in state_dict.items()])
 
 		self.load_state_dict(state_dict, strict=False)
 
