@@ -88,10 +88,11 @@ coco_base_config = Config({
     'lr_steps': (280000, 360000, 400000),
     'max_iter': 400000,
     'mask_size': 16,
-    'use_gt_bboxes': False,
     'min_size': 200,
     'max_size': 300,
+    'use_gt_bboxes': False,
     'preserve_aspect_ratio': False,
+    'use_prediction_module': False,
     
     'backbone': None,
     'name': 'base_config',

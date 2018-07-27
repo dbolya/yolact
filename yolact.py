@@ -48,9 +48,10 @@ class PredictionModule(nn.Module):
         self.mask_size   = mask_size
         self.num_priors  = len(aspect_ratios) * len(scales)
 
-        # self.block = Bottleneck(in_channels, out_channels // 4)
-        # self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=True)
-        # self.bn = nn.BatchNorm2d(out_channels)
+        if cfg.use_prediction_module:
+            self.block = Bottleneck(in_channels, out_channels // 4)
+            self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=True)
+            self.bn = nn.BatchNorm2d(out_channels)
 
         self.bbox_layer = nn.Conv2d(out_channels, self.num_priors * 4,              kernel_size=3, padding=1)
         self.conf_layer = nn.Conv2d(out_channels, self.num_priors * num_classes,    kernel_size=3, padding=1)
@@ -77,15 +78,16 @@ class PredictionModule(nn.Module):
         conv_h = x.size(2)
         conv_w = x.size(3)
         
-        # The two branches of PM design (c)
-        # a = self.block(x)
-        
-        # b = self.conv(x)
-        # b = self.bn(b)
-        # b = F.relu(b)
-        
-        # # TODO: Possibly switch this out for a product
-        # x = a + b
+        if cfg.use_prediction_module:
+            # The two branches of PM design (c)
+            a = self.block(x)
+            
+            b = self.conv(x)
+            b = self.bn(b)
+            b = F.relu(b)
+            
+            # TODO: Possibly switch this out for a product
+            x = a + b
 
         bbox = self.bbox_layer(x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, 4)
         conf = self.conf_layer(x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, self.num_classes)
@@ -237,10 +239,10 @@ if __name__ == '__main__':
     # cudnn.benchmark = True
     # torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
-    x = torch.zeros((1, 3, 600, 600))
+    x = torch.zeros((1, 3, cfg.max_size, cfg.max_size))
 
     y = net(x)
-
+    print()
     for a in y:
         print(a.size(), torch.sum(a))
     exit()

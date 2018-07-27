@@ -123,7 +123,11 @@ def prep_display(dets, img, gt, gt_masks, h, w):
     
     img_numpy = (img.permute(1, 2, 0).cpu().numpy() / 255.0 + np.array(MEANS) / 255.0).astype(np.float32)
     img_numpy = np.clip(img_numpy, 0, 1)
-    h, w, _ = img_numpy.shape # The padded size is different
+    
+    if cfg.preserve_aspect_ratio:
+        h, w, _ = img_numpy.shape # The padded size is different
+    else:
+        img_numpy = cv2.resize(img_numpy, (w,h))
     
     timer.start('Postprocessing')
     
