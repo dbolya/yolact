@@ -99,7 +99,7 @@ coco_base_config = Config({
 })
 
 yolact_resnet101_config = coco_base_config.copy({
-    'name': 'yolact_resnet101',
+    'name': 'yolact_vgg16',
     'backbone': vgg16_backbone,
 })
 
