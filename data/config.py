@@ -90,6 +90,7 @@ coco_base_config = Config({
     'mask_size': 16,
     'min_size': 200,
     'max_size': 300,
+    'train_masks': False,
     'use_gt_bboxes': False,
     'preserve_aspect_ratio': False,
     'use_prediction_module': False,

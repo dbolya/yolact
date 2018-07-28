@@ -129,7 +129,6 @@ class Pad(object):
             (masks.shape[0], self.height, self.width),
             dtype=masks.dtype)
         expand_masks[:,:im_h,:im_w] = masks
-        masks = expand_masks
 
         return expand_image, expand_masks, boxes, labels
 

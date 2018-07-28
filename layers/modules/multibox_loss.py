@@ -102,15 +102,18 @@ class MultiBoxLoss(nn.Module):
         loss_l = F.smooth_l1_loss(loc_p, loc_t, size_average=False)
 
         # Mask Loss
-        if self.use_gt_bboxes:
-            pos_masks = []
-            for idx in range(num):
-                pos_masks.append(masks[idx][idx_t[idx, pos[idx]]])
-            masks_t = torch.cat(pos_masks, 0)
-            masks_p = mask_data[pos, :].view(-1, self.mask_size**2)
-            loss_m = F.binary_cross_entropy(masks_p, masks_t, size_average=True)*100
+        if cfg.train_masks:
+            if self.use_gt_bboxes:
+                pos_masks = []
+                for idx in range(num):
+                    pos_masks.append(masks[idx][idx_t[idx, pos[idx]]])
+                masks_t = torch.cat(pos_masks, 0)
+                masks_p = mask_data[pos, :].view(-1, self.mask_size**2)
+                loss_m = F.binary_cross_entropy(masks_p, masks_t, size_average=True)*100
+            else:
+                loss_m = self.mask_loss(pos_idx, idx_t, loc_data, mask_data, priors, masks)
         else:
-            loss_m = self.mask_loss(pos_idx, idx_t, loc_data, mask_data, priors, masks)
+            loss_m = 0
 
         # Compute max conf across batch for hard negative mining
         batch_conf = conf_data.view(-1, self.num_classes)
