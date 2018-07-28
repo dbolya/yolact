@@ -140,7 +140,8 @@ def train():
     
     save_path = lambda epoch, iteration: SavePath(cfg.name, epoch, iteration).get_path(root=args.save_folder)
     time_avg = MovingAverage()
-    loss_m_avg, loss_l_avg, loss_c_avg = (MovingAverage(), MovingAverage(), MovingAverage())
+    avg_window = 100
+    loss_m_avg, loss_l_avg, loss_c_avg = (MovingAverage(avg_window), MovingAverage(avg_window), MovingAverage(avg_window))
 
     print('Begin training!')
     print()
