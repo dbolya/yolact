@@ -1,6 +1,7 @@
 
 import torch
 import os
+import math
 from pathlib import Path
 
 class MovingAverage():
@@ -13,6 +14,10 @@ class MovingAverage():
 
     def add(self, elem):
         """ Adds an element to the window, removing the earliest element if necessary. """
+        if not math.isfinite(elem):
+            print('Warning: Moving average ignored a value of %f' % elem)
+            return
+        
         self.window.append(elem)
         self.sum += elem
 
