@@ -208,7 +208,8 @@ class Yolact(nn.Module):
     def forward(self, x):
         """ The input should be of size [batch_size, 3, img_h, img_w] """
         with timer.env('pass1'):
-            outs = self.backbone(x)
+            with torch.no_grad():
+                outs = self.backbone(x)
 
         with timer.env('pass2'):
             pred_outs = ([], [], [], [])

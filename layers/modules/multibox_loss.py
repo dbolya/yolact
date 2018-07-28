@@ -47,6 +47,7 @@ class MultiBoxLoss(nn.Module):
         self.neg_overlap = neg_overlap
         self.mask_size = cfg.mask_size
         self.use_gt_bboxes = cfg.use_gt_bboxes
+        self.train_masks = cfg.train_masks
 
 
     def forward(self, predictions, targets, masks):
@@ -102,7 +103,7 @@ class MultiBoxLoss(nn.Module):
         loss_l = F.smooth_l1_loss(loc_p, loc_t, size_average=False)
 
         # Mask Loss
-        if cfg.train_masks:
+        if self.train_masks:
             if self.use_gt_bboxes:
                 pos_masks = []
                 for idx in range(num):
@@ -118,7 +119,7 @@ class MultiBoxLoss(nn.Module):
         # Compute max conf across batch for hard negative mining
         batch_conf = conf_data.view(-1, self.num_classes)
         loss_c = log_sum_exp(batch_conf) - batch_conf.gather(1, conf_t.view(-1, 1))
-
+        
         # Hard Negative Mining
         loss_c = loss_c.view(num, -1)
         loss_c[pos] = 0  # filter out pos boxes for now
