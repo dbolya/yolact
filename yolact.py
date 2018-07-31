@@ -94,9 +94,10 @@ class PredictionModule(nn.Module):
         mask = self.mask_layer(x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, self.mask_size**2)
         
         # See box_utils.decode for an explaination of this
-        bbox[:, :, :2] = F.sigmoid(bbox[:, :, :2]) - 0.5
-        bbox[:, :, 0] /= conv_w
-        bbox[:, :, 1] /= conv_h
+        if cfg.use_yolo_regressors:
+            bbox[:, :, :2] = F.sigmoid(bbox[:, :, :2]) - 0.5
+            bbox[:, :, 0] /= conv_w
+            bbox[:, :, 1] /= conv_h
 
 
         mask = F.sigmoid(mask)

@@ -94,6 +94,7 @@ coco_base_config = Config({
     'use_gt_bboxes': False,
     'preserve_aspect_ratio': False,
     'use_prediction_module': False,
+    'use_yolo_regressors': True,
     
     'backbone': None,
     'name': 'base_config',
