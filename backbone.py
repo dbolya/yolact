@@ -88,6 +88,8 @@ class VGGBackbone(nn.Module):
         for layer_cfg in cfg_layers:
             self._make_layer(layer_cfg)
 
+        self.l2norm = L2Norm(512, scale=20)
+
         # These modules will be initialized by init_backbone,
         # so don't overwrite their initialization later.
         self.backbone_modules = [m for m in self.modules() if isinstance(m, nn.Conv2d)]
@@ -111,12 +113,6 @@ class VGGBackbone(nn.Module):
                 layers.append(nn.Conv2d(self.in_channels, v, kernel_size=3, padding=1))
                 layers.append(nn.ReLU())
                 self.in_channels = v
-
-        if len(self.layers) == 3:
-            # An extra layer that doesn't exist in VGG originally,
-            # so we have to reduce the layer count.
-            layers.append(L2Norm(self.in_channels, scale=20))
-            self.total_layer_count -= 1
         
         self.total_layer_count += len(layers)
         self.channels.append(self.in_channels)
@@ -126,9 +122,13 @@ class VGGBackbone(nn.Module):
         """ Returns a list of convouts for each layer. """
         outs = []
 
-        for layer in self.layers:
+        for idx, layer in enumerate(self.layers):
             x = layer(x)
-            outs.append(x)
+            
+            if idx == 3:
+                outs.append(self.l2norm(x))
+            else:
+                outs.append(x)
         
         return outs
 

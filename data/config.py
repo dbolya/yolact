@@ -47,6 +47,7 @@ coco_dataset = Config({
 # Backbones
 from backbone import ResNetBackbone, VGGBackbone
 from torchvision.models.vgg import cfg as vggcfg
+from math import sqrt
 
 resnet101_backbone = Config({
     'name': 'ResNet101',
@@ -78,7 +79,7 @@ vgg16_backbone = Config({
 
     'selected_layers': list(range(3, 9)),
     'pred_scales': [[4]]*6,
-    'pred_aspect_ratios': [[1, 1.414, 0.707, 0.577, 1.73][:n] for n in [4, 6, 6, 6, 4, 4]],
+    'pred_aspect_ratios': [[1, 0.9, sqrt(2), 1/sqrt(2), sqrt(3), 1/sqrt(3)][:n] for n in [4, 6, 6, 6, 4, 4]],
 })
 
 # Configs

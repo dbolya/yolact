@@ -110,36 +110,62 @@ class PredictionModule(nn.Module):
         """ Note that priors are [x,y,width,height] where (x,y) is the center of the box. """
         with timer.env('makepriors'):
             if self.last_conv_size != (conv_w, conv_h):
-                # Fancy fast way of doing a cartesian product
-                priors = np.array(np.meshgrid(list(range(conv_w)),
-                                              list(range(conv_h)),
-                                              self.aspect_ratios,
-                                              self.scales), dtype=np.float32).T.reshape(-1, 4)
+                # # Fancy fast way of doing a cartesian product
+                # priors = np.array(np.meshgrid(list(range(conv_w)),
+                #                               list(range(conv_h)),
+                #                               self.aspect_ratios,
+                #                               self.scales), dtype=np.float32).T.reshape(-1, 4)
                 
-                # The predictions will be in the order conv_h, conv_w, num_priors, but I don't
-                # know if meshgrid ordering is deterministic, so let's sort it here to make sure
-                # the elements are in this order. aspect_ratios and scales are interchangable
-                # because the network can just learn which is which, but conv_h and conv_w orders
-                # have to match or the network will get priors for a cell that is in the complete
-                # wrong place in the image. Note: the sort order is from last to first (so 1, 0, etc.)
-                ind = np.lexsort((priors[:,3],priors[:,2],priors[:,0],priors[:,1]), axis=0)
-                priors = priors[ind]
+                # # The predictions will be in the order conv_h, conv_w, num_priors, but I don't
+                # # know if meshgrid ordering is deterministic, so let's sort it here to make sure
+                # # the elements are in this order. aspect_ratios and scales are interchangable
+                # # because the network can just learn which is which, but conv_h and conv_w orders
+                # # have to match or the network will get priors for a cell that is in the complete
+                # # wrong place in the image. Note: the sort order is from last to first (so 1, 0, etc.)
+                # ind = np.lexsort((priors[:,3],priors[:,2],priors[:,0],priors[:,1]), axis=0)
+                # priors = priors[ind]
                 
-                # Priors are in center-size form
-                priors[:, [0, 1]] += 0.5
+                # # Priors are in center-size form
+                # priors[:, [0, 1]] += 0.5
 
-                # Compute the correct width and height of each bounding box
-                aspect_ratios = priors[:, 2].copy() # In the form w / h
-                scales        = priors[:, 3].copy()
-                priors[:, 2] = scales * aspect_ratios # p_w = (scale / h) * w
-                priors[:, 3] = scales / aspect_ratios # p_h = (scale / w) * h
+                # # Compute the correct width and height of each bounding box
+                # aspect_ratios = priors[:, 2].copy() # In the form w / h
+                # scales        = priors[:, 3].copy()
+                # priors[:, 2] = scales * aspect_ratios # p_w = (scale / h) * w
+                # priors[:, 3] = scales / aspect_ratios # p_h = (scale / w) * h
 
-                # Make those coordinate relative
-                priors[:, [0, 2]] /= conv_w
-                priors[:, [1, 3]] /= conv_h
+                # # Make those coordinate relative
+                # priors[:, [0, 2]] /= conv_w
+                # priors[:, [1, 3]] /= conv_h
                 
-                # Cache priors because copying them to the gpu takes time
-                self.priors = torch.Tensor(priors)
+                # # Cache priors because copying them to the gpu takes time
+                # self.priors = torch.Tensor(priors)
+                # self.last_conv_size = (conv_w, conv_h)
+                from itertools import product
+                from math import sqrt
+
+                mean = []
+                for i, j in product(range(conv_h), repeat=2):
+                    f_k = conv_w
+                    # unit center x,y
+                    cx = (j + 0.5) / f_k
+                    cy = (i + 0.5) / f_k
+
+                    # aspect_ratio: 1
+                    # rel size: min_size
+                    s_k = 4/f_k
+                    mean += [cx, cy, s_k, s_k]
+
+                    # aspect_ratio: 1
+                    # rel size: sqrt(s_k * s_(k+1))
+                    s_k_prime = sqrt(1.5) * s_k
+                    mean += [cx, cy, s_k_prime, s_k_prime]
+
+                    # rest of aspect ratios
+                    for ar in self.aspect_ratios[2:]:
+                        mean += [cx, cy, s_k*ar, s_k/ar]
+                
+                self.priors = torch.Tensor(mean).view(-1, 4)
                 self.last_conv_size = (conv_w, conv_h)
         
         return self.priors
