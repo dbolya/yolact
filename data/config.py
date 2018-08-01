@@ -91,6 +91,10 @@ coco_base_config = Config({
     'mask_size': 16,
     'min_size': 200,
     'max_size': 300,
+    
+    'force_cpu_detect': True,
+    'force_cpu_nms': True,
+
     'train_masks': False,
     'use_gt_bboxes': False,
     'preserve_aspect_ratio': False,

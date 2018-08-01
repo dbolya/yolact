@@ -44,6 +44,12 @@ class Detect(Function):
             Note that the outputs are sorted only if cross_class_nms is False
         """
 
+        if cfg.force_cpu_detect:
+            loc_data = loc_data.cpu()
+            conf_data = conf_data.cpu()
+            mask_data = mask_data.cpu()
+            prior_data = prior_data.cpu()
+
         with timer.env('Detect'):
             num = loc_data.size(0)  # batch size
             num_priors = prior_data.size(0)
@@ -77,7 +83,7 @@ class Detect(Function):
         boxes = decoded_boxes[l_mask].view(-1, 4)
         masks = mask_data[batch_idx, l_mask[:, 0], :]
         # idx of highest scoring and non-overlapping boxes per class
-        ids, count = nms(boxes, scores, self.nms_thresh, self.top_k)
+        ids, count = nms(boxes, scores, self.nms_thresh, self.top_k, force_cpu=cfg.force_cpu_nms)
         ids = ids[:count]
         output[batch_idx, :count] = \
             torch.cat((classes[ids].unsqueeze(1).float(), scores[ids].unsqueeze(1), boxes[ids], masks[ids]), 1)
@@ -96,7 +102,7 @@ class Detect(Function):
             boxes = decoded_boxes[l_mask].view(-1, 4)
             masks = mask_data[batch_idx, l_mask[:, 0], :]
             # idx of highest scoring and non-overlapping boxes per class
-            ids, count = nms(boxes, scores, self.nms_thresh, self.top_k)
+            ids, count = nms(boxes, scores, self.nms_thresh, self.top_k, force_cpu=cfg.force_cpu_nms)
             ids = ids[:count]
             classes = torch.ones(count, 1).float()*(cl-1)
             tmp_output[cl-1, :count] = \
