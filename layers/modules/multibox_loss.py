@@ -69,6 +69,9 @@ class MultiBoxLoss(nn.Module):
 
         loc_data, conf_data, mask_data, priors = predictions
         num = loc_data.size(0)
+        # This is necessary for training on multiple GPUs because
+        # DataParallel will cat the priors from each GPU together
+        priors = priors[:loc_data.size(1), :]
         num_priors = (priors.size(0))
         num_classes = self.num_classes
 
