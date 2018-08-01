@@ -200,8 +200,12 @@ def train():
                 if iteration % 10 == 0:
                     print('timer: %.4f sec.' % (t1 - t0))
                     eta_str = datetime.timedelta(seconds=(cfg.max_iter-iteration) * time_avg.get_avg())
-                    print('epoch ' + repr(epoch) + ' || iter ' + repr(iteration) + ' || Bbox Loss: %.4f || Conf Loss: %.4f || ETA: %s ||'
-                            % (loss_l_avg.get_avg(), loss_c_avg.get_avg(), eta_str), end=' ')
+                    l = loss_l_avg.get_avg()
+                    c = loss_c_avg.get_avg()
+                    m = loss_m_avg.get_avg()
+                    t = l + c + m
+                    print('[%3d] %7d || B: %.3f | C: %.3f | M: %.3f | T: %.3f || ETA: %s ||'
+                            % (epoch, iteration, l,c,m,t, eta_str), end=' ')
 
                 if args.visdom:
                     update_vis_plot(iteration, loss_l.item(), loss_c.item(),
