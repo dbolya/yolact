@@ -149,9 +149,11 @@ class Resize(object):
         self.max_size = cfg.max_size
         self.preserve_aspect_ratio = cfg.preserve_aspect_ratio
 
-    def __call__(self, image, masks, boxes=None, labels=None):
+    def __call__(self, image, masks, boxes, labels=None):
+        img_h, img_w, _ = image.shape
+        
         if self.preserve_aspect_ratio:
-            height, width, depth = image.shape
+            width, height = (img_w, img_h)
 
             min_scale = self.min_size / min(width, height)
             width  *= min_scale
@@ -180,6 +182,10 @@ class Resize(object):
                 masks = np.expand_dims(masks, 0)
             else:
                 masks = masks.transpose((2, 0, 1))
+
+        # Scale bounding boxes (which are currently absolute coordinates)
+        boxes[:, [0, 2]] *= (width  / img_w)
+        boxes[:, [1, 3]] *= (height / img_h)
 
         return image, masks, boxes, labels
 

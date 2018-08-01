@@ -59,6 +59,7 @@ def avg_iou(ars:list):
 
 	return np.average(np.max(ious, axis=0))
 
+# TODO: These scripts don't take into account the fact that we're resizing the boxes. Fix that.
 if __name__ == '__main__':
 	res = minimize(lambda x: -avg_iou(x), [1.19613237, 0.70644902, 0.1], method='Nelder-Mead')
 	print(res.x)
