@@ -6,15 +6,13 @@ import numpy as np
 from itertools import product
 from math import sqrt
 
-from data.config import get_cfg
+from data.config import cfg
 from layers import Detect
 from backbone import construct_backbone
 
 import torch.backends.cudnn as cudnn
 from utils import timer
 from utils.functions import MovingAverage
-
-cfg = get_cfg()
 
 class PredictionModule(nn.Module):
     """

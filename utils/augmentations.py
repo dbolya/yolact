@@ -5,8 +5,7 @@ import numpy as np
 import types
 from numpy import random
 
-from data import get_cfg
-cfg = get_cfg()
+from data import cfg
 
 
 def intersect(box_a, box_b):

@@ -7,8 +7,7 @@ from utils import timer
 from utils.functions import sanitize_coordinates, SavePath
 import pycocotools
 
-from data import get_cfg
-cfg = get_cfg()
+from data import cfg
 
 import numpy as np
 import torch

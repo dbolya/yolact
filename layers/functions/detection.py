@@ -3,8 +3,7 @@ from torch.autograd import Function
 from ..box_utils import decode, nms
 from utils import timer
 
-from data import get_cfg
-cfg = get_cfg()
+from data import cfg
 
 
 class Detect(Function):

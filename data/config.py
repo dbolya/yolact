@@ -37,6 +37,17 @@ class Config(object):
 
         return ret
 
+    def replace(self, new_config_dict):
+        """
+        Copies new_config_dict into this config object.
+        Note: new_config_dict can also be a config object.
+        """
+        if isinstance(new_config_dict, Config):
+            new_config_dict = vars(new_config_dict)
+
+        for key, val in new_config_dict.items():
+            self.__setattr__(key, val)
+
 
 # Datasets
 coco_dataset = Config({
@@ -97,7 +108,7 @@ coco_base_config = Config({
     'num_classes': 81,
     'lr_steps': (280000, 360000, 400000),
     'max_iter': 400000,
-    'mask_size': 16,
+    'mask_size': 20,
     
     # Input image size. If preserve_aspect_ratio is False, min_size is ignored.
     'min_size': 200,
@@ -141,6 +152,23 @@ yolact_resnet101_config = coco_base_config.copy({
     'use_yolo_regressors': True,
 })
 
+# Pretty close to the original ssd300 just using resnet101 instead of vgg16
+ssd600_resnet101_config = coco_base_config.copy({
+    'name': 'ssd600_resnet101',
+    'backbone': resnet101_backbone.copy({
+        'selected_layers': list(range(2, 8)),
+        'pred_scales': [[5, 4]]*6,
+        'pred_aspect_ratios': [ [[1], [1, sqrt(2), 1/sqrt(2), sqrt(3), 1/sqrt(3)][:n]] for n in [3, 5, 5, 5, 3, 3] ],
+    }),
+
+    'max_size': 600,
+
+    'train_masks': True,
+    'preserve_aspect_ratio': False,
+    'use_prediction_module': False,
+    'use_yolo_regressors': False,
+})
+
 # Close to vanilla ssd300
 ssd300_config = coco_base_config.copy({
     'name': 'ssd300',
@@ -152,12 +180,20 @@ ssd300_config = coco_base_config.copy({
 
     'max_size': 300,
 
-    'train_masks': False,
+    'train_masks': True,
     'preserve_aspect_ratio': False,
     'use_prediction_module': False,
     'use_yolo_regressors': False,
 })
 
-def get_cfg():
-    """ Returns the currently loaded config object. """
-    return yolact_resnet101_config
+cfg = ssd600_resnet101_config.copy()
+
+def set_cfg(config_name:str):
+    """ Sets the active config. Works even if cfg is already imported! """
+    global cfg
+
+    # Note this is not just an eval because I'm lazy, but also because it can
+    # be used like ssd300_config.copy({'max_size': 400}) for extreme fine-tuning
+    cfg.replace(eval(config_name))
+
+    

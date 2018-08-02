@@ -2,8 +2,7 @@
 import torch
 from utils import timer
 
-from data import get_cfg
-cfg = get_cfg()
+from data import cfg
 
 def point_form(boxes):
     """ Convert prior_boxes to (xmin, ymin, xmax, ymax)

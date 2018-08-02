@@ -52,12 +52,14 @@ parser.add_argument('--visdom', default=False, type=str2bool,
                     help='Use visdom for loss visualization')
 parser.add_argument('--save_folder', default='weights/',
                     help='Directory for saving checkpoint models')
-parser.add_argument('--model_name', default='yolact',
-                    help='The name of the model used for saving checkpoints')
+parser.add_argument('--config', default=None,
+                    help='The config object to use.')
 parser.add_argument('--save_interval', default=10000, type=int,
                     help='The number of iterations between saving the model.')
 args = parser.parse_args()
 
+if args.config is not None:
+    set_cfg(args.config)
 
 if torch.cuda.is_available():
     if args.cuda:
@@ -73,7 +75,6 @@ def train():
     if not os.path.exists(args.save_folder):
         os.mkdir(args.save_folder)
 
-    cfg = get_cfg()
     dataset = COCODetection(root=args.dataset_root,
                             image_set=cfg.dataset.split,
                             transform=SSDAugmentation(MEANS))

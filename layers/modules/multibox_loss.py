@@ -6,8 +6,7 @@ from torch.autograd import Variable
 from ..box_utils import match, log_sum_exp, decode
 from utils.functions import sanitize_coordinates
 
-from data import get_cfg
-cfg = get_cfg()
+from data import cfg
 
 class MultiBoxLoss(nn.Module):
     """SSD Weighted Loss Function
