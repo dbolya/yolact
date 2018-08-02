@@ -1,8 +1,8 @@
 from data import COCO_ROOT, COCODetection, MEANS, COLORS, COCO_CLASSES
 from yolact import Yolact
-from utils.augmentations import BaseTransform
+from utils.augmentations import BaseTransform, Resize
 from utils.functions import MovingAverage, ProgressBar
-from layers.box_utils import jaccard
+from layers.box_utils import jaccard, center_size
 from utils import timer
 from utils.functions import sanitize_coordinates, SavePath
 import pycocotools
@@ -125,7 +125,22 @@ def prep_display(dets, img, gt, gt_masks, h, w):
     img_numpy = np.clip(img_numpy, 0, 1)
     
     if cfg.preserve_aspect_ratio:
-        h, w, _ = img_numpy.shape # The padded size is different
+        # Undo padding
+        r_w, r_h = Resize.faster_rcnn_scale(w, h, cfg.min_size, cfg.max_size)
+        img_numpy = img_numpy[:r_h, :r_w]
+
+        # Undo resizing
+        img_numpy = cv2.resize(img_numpy, (w,h))
+
+        # Get rid of any detections whose centers are outside the image
+        boxes = dets[:, 2:6]
+        boxes = center_size(boxes)
+        s_w, s_h = (r_w/cfg.max_size, r_h/cfg.max_size)
+        not_outside = ((boxes[:, 0] > s_w) + (boxes[:, 1] > s_h)) < 1 # not (a or b)
+        dets = dets[not_outside]
+
+        # A hack to scale the bboxes to the right size
+        w, h = (cfg.max_size / r_w * w, cfg.max_size / r_h * h)
     else:
         img_numpy = cv2.resize(img_numpy, (w,h))
     
@@ -161,7 +176,7 @@ def prep_display(dets, img, gt, gt_masks, h, w):
     timer.stop('Postprocessing')
 
     # timer.start('Drawing Image')
-    for j in reversed(range(args.top_k)):
+    for j in reversed(range(min(args.top_k, len(all_boxes)))):
         box_obj = all_boxes[j]
 
         # if box_obj['score'] < 0.1:

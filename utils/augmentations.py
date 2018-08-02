@@ -132,7 +132,6 @@ class Pad(object):
 
         return expand_image, expand_masks, boxes, labels
 
-
 class Resize(object):
     """
     The same resizing scheme as used in faster R-CNN
@@ -142,6 +141,19 @@ class Resize(object):
     If the longer side is then over max_size, we instead resize
     the image so the long side is max_size.
     """
+
+    @staticmethod
+    def faster_rcnn_scale(width, height, min_size, max_size):
+        min_scale = min_size / min(width, height)
+        width  *= min_scale
+        height *= min_scale
+
+        max_scale = max_size / max(width, height)
+        if max_scale < 1: # If a size is greater than max_size
+            width  *= max_scale
+            height *= max_scale
+        
+        return int(width), int(height)
 
     def __init__(self, resize_masks=True):
         self.resize_masks = resize_masks
@@ -153,22 +165,9 @@ class Resize(object):
         img_h, img_w, _ = image.shape
         
         if self.preserve_aspect_ratio:
-            width, height = (img_w, img_h)
-
-            min_scale = self.min_size / min(width, height)
-            width  *= min_scale
-            height *= min_scale
-
-            max_scale = self.max_size / max(width, height)
-            if max_scale < 1: # If a size is greater than max_size
-                width  *= max_scale
-                height *= max_scale
-            
-            width  = int(width)
-            height = int(height)
+            width, height = Resize.faster_rcnn_scale(img_w, img_h, self.min_size, self.max_size)
         else:
-            width  = self.max_size
-            height = self.max_size
+            width, height = self.max_size, self.max_size
 
         image = cv2.resize(image, (width, height))
         
