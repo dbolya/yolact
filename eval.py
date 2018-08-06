@@ -7,7 +7,7 @@ from utils import timer
 from utils.functions import sanitize_coordinates, SavePath
 import pycocotools
 
-from data import cfg
+from data import cfg, set_cfg
 
 import numpy as np
 import torch
@@ -73,10 +73,15 @@ parser.add_argument('--mask_det_file', default='results/mask_detections.json', t
                     help='The output file for coco mask results if --coco_results is set.')
 parser.add_argument('--max_num_detections', default=100, type=int,
                     help='The maximum number of detections to consider for each image for mAP scoring. COCO uses 100.')
+parser.add_argument('--config', default=None,
+                    help='The config object to use.')
 
 parser.set_defaults(display=False, resume=False, output_coco_json=False, shuffle=False)
 
 args = parser.parse_args()
+
+if args.config is not None:
+    set_cfg(args.config)
 
 iou_thresholds = [x / 100 for x in range(50, 100, 5)]
 coco_cats = [] # Call prep_coco_cats to fill this
@@ -577,6 +582,7 @@ def evaluate(net, dataset):
                 if it > 1:
                     print('Avg FPS: %.4f' % (1 / frame_times.get_avg()))
                 plt.imshow(np.clip(img_numpy, 0, 1))
+                plt.title(str(dataset.ids[image_idx]))
                 plt.show()
             else:
                 if it > 1: fps = 1 / frame_times.get_avg()

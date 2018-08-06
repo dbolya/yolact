@@ -118,7 +118,7 @@ class PredictionModule(nn.Module):
                     # +0.5 because priors are in center-size notation
                     x = (i + 0.5) / conv_w
                     y = (j + 0.5) / conv_h
-
+                    
                     for scale, ars in zip(self.scales, self.aspect_ratios):
                         for ar in ars:
                             w = scale * ar / conv_w
@@ -229,8 +229,11 @@ if __name__ == '__main__':
     # torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
     x = torch.zeros((1, 3, cfg.max_size, cfg.max_size))
-
     y = net(x)
+
+    for p in net.prediction_layers:
+        print(p.last_conv_size)
+
     print()
     for a in y:
         print(a.size(), torch.sum(a))

@@ -66,13 +66,9 @@ resnet101_backbone = Config({
     'type': ResNetBackbone,
     'args': ([3, 4, 23, 3],),
 
-    'selected_layers': list(range(2, 7)),
-    'pred_scales': [[1, 2], [2], [2], [2], [2]],
-    'pred_aspect_ratios': [[[1], [1.05, 0.62]],
-                           [[1.29, 0.79, 0.47, 2.33, 0.27]],
-                           [[1.19, 0.72, 0.43, 2.13, 0.25]],
-                           [[1.34, 0.84, 0.52, 2.38, 0.30]],
-                           [[1.40, 0.95, 0.64, 2.16]]],
+    'selected_layers': list(range(2, 8)),
+    'pred_scales': [[1]]*6,
+    'pred_aspect_ratios': [ [[0.66685089, 1.7073535, 0.87508774, 1.16524493, 0.49059086]] ] * 6,
 })
 
 resnet50_backbone = resnet101_backbone.copy({
@@ -143,11 +139,10 @@ yolact_resnet101_config = coco_base_config.copy({
     'name': 'yolact_resnet101',
     'backbone': resnet101_backbone,
 
-    'min_size': 400,
-    'max_size': 600,
+    'max_size': 550,
 
     'train_masks': True,
-    'preserve_aspect_ratio': True,
+    'preserve_aspect_ratio': False,
     'use_prediction_module': True,
     'use_yolo_regressors': True,
 })
@@ -161,7 +156,7 @@ ssd600_resnet101_config = coco_base_config.copy({
         'pred_aspect_ratios': [ [[1], [1, sqrt(2), 1/sqrt(2), sqrt(3), 1/sqrt(3)][:n]] for n in [3, 5, 5, 5, 3, 3] ],
     }),
 
-    'max_size': 600,
+    'max_size': 550,
 
     'train_masks': True,
     'preserve_aspect_ratio': False,
