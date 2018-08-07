@@ -117,7 +117,7 @@ coco_base_config = Config({
     # Whether or not to tie the mask loss to 0
     'train_masks': False,
     # If enabled, the gt masks will be cropped using the gt bboxes instead of the predicted ones.
-    # This speeds up training time considerably but results in a worse mAP at test time.
+    # This speeds up training time considerably but results in much worse mAP at test time.
     'use_gt_bboxes': False,
 
     # Whether or not to preserve aspect ratio when resizing the image.
@@ -131,6 +131,12 @@ coco_base_config = Config({
     # Whether or not to use the predicted coordinate scheme from Yolo v2
     'use_yolo_regressors': False,
     
+    # For training, bboxes are considered "positive" if their anchors have a 0.5 IoU overlap
+    # or greater with a ground truth box. If this is true, instead of using the anchor boxes
+    # for this IoU computation, the matching function will use the predicted bbox coordinates.
+    # Don't turn this on if you're not using yolo regressors!
+    'use_prediction_matching': False,
+
     'backbone': None,
     'name': 'base_config',
 })

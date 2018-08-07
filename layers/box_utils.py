@@ -74,7 +74,7 @@ def jaccard(box_a, box_b, iscrowd=False):
         return inter / union  # [A,B]
 
 
-def match(threshold, truths, priors, labels, loc_t, conf_t, idx_t, idx):
+def match(threshold, truths, priors, labels, loc_t, conf_t, idx_t, idx, loc_data):
     """Match each prior box with the ground truth box of the highest jaccard
     overlap, encode the bounding boxes, then return the matched indices
     corresponding to both confidence and location preds.
@@ -86,14 +86,15 @@ def match(threshold, truths, priors, labels, loc_t, conf_t, idx_t, idx):
         loc_t: (tensor) Tensor to be filled w/ endcoded location targets.
         conf_t: (tensor) Tensor to be filled w/ matched indices for conf preds.
         idx_t: (tensor) Tensor to be filled w/ the index of the matched gt box for each prior.
-        idx: (int) current batch index
+        idx: (int) current batch index.
+        loc_data: (tensor) The predicted bbox regression coordinates for this batch.
     Return:
         The matched indices corresponding to 1)location and 2)confidence preds.
     """
     # jaccard index
     overlaps = jaccard(
         truths,
-        point_form(priors)
+        decode(loc_data, priors) if cfg.use_prediction_matching else point_form(priors)
     )
     # (Bipartite Matching)
     # [1,num_objects] best prior for each ground truth
