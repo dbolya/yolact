@@ -110,11 +110,11 @@ class Pad(object):
 
     Note: this expects im_w <= width and im_h <= height
     """
-    def __init__(self, width, height, mean=(104, 117, 123), pad_masks=True):
+    def __init__(self, width, height, mean=(104, 117, 123), pad_gt=True):
         self.mean = mean
         self.width = width
         self.height = height
-        self.pad_masks = pad_masks
+        self.pad_gt = pad_gt
 
     def __call__(self, image, masks, boxes=None, labels=None):
         im_h, im_w, depth = image.shape
@@ -125,7 +125,7 @@ class Pad(object):
         expand_image[:, :, :] = self.mean
         expand_image[:im_h, :im_w] = image
 
-        if self.pad_masks:
+        if self.pad_gt:
             expand_masks = np.zeros(
                 (masks.shape[0], self.height, self.width),
                 dtype=masks.dtype)
@@ -157,8 +157,8 @@ class Resize(object):
         
         return int(width), int(height)
 
-    def __init__(self, resize_masks=True):
-        self.resize_masks = resize_masks
+    def __init__(self, resize_gt=True):
+        self.resize_gt = resize_gt
         self.min_size = cfg.min_size
         self.max_size = cfg.max_size
         self.preserve_aspect_ratio = cfg.preserve_aspect_ratio
@@ -173,7 +173,7 @@ class Resize(object):
 
         image = cv2.resize(image, (width, height))
         
-        if self.resize_masks:
+        if self.resize_gt:
             # Act like each object is a color channel
             masks = masks.transpose((1, 2, 0))
             masks = cv2.resize(masks, (width, height))
@@ -184,9 +184,9 @@ class Resize(object):
             else:
                 masks = masks.transpose((2, 0, 1))
 
-        # Scale bounding boxes (which are currently absolute coordinates)
-        boxes[:, [0, 2]] *= (width  / img_w)
-        boxes[:, [1, 3]] *= (height / img_h)
+            # Scale bounding boxes (which are currently absolute coordinates)
+            boxes[:, [0, 2]] *= (width  / img_w)
+            boxes[:, [1, 3]] *= (height / img_h)
 
         return image, masks, boxes, labels
 
@@ -529,8 +529,8 @@ class BaseTransform(object):
     def __init__(self, mean):
         self.augment = Compose([
             ConvertFromInts(),
-            Resize(resize_masks=False),
-            Pad(cfg.max_size, cfg.max_size, mean, pad_masks=False),
+            Resize(resize_gt=False),
+            Pad(cfg.max_size, cfg.max_size, mean, pad_gt=False),
             SubtractMeans(mean)
         ])
 

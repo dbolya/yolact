@@ -297,13 +297,12 @@ def mask_iou(mask1, mask2, iscrowd=False):
     return ret.cpu()
 
 def bbox_iou(bbox1, bbox2, iscrowd=False):
-    timer.start('BBox IoU')
-    ret = jaccard(bbox1, bbox2, iscrowd)
-    timer.stop('BBox IoU')
+    with timer.env('BBox IoU'):
+        ret = jaccard(bbox1, bbox2, iscrowd)
     return ret.cpu()
 
 def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, crowd, image_id, detections:Detections=None):
-    """ Returns a list of APs for this image, wich each element being for a class  """
+    """ Returns a list of APs for this image, with each element being for a class  """
     if not args.output_coco_json:
         timer.start('Prepare gt')
         gt_boxes = torch.Tensor(gt[:, :4])
@@ -321,43 +320,43 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, crowd, image_id, detect
 
         timer.stop('Prepare gt')
 
-    timer.start('Sort')
-    _, sort_idx = dets[:, 1].sort(0, descending=True)
-    dets = dets[sort_idx, :]
-    timer.stop('Sort')
+    with timer.env('Sort'):
+        _, sort_idx = dets[:, 1].sort(0, descending=True)
+        dets = dets[sort_idx, :]
 
-    timer.start('Prepare pred')
-    if dets.size(0) > args.max_num_detections:
-        dets = dets[:args.max_num_detections]
-    classes = list(dets[:, 0].cpu().numpy().astype(int))
-    scores = list(dets[:, 1].cpu().numpy().astype(float))
-    boxes = dets[:, 2:6]
-    x1, x2 = sanitize_coordinates(boxes[:, 0], boxes[:, 2], w, cast=False)
-    y1, y2 = sanitize_coordinates(boxes[:, 1], boxes[:, 3], h, cast=False)
-    boxes = torch.stack((x1, y1, x2, y2), dim=1)
-    masks = dets[:, 6:].cpu().numpy()
-    full_masks = torch.zeros(masks.shape[0], h, w)
-    timer.stop('Prepare pred')
+    with timer.env('Prepare pred'):
+        if dets.size(0) > args.max_num_detections:
+            dets = dets[:args.max_num_detections]
+        
+        classes = list(dets[:, 0].cpu().numpy().astype(int))
+        scores = list(dets[:, 1].cpu().numpy().astype(float))
+        
+        boxes = dets[:, 2:6]
+        x1, x2 = sanitize_coordinates(boxes[:, 0], boxes[:, 2], w, cast=False)
+        y1, y2 = sanitize_coordinates(boxes[:, 1], boxes[:, 3], h, cast=False)
+        boxes = torch.stack((x1, y1, x2, y2), dim=1)
+        
+        masks = dets[:, 6:].cpu().numpy()
+        full_masks = torch.zeros(masks.shape[0], h, w)
 
     # Scale up the predicted masks to be comparable to the gt masks
-    timer.start('Scale masks')
-    for i in range(masks.shape[0]):
-        x1, y1, x2, y2 = boxes[i, :].cpu().numpy().astype(np.int32)
+    with timer.env('Upsample masks'):
+        for i in range(masks.shape[0]):
+            x1, y1, x2, y2 = boxes[i, :].cpu().numpy().astype(np.int32)
 
-        mask_w = x2 - x1
-        mask_h = y2 - y1
+            mask_w = x2 - x1
+            mask_h = y2 - y1
 
-        # I don't know how this can happen (since they're sanitized to begin with), but it can
-        if mask_w * mask_h <= 0 or mask_w < 0:
-            continue
+            # I don't know how this can happen (since they're sanitized to begin with), but it can
+            if mask_w * mask_h <= 0 or mask_w < 0:
+                continue
 
-        pred_mask = masks[i, :].reshape(cfg.mask_size, cfg.mask_size, 1)
-        local_mask = cv2.resize(pred_mask, (mask_w, mask_h), interpolation=cv2.INTER_LINEAR)
-        local_mask = (local_mask > 0.5).astype(np.float32)
-        full_masks[i, y1:y2, x1:x2] = torch.Tensor(local_mask)
+            pred_mask = masks[i, :].reshape(cfg.mask_size, cfg.mask_size, 1)
+            local_mask = cv2.resize(pred_mask, (mask_w, mask_h), interpolation=cv2.INTER_LINEAR)
+            local_mask = (local_mask > 0.5).astype(np.float32)
+            full_masks[i, y1:y2, x1:x2] = torch.Tensor(local_mask)
 
-    masks = full_masks.view(-1, h*w)
-    timer.stop('Scale masks')
+        masks = full_masks.view(-1, h*w)
 
     if args.output_coco_json:
         boxes = boxes.cpu().numpy()
@@ -411,9 +410,7 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, crowd, image_id, detect
                         if gt_used[j] or gt_classes[j] != _class:
                             continue
                             
-                        timer.stop('Main loop')
                         iou = iou_func(i, j)
-                        timer.start('Main loop')
 
                         if iou > max_iou_found:
                             max_iou_found = iou
@@ -431,9 +428,7 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, crowd, image_id, detect
                                 if crowd_classes[j] != _class:
                                     continue
                                 
-                                timer.stop('Main loop')
                                 iou = crowd_func(i, j)
-                                timer.start('Main loop')
 
                                 if iou > iou_threshold:
                                     matched_crowd = True
