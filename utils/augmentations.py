@@ -110,10 +110,11 @@ class Pad(object):
 
     Note: this expects im_w <= width and im_h <= height
     """
-    def __init__(self, width, height, mean=(104, 117, 123)):
+    def __init__(self, width, height, mean=(104, 117, 123), pad_masks=True):
         self.mean = mean
         self.width = width
         self.height = height
+        self.pad_masks = pad_masks
 
     def __call__(self, image, masks, boxes=None, labels=None):
         im_h, im_w, depth = image.shape
@@ -124,12 +125,14 @@ class Pad(object):
         expand_image[:, :, :] = self.mean
         expand_image[:im_h, :im_w] = image
 
-        expand_masks = np.zeros(
-            (masks.shape[0], self.height, self.width),
-            dtype=masks.dtype)
-        expand_masks[:,:im_h,:im_w] = masks
+        if self.pad_masks:
+            expand_masks = np.zeros(
+                (masks.shape[0], self.height, self.width),
+                dtype=masks.dtype)
+            expand_masks[:,:im_h,:im_w] = masks
+            masks = expand_masks
 
-        return expand_image, expand_masks, boxes, labels
+        return expand_image, masks, boxes, labels
 
 class Resize(object):
     """
@@ -526,8 +529,8 @@ class BaseTransform(object):
     def __init__(self, mean):
         self.augment = Compose([
             ConvertFromInts(),
-            Resize(),
-            Pad(cfg.max_size, cfg.max_size, mean),
+            Resize(resize_masks=False),
+            Pad(cfg.max_size, cfg.max_size, mean, pad_masks=False),
             SubtractMeans(mean)
         ])
 
