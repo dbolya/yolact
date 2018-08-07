@@ -154,8 +154,8 @@ yolact_resnet101_config = coco_base_config.copy({
 })
 
 # Pretty close to the original ssd300 just using resnet101 instead of vgg16
-ssd600_resnet101_config = coco_base_config.copy({
-    'name': 'ssd600_resnet101',
+ssd550_resnet101_config = coco_base_config.copy({
+    'name': 'ssd550_resnet101',
     'backbone': resnet101_backbone.copy({
         'selected_layers': list(range(2, 8)),
         'pred_scales': [[5, 4]]*6,
@@ -187,7 +187,7 @@ ssd300_config = coco_base_config.copy({
     'use_yolo_regressors': False,
 })
 
-cfg = ssd600_resnet101_config.copy()
+cfg = ssd550_resnet101_config.copy()
 
 def set_cfg(config_name:str):
     """ Sets the active config. Works even if cfg is already imported! """
