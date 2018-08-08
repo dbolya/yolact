@@ -102,7 +102,7 @@ class MultiBoxLoss(nn.Module):
         pos_idx = pos.unsqueeze(pos.dim()).expand_as(loc_data)
         loc_p = loc_data[pos_idx].view(-1, 4)
         loc_t = loc_t[pos_idx].view(-1, 4)
-        loss_l = F.smooth_l1_loss(loc_p, loc_t, size_average=False)
+        loss_l = F.smooth_l1_loss(loc_p, loc_t, reduction='sum')
 
         # Mask Loss
         if self.train_masks:
@@ -112,7 +112,7 @@ class MultiBoxLoss(nn.Module):
                     pos_masks.append(masks[idx][idx_t[idx, pos[idx]]])
                 masks_t = torch.cat(pos_masks, 0)
                 masks_p = mask_data[pos, :].view(-1, self.mask_size**2)
-                loss_m = F.binary_cross_entropy(masks_p, masks_t, size_average=True)*100
+                loss_m = F.binary_cross_entropy(masks_p, masks_t, reduction='elementwise_mean')*100
             else:
                 loss_m = self.mask_loss(pos_idx, idx_t, loc_data, mask_data, priors, masks)
         else:
@@ -136,7 +136,7 @@ class MultiBoxLoss(nn.Module):
         neg_idx = neg.unsqueeze(2).expand_as(conf_data)
         conf_p = conf_data[(pos_idx+neg_idx).gt(0)].view(-1, self.num_classes)
         targets_weighted = conf_t[(pos+neg).gt(0)]
-        loss_c = F.cross_entropy(conf_p, targets_weighted, size_average=False)
+        loss_c = F.cross_entropy(conf_p, targets_weighted, reduction='sum')
 
         # Sum of losses: L(x,c,l,g) = (Lconf(x, c) + αLloc(x,l,g)) / N
 
@@ -186,6 +186,6 @@ class MultiBoxLoss(nn.Module):
                 mask_t = torch.cat(scaled_masks, 0).gt(0.5).float() # Threshold downsampled mask
             
             pos_mask_data = mask_data[idx, cur_pos_idx_squeezed, :]
-            loss_m += F.binary_cross_entropy(pos_mask_data, mask_t, size_average=True)*100
+            loss_m += F.binary_cross_entropy(pos_mask_data, mask_t, reduction='elementwise_mean')*100
 
         return loss_m

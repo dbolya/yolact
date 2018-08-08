@@ -95,12 +95,12 @@ class PredictionModule(nn.Module):
         
         # See box_utils.decode for an explaination of this
         if cfg.use_yolo_regressors:
-            bbox[:, :, :2] = F.sigmoid(bbox[:, :, :2]) - 0.5
+            bbox[:, :, :2] = torch.sigmoid(bbox[:, :, :2]) - 0.5
             bbox[:, :, 0] /= conv_w
             bbox[:, :, 1] /= conv_h
 
 
-        mask = F.sigmoid(mask)
+        mask = torch.sigmoid(mask)
         
         priors = self.make_priors(conv_h, conv_w)
 

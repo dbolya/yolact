@@ -104,6 +104,8 @@ class Detect(Function):
             ids, count = nms(boxes, scores, self.nms_thresh, self.top_k, force_cpu=cfg.force_cpu_nms)
             ids = ids[:count]
             classes = torch.ones(count, 1).float()*(cl-1)
+            if cfg.force_cpu_detect:
+                classes = classes.cpu()
             tmp_output[cl-1, :count] = \
                 torch.cat((classes, scores[ids].unsqueeze(1), boxes[ids], masks[ids]), 1)
 
