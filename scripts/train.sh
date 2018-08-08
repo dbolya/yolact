@@ -7,7 +7,7 @@
 # Usage: ./train.sh config batch_size
 
 module load python/3.6.4_gcc5_np1.14.5
-module load cuda/9.2
+module load cuda/9.0
 
 cd $SCRATCH/yolact
 
