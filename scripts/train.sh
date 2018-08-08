@@ -11,4 +11,4 @@ module load cuda/9.2
 
 cd $SCRATCH/yolact
 
-stdbuf -oL python3 train.py --config $1 --batch_size $2 --save_interval 5000 &>logs/$1_log
+python3 train.py --config $1 --batch_size $2 --save_interval 5000 &>logs/$1_log

@@ -207,7 +207,7 @@ def train():
                     m = loss_m_avg.get_avg()
                     t = l + c + m
                     print('[%3d] %7d || B: %.3f | C: %.3f | M: %.3f | T: %.3f || ETA: %s ||'
-                            % (epoch, iteration, l,c,m,t, eta_str), end=' ')
+                            % (epoch, iteration, l,c,m,t, eta_str), end=' ', flush=True)
 
                 if args.visdom:
                     update_vis_plot(iteration, loss_l.item(), loss_c.item(),
