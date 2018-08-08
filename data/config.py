@@ -104,7 +104,7 @@ coco_base_config = Config({
     'num_classes': 81,
     'lr_steps': (280000, 360000, 400000),
     'max_iter': 400000,
-    'mask_size': 20,
+    'mask_size': 16,
     
     # Input image size. If preserve_aspect_ratio is False, min_size is ignored.
     'min_size': 200,
@@ -163,6 +163,26 @@ ssd550_resnet101_config = coco_base_config.copy({
     }),
 
     'max_size': 550,
+    'mask_size': 20, # Turned out not to help much
+
+    'train_masks': True,
+    'preserve_aspect_ratio': False,
+    'use_prediction_module': False,
+    'use_yolo_regressors': False,
+})
+
+# Close to vanilla ssd300 but bigger!
+ssd550_config = coco_base_config.copy({
+    'name': 'ssd550',
+    'backbone': vgg16_backbone.copy({
+        'args': (vgg16_arch, [(256, 2), (256, 2), (128, 2), (128, 1), (128, 1)], [4]),
+
+        'selected_layers': [4] + list(range(6, 11)),
+        'pred_scales': [[5, 4]]*6,
+        'pred_aspect_ratios': [ [[1], [1, sqrt(2), 1/sqrt(2), sqrt(3), 1/sqrt(3)][:n]] for n in [3, 5, 5, 5, 3, 3] ],
+    }),
+
+    'max_size': 550,
 
     'train_masks': True,
     'preserve_aspect_ratio': False,
@@ -180,6 +200,7 @@ ssd300_config = coco_base_config.copy({
     }),
 
     'max_size': 300,
+    'mask_size': 20, # Turned out not to help much
 
     'train_masks': True,
     'preserve_aspect_ratio': False,
