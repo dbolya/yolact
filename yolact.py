@@ -40,12 +40,11 @@ class PredictionModule(nn.Module):
         - mask_size:     The side length of the downsampled predicted mask.
     """
     
-    def __init__(self, in_channels, out_channels=1024, aspect_ratios=[[1]], scales=[1],
-                       num_classes=cfg.num_classes, mask_size=cfg.mask_size):
+    def __init__(self, in_channels, out_channels=1024, aspect_ratios=[[1]], scales=[1]):
         super().__init__()
 
-        self.num_classes = num_classes
-        self.mask_size   = mask_size
+        self.num_classes = cfg.num_classes
+        self.mask_size   = cfg.mask_size
         self.num_priors  = sum(len(x) for x in aspect_ratios)
 
         if cfg.use_prediction_module:
@@ -53,9 +52,9 @@ class PredictionModule(nn.Module):
             self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=True)
             self.bn = nn.BatchNorm2d(out_channels)
 
-        self.bbox_layer = nn.Conv2d(out_channels, self.num_priors * 4,              kernel_size=3, padding=1)
-        self.conf_layer = nn.Conv2d(out_channels, self.num_priors * num_classes,    kernel_size=3, padding=1)
-        self.mask_layer = nn.Conv2d(out_channels, self.num_priors * (mask_size**2), kernel_size=3, padding=1)
+        self.bbox_layer = nn.Conv2d(out_channels, self.num_priors * 4,                   kernel_size=3, padding=1)
+        self.conf_layer = nn.Conv2d(out_channels, self.num_priors * self.num_classes,    kernel_size=3, padding=1)
+        self.mask_layer = nn.Conv2d(out_channels, self.num_priors * (self.mask_size**2), kernel_size=3, padding=1)
 
         self.aspect_ratios = aspect_ratios
         self.scales = scales
