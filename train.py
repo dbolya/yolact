@@ -200,7 +200,7 @@ def train():
                     time_avg.add(t1 - t0)
 
                 if iteration % 10 == 0:
-                    print('timer: %.4f sec.' % (t1 - t0))
+                    print('timer: %.4f sec.' % (t1 - t0), flush=True)
                     eta_str = datetime.timedelta(seconds=(cfg.max_iter-iteration) * time_avg.get_avg())
                     l = loss_l_avg.get_avg()
                     c = loss_c_avg.get_avg()
