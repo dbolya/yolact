@@ -2,7 +2,7 @@ from http.server import SimpleHTTPRequestHandler, HTTPServer, HTTPStatus
 from pathlib import Path
 import os
 
-PORT = 8000
+PORT = 6337
 IMAGE_PATH = '../data/coco/images/val2014/'
 IMAGE_FMT  = 'COCO_val2014_%012d.jpg'
 
