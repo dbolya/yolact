@@ -75,8 +75,14 @@ parser.add_argument('--max_num_detections', default=100, type=int,
                     help='The maximum number of detections to consider for each image for mAP scoring. COCO uses 100.')
 parser.add_argument('--config', default=None,
                     help='The config object to use.')
+parser.add_argument('--output_web_json', dest='output_web_json', action='store_true',
+                    help='If display is not set, instead of processing IoU values, this dumps detections for usage with the detections viewer web thingy.')
+parser.add_argument('--web_det_path', default='web/dets/', type=str,
+                    help='If output_web_json is set, this is the path to dump detections into.')
 
-parser.set_defaults(display=False, resume=False, output_coco_json=False, shuffle=False)
+
+
+parser.set_defaults(display=False, resume=False, output_coco_json=False, output_web_json=False, shuffle=False)
 
 args = parser.parse_args()
 
@@ -85,6 +91,7 @@ if args.config is not None:
 
 iou_thresholds = [x / 100 for x in range(50, 100, 5)]
 coco_cats = [] # Call prep_coco_cats to fill this
+coco_cats_inv = {}
 
 def overlay_image_alpha(img, img_overlay, pos, alpha_mask):
     """
@@ -226,11 +233,16 @@ def prep_coco_cats(cats):
     # Bit of a roundabout way to do this but whatever
     for i in range(len(COCO_CLASSES)):
         coco_cats.append(name_lookup[COCO_CLASSES[i]])
+        coco_cats_inv[coco_cats[-1]] = i
 
 
 def get_coco_cat(transformed_cat_id):
     """ transformed_cat_id is [0,80) as indices in COCO_CLASSES """
     return coco_cats[transformed_cat_id]
+
+def get_transformed_cat(coco_cat_id):
+    """ transformed_cat_id is [0,80) as indices in COCO_CLASSES """
+    return coco_cats_inv[coco_cat_id]
 
 
 class Detections:
@@ -274,6 +286,37 @@ class Detections:
         for data, path in dump_arguments:
             with open(path, 'w') as f:
                 json.dump(data, f)
+    
+    def dump_web(self):
+        """ Dumps it in the format for my web app. Warning: bad code ahead! """
+        config_outs = ['preserve_aspect_ratio', 'use_prediction_module', 'use_yolo_regressors', 'use_prediction_matching']
+
+        output = {
+            'info' : {
+                'Config': {key: getattr(cfg, key) for key in config_outs},
+            }
+        }
+
+        image_ids = list(set([x['image_id'] for x in self.bbox_data]))
+        image_ids.sort()
+        image_lookup = {_id: idx for idx, _id in enumerate(image_ids)}
+
+        output['images'] = [{'image_id': image_id, 'dets': []} for image_id in image_ids]
+
+        # These should already be sorted by score with the way prep_metrics works.
+        for bbox, mask in zip(self.bbox_data, self.mask_data):
+            image_obj = output['images'][image_lookup[bbox['image_id']]]
+            image_obj['dets'].append({
+                'score': bbox['score'],
+                'bbox': bbox['bbox'],
+                'category': COCO_CLASSES[get_transformed_cat(bbox['category_id'])],
+                'mask': mask['segmentation'],
+            })
+
+        with open(os.path.join(args.web_det_path, '%s.json' % cfg.name), 'w') as f:
+            json.dump(output, f)
+        
+
         
 
 def mask_iou(mask1, mask2, iscrowd=False):
@@ -592,7 +635,10 @@ def evaluate(net, dataset):
             print()
             if args.output_coco_json:
                 print('Dumping detections...')
-                detections.dump()
+                if args.output_web_json:
+                    detections.dump_web()
+                else:
+                    detections.dump()
             else:
                 print('Saving data...')
                 with open(args.ap_data_file, 'wb') as f:
@@ -655,6 +701,8 @@ if __name__ == '__main__':
 
         if args.trained_model == 'interrupt':
             args.trained_model = SavePath.get_interrupt('weights/')
+        if args.output_web_json:
+            args.output_coco_json = True
 
         print('Loading model...', end='')
         net = Yolact()

@@ -1,0 +1,62 @@
+
+/* 
+Pallete:
+
+FFFFFF
+D2CBCB
+7D8491
+003459
+274C77
+161925
+*/
+
+
+.big {
+	font-size:72px;
+	margin-bottom: 20px;
+}
+
+.list_wrapper {
+	width: 300px;
+	padding-top: 2px;
+	padding-bottom: 20px;
+}
+
+
+body {
+	margin:0;
+	padding:0;
+	vertical-align: top;
+
+	background-color: #274C77;
+	color: #ffffff;
+	font-family: 'Open Sans', sans-serif;
+	font-size: 24px;
+	width: 100%;
+	height: 99vh;
+
+	display: grid;
+	grid-template-areas:
+		'header'
+		'main'
+		'footer';
+	
+	grid-template-rows: 100px auto 25px;
+	
+	text-align: center;
+}
+
+.box {
+	background-color: #23395B;
+	border-radius: 10px;
+}
+
+.header   { grid-area: header;   }
+.main     { grid-area: main;     }
+.footer   { grid-area: footer;   }
+
+span {
+	margin:0;
+	padding:0;
+	vertical-align: top;
+}

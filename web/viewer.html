@@ -1,0 +1,40 @@
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<meta http-equiv="X-UA-Compatible" content="ie=edge">
+	
+	<title>Detections Viewer</title>
+
+	<!-- Because yes, I live in 2013 and still use jQuery. -->
+	<script src="scripts/jquery.js"></script>
+	<script src="scripts/viewer.js"></script>
+
+	<link href="https://fonts.googleapis.com/css?family=Open+Sans" rel="stylesheet">
+	<link rel="stylesheet" href="css/index.css">
+	<link rel="stylesheet" href="css/viewer.css">
+</head>
+
+<body>
+	<span class="big header">Detections Viewer</span>
+
+	<div id='viewer' class='main'>
+		<div class="info box">
+			Info &nbsp; <span id='ablation_name'></span><br /><br />
+			<div id='info_box'></div>
+		</div>
+		
+		<div class="image box">
+			<span id='image_name'></span> &nbsp; <span id='image_idx'></span>
+			<canvas id='image_canvas' style='vertical-align: center;'></canvas>
+		</div>
+		
+		<div class="controls box">
+			Controls<br>
+			<div id='control_box'></div>
+		</div>
+	</div>
+
+	<small class='footer'>By Daniel Bolya</small>
+</body>
+</html>

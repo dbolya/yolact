@@ -1,0 +1,35 @@
+
+.info     { grid-area: info;     }
+.image    { grid-area: image;    }
+.controls { grid-area: controls; }
+
+
+#viewer {
+	display: grid;
+	grid-template-areas: 'info image controls';
+	grid-template-columns: 1fr 2fr 1fr;
+	grid-gap: 0;
+}
+
+#viewer > div.box {
+	padding: 10px;
+	margin: 0 10px 10px 10px;
+}
+
+#image_idx, #ablation_name, .info_value {
+	color: rgb(152, 160, 175);
+}
+
+.info_section {
+	text-align: center;
+	border-bottom: 1px solid #fff;
+}
+
+a {
+	text-decoration: none;
+	color: #fff;
+}
+
+a:hover {
+	color: rgb(152, 160, 175);
+}

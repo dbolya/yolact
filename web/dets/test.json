@@ -1,0 +1,21 @@
+{
+	"info": {
+		"Cross-Class NMS": {"BBox mAP": 0.9523,"Mask mAP": 0.4231},"Per-Class NMS": {"BBox mAP": 0.1,"Mask mAP": 0.2},
+		"Config" : {}
+	},
+	"images": [
+		{
+			"image_id": 42,
+			"dets": [
+				{
+					"score": 0.14,
+					"bbox": [20, 20, 100, 100]
+				},
+				{
+					"score": 0.09,
+					"bbox": [40, 100, 230, 10]
+				}
+			]
+		}
+	]
+}
