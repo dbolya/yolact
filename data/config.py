@@ -171,6 +171,15 @@ ssd550_resnet101_config = coco_base_config.copy({
     'use_yolo_regressors': False,
 })
 
+ssd550_resnet101_yolo_matching_config = ssd550_resnet101_config.copy({
+    'name': 'ssd550_resnet101_yolo_matching',
+
+    'mask_size': 16,
+
+    'use_yolo_regressors': True,
+    'use_prediction_matching': True,
+})
+
 # Close to vanilla ssd300 but bigger!
 ssd550_config = coco_base_config.copy({
     'name': 'ssd550',
