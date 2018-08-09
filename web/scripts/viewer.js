@@ -35,7 +35,7 @@ $(document).ready(function() {
 	img_idx = parseInt(img_idx);
 	
 	$.getJSON('dets/' + ablation_name + '.json', function(data) {
-		if (img_idx >= data.images.length) img_idx = 0;
+		img_idx = (img_idx+data.images.length) % data.images.length;
 		var info = data.info;
 		var data = data.images[img_idx];
 
@@ -47,6 +47,7 @@ $(document).ready(function() {
 		img.src = 'image' + data.image_id;
 
 		$('#image_name').html(data.image_id);
+		$('#image_idx').html(img_idx);
 
 		fill_info(info);
 		fill_controls();
