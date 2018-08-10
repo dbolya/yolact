@@ -1,5 +1,5 @@
 // Global variables so I remember them
-ablation_name = null;
+config_name = null;
 img_idx = null;
 
 img = null;
@@ -27,14 +27,14 @@ $.urlParam = function(name){
 }
 
 $(document).ready(function() {
-	ablation_name = $.urlParam('ablation');
-	$('#ablation_name').html(ablation_name);
+	config_name = $.urlParam('config');
+	$('#config_name').html(config_name);
 
 	img_idx = $.urlParam('idx');
 	if (img_idx === null) img_idx = 0;
 	img_idx = parseInt(img_idx);
 	
-	$.getJSON('dets/' + ablation_name + '.json', function(data) {
+	$.getJSON('dets/' + config_name + '.json', function(data) {
 		img_idx = (img_idx+data.images.length) % data.images.length;
 		var info = data.info;
 		var data = data.images[img_idx];
@@ -84,9 +84,9 @@ function fill_info(info) {
 
 function fill_controls() {
 	html = '<br>';
-	html += '<a href="viewer.html?ablation=' + ablation_name + '&idx=' + (img_idx-1) +'">Prev</a>';
+	html += '<a href="viewer.html?config=' + config_name + '&idx=' + (img_idx-1) +'">Prev</a>';
 	html += '&nbsp;&nbsp;&nbsp;';
-	html += '<a href="viewer.html?ablation=' + ablation_name + '&idx=' + (img_idx+1) +'">Next</a>';
+	html += '<a href="viewer.html?config=' + config_name + '&idx=' + (img_idx+1) +'">Next</a>';
 	html += '<br><br><br>';
 	html += '<a href="/">Back</a>';
 	$('#control_box').html(html);

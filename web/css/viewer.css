@@ -16,7 +16,7 @@
 	margin: 0 10px 10px 10px;
 }
 
-#image_idx, #ablation_name, .info_value {
+#image_idx, #config_name, .info_value {
 	color: rgb(152, 160, 175);
 }
 
