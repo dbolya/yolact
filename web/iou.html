@@ -1,0 +1,49 @@
+
+
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<meta http-equiv="X-UA-Compatible" content="ie=edge">
+	
+	<title>IoU thingy</title>
+
+	<!-- Because yes, I live in 2013 and still use jQuery. -->
+	<link href="https://fonts.googleapis.com/css?family=Open+Sans" rel="stylesheet">
+	<script src="scripts/jquery.js"></script>
+	<script src="scripts/iou.js"></script>
+
+	<style>
+		#container2 { position: relative; }
+		#canvas2 { border-radius: 10px; background-color: #23395B; }
+
+		body {
+
+			background-color: #274C77;
+			color: #ffffff;
+			font-family: 'Open Sans', sans-serif;
+			font-size: 24px;
+
+			text-align: center;
+		}
+
+		a {
+			text-decoration: none;
+		}
+	</style>
+</head>
+
+<body>
+	<div id="container2">
+		<canvas id="canvas2">
+			This text is displayed if your browser does not support HTML5 Canvas.
+		</canvas>
+	</div>
+	<div>
+		<p>IoU: <span id='iou'></span></p>
+		<br><br><br>
+		<p>Bbox manupluation sourced from <a href='http://jsfiddle.net/M8kms/'>here</a></p>
+	</div>
+</body>
+</html>
