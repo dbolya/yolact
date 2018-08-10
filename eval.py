@@ -289,7 +289,9 @@ class Detections:
     
     def dump_web(self):
         """ Dumps it in the format for my web app. Warning: bad code ahead! """
-        config_outs = ['preserve_aspect_ratio', 'use_prediction_module', 'use_yolo_regressors', 'use_prediction_matching']
+        config_outs = ['preserve_aspect_ratio', 'use_prediction_module',
+                        'use_yolo_regressors', 'use_prediction_matching',
+                        'train_masks']
 
         output = {
             'info' : {

@@ -115,7 +115,7 @@ coco_base_config = Config({
     'force_cpu_nms': True,
 
     # Whether or not to tie the mask loss to 0
-    'train_masks': False,
+    'train_masks': True,
     # If enabled, the gt masks will be cropped using the gt bboxes instead of the predicted ones.
     # This speeds up training time considerably but results in much worse mAP at test time.
     'use_gt_bboxes': False,
@@ -178,6 +178,11 @@ ssd550_resnet101_yolo_matching_config = ssd550_resnet101_config.copy({
 
     'use_yolo_regressors': True,
     'use_prediction_matching': True,
+
+    # Because of prediction matching, the number of positives goes up to high and thus
+    # we run out of memory when training masks. The amount of memory for training masks
+    # is proportional to the number of positives after all.
+    'train_masks': False,
 })
 
 # Close to vanilla ssd300 but bigger!
