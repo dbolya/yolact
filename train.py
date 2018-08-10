@@ -121,6 +121,7 @@ def train():
     loc_loss = 0
     conf_loss = 0
     iteration = args.start_iter
+    last_time = time.time()
 
     epoch_size = len(dataset) // args.batch_size
     num_epochs = math.ceil(cfg.max_iter / epoch_size)
@@ -180,7 +181,6 @@ def train():
                     targets = [Variable(ann, requires_grad=False) for ann in targets]
                     masks = [Variable(mask, requires_grad=False) for mask in masks]
                 # forward
-                t0 = time.time()
                 out = net(images)
                 # backprop
                 optimizer.zero_grad()
@@ -189,25 +189,27 @@ def train():
                 loss.backward() # Do this to free up vram even if loss is infinite
                 if torch.isfinite(loss).item():
                     optimizer.step()
-                t1 = time.time()
                 loc_loss += loss_l.item()
                 conf_loss += loss_c.item()
                 loss_c_avg.add(loss_c.item())
                 loss_l_avg.add(loss_l.item())
                 loss_m_avg.add(loss_m.item())
 
+                cur_time  = time.time()
+                elapsed   = cur_time - last_time
+                last_time = cur_time
+
                 if iteration != args.start_iter:
-                    time_avg.add(t1 - t0)
+                    time_avg.add(elapsed)
 
                 if iteration % 10 == 0:
-                    print('timer: %.4f sec.' % (t1 - t0), flush=True)
                     eta_str = datetime.timedelta(seconds=(cfg.max_iter-iteration) * time_avg.get_avg())
                     l = loss_l_avg.get_avg()
                     c = loss_c_avg.get_avg()
                     m = loss_m_avg.get_avg()
                     t = l + c + m
-                    print('[%3d] %7d || B: %.3f | C: %.3f | M: %.3f | T: %.3f || ETA: %s ||'
-                            % (epoch, iteration, l,c,m,t, eta_str), end=' ')
+                    print('[%3d] %7d || B: %.3f | C: %.3f | M: %.3f | T: %.3f || ETA: %s || timer: %.3f'
+                            % (epoch, iteration, l,c,m,t, eta_str, elapsed), flush=True)
 
                 if args.visdom:
                     update_vis_plot(iteration, loss_l.item(), loss_c.item(),
