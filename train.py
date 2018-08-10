@@ -186,8 +186,8 @@ def train():
                 optimizer.zero_grad()
                 loss_l, loss_c, loss_m = criterion(out, targets, masks)
                 loss = loss_l + loss_c + loss_m
+                loss.backward() # Do this to free up vram even if loss is infinite
                 if torch.isfinite(loss).item():
-                    loss.backward()
                     optimizer.step()
                 t1 = time.time()
                 loc_loss += loss_l.item()
