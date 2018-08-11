@@ -6,7 +6,7 @@ import numpy as np
 from itertools import product
 from math import sqrt
 
-from data.config import cfg
+from data.config import cfg, mask_type
 from layers import Detect
 from backbone import construct_backbone
 
@@ -44,7 +44,7 @@ class PredictionModule(nn.Module):
         super().__init__()
 
         self.num_classes = cfg.num_classes
-        self.mask_size   = cfg.mask_size
+        self.mask_dim    = cfg.mask_dim
         self.num_priors  = sum(len(x) for x in aspect_ratios)
 
         if cfg.use_prediction_module:
@@ -52,9 +52,9 @@ class PredictionModule(nn.Module):
             self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=True)
             self.bn = nn.BatchNorm2d(out_channels)
 
-        self.bbox_layer = nn.Conv2d(out_channels, self.num_priors * 4,                   kernel_size=3, padding=1)
-        self.conf_layer = nn.Conv2d(out_channels, self.num_priors * self.num_classes,    kernel_size=3, padding=1)
-        self.mask_layer = nn.Conv2d(out_channels, self.num_priors * (self.mask_size**2), kernel_size=3, padding=1)
+        self.bbox_layer = nn.Conv2d(out_channels, self.num_priors * 4,                kernel_size=3, padding=1)
+        self.conf_layer = nn.Conv2d(out_channels, self.num_priors * self.num_classes, kernel_size=3, padding=1)
+        self.mask_layer = nn.Conv2d(out_channels, self.num_priors * self.mask_dim,    kernel_size=3, padding=1)
 
         self.aspect_ratios = aspect_ratios
         self.scales = scales
@@ -71,7 +71,7 @@ class PredictionModule(nn.Module):
         Returns a tuple (bbox_coords, class_confs, mask_output, prior_boxes) with sizes
             - bbox_coords: [batch_size, conv_h*conv_w*num_priors, 4]
             - class_confs: [batch_size, conv_h*conv_w*num_priors, num_classes]
-            - mask_output: [batch_size, conv_h*conv_w*num_priors, mask_size**2]
+            - mask_output: [batch_size, conv_h*conv_w*num_priors, mask_dim]
             - prior_boxes: [conv_h*conv_w*num_priors, 4]
         """
         conv_h = x.size(2)
@@ -90,7 +90,7 @@ class PredictionModule(nn.Module):
 
         bbox = self.bbox_layer(x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, 4)
         conf = self.conf_layer(x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, self.num_classes)
-        mask = self.mask_layer(x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, self.mask_size**2)
+        mask = self.mask_layer(x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, self.mask_dim)
         
         # See box_utils.decode for an explaination of this
         if cfg.use_yolo_regressors:
@@ -99,7 +99,10 @@ class PredictionModule(nn.Module):
             bbox[:, :, 1] /= conv_h
 
 
-        mask = torch.sigmoid(mask)
+        if cfg.mask_type == mask_type.direct:
+            mask = torch.sigmoid(mask)
+        elif cfg.mask_type == mask_type.lincomb:
+            mask = torch.tanh(mask)
         
         priors = self.make_priors(conv_h, conv_w)
 
@@ -159,7 +162,21 @@ class Yolact(nn.Module):
         pred_scales        = cfg.backbone.pred_scales
         pred_aspect_ratios = cfg.backbone.pred_aspect_ratios
 
-        self.backbone = construct_backbone(cfg.backbone)     
+        self.backbone = construct_backbone(cfg.backbone)
+
+        # Compute mask_dim here and add it back to the config. Make sure Yolact's constructor is called early!
+        if cfg.mask_type == mask_type.direct:
+            cfg.mask_dim = cfg.mask_size**2
+        elif cfg.mask_type == mask_type.lincomb:
+            if isinstance(cfg.mask_proto_layer, int):
+                cfg.mask_dim = self.backbone.channels[cfg.mask_proto_layer]
+                self.proto_idx = cfg.mask_proto_layer
+                self.use_backbone_proto = True
+            else:
+                out_channels, kernel_size, kwdargs = cfg.mask_proto_layer
+                cfg.mask_dim = out_channels
+                self.proto = nn.Conv2d(3, out_channels, kernel_size, **kwdargs)
+                self.use_backbone_proto = False
 
         self.selected_layers = selected_layers
         self.prediction_layers = nn.ModuleList()
@@ -206,11 +223,22 @@ class Yolact(nn.Module):
 
         pred_outs = [torch.cat(x, -2) for x in pred_outs]
 
+        if cfg.mask_type == mask_type.lincomb:
+            with timer.env('proto'):
+                if self.use_backbone_proto:
+                    proto_out = outs[cfg.mask_proto_layer]
+                else:
+                    proto_out = F.relu(self.proto(x))
+                
+                pred_outs.append(proto_out.permute(0, 2, 3, 1).contiguous())
+
         if self.training:
             return pred_outs
         else:
             pred_outs[1] = F.softmax(pred_outs[1], -1) # Softmax the conf output
             return self.detect(*pred_outs)
+
+
 
 
 # Some testing code
@@ -223,9 +251,9 @@ if __name__ == '__main__':
     net.init_weights(backbone_path='weights/' + cfg.backbone.path)
 
     # GPU
-    # net = net.cuda()
-    # cudnn.benchmark = True
-    # torch.set_default_tensor_type('torch.cuda.FloatTensor')
+    net = net.cuda()
+    cudnn.benchmark = True
+    torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
     x = torch.zeros((1, 3, cfg.max_size, cfg.max_size))
     y = net(x)

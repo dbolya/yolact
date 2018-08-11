@@ -5,6 +5,7 @@ from utils.functions import MovingAverage, ProgressBar
 from layers.box_utils import jaccard, center_size
 from utils import timer
 from utils.functions import sanitize_coordinates, SavePath
+from layers.output_utils import postprocess, undo_image_transformation
 import pycocotools
 
 from data import cfg, set_cfg
@@ -51,8 +52,6 @@ parser.add_argument('--display_masks', default=True, type=str2bool,
                     help='Whether or not to display masks over bounding boxes')
 parser.add_argument('--display_bboxes', default=True, type=str2bool,
                     help='Whether or not to display bboxes around masks')
-parser.add_argument('--display_gt_bboxes', default=False, type=str2bool,
-                    help='Whether or not to display thin lines representing gt bboxes in addition to the predicted ones')
 parser.add_argument('--display_scores', default=False, type=str2bool,
                     help='Whether or not to display scores in addition to classes')
 parser.add_argument('--display', dest='display', action='store_true',
@@ -71,8 +70,6 @@ parser.add_argument('--bbox_det_file', default='results/bbox_detections.json', t
                     help='The output file for coco bbox results if --coco_results is set.')
 parser.add_argument('--mask_det_file', default='results/mask_detections.json', type=str,
                     help='The output file for coco mask results if --coco_results is set.')
-parser.add_argument('--max_num_detections', default=100, type=int,
-                    help='The maximum number of detections to consider for each image for mAP scoring. COCO uses 100.')
 parser.add_argument('--config', default=None,
                     help='The config object to use.')
 parser.add_argument('--output_web_json', dest='output_web_json', action='store_true',
@@ -93,131 +90,41 @@ iou_thresholds = [x / 100 for x in range(50, 100, 5)]
 coco_cats = [] # Call prep_coco_cats to fill this
 coco_cats_inv = {}
 
-def overlay_image_alpha(img, img_overlay, pos, alpha_mask):
-    """
-    Overlay img_overlay on top of img at the position specified by
-    pos and blend using alpha_mask.
-
-    Alpha mask must contain values within the range [0, 1] and be the
-    same size as img_overlay.
-
-    Source: https://stackoverflow.com/questions/14063070/overlay-a-smaller-image-on-a-larger-image-python-opencv
-    """
-
-    x, y = pos
-
-    # Image ranges
-    y1, y2 = max(0, y), min(img.shape[0], y + img_overlay.shape[0])
-    x1, x2 = max(0, x), min(img.shape[1], x + img_overlay.shape[1])
-
-    # Overlay ranges
-    y1o, y2o = max(0, -y), min(img_overlay.shape[0], img.shape[0] - y)
-    x1o, x2o = max(0, -x), min(img_overlay.shape[1], img.shape[1] - x)
-
-    # Exit if nothing to do
-    if y1 >= y2 or x1 >= x2 or y1o >= y2o or x1o >= x2o:
-        return
-
-    channels = img.shape[2]
-
-    alpha = alpha_mask[y1o:y2o, x1o:x2o]
-    alpha_inv = 1.0 - alpha
-
-    for c in range(channels):
-        img[y1:y2, x1:x2, c] = (alpha * img_overlay[y1o:y2o, x1o:x2o, c] +
-                                alpha_inv * img[y1:y2, x1:x2, c])
-
-def prep_display(dets, img, gt, gt_masks, h, w):
+def prep_display(dets_out, img, gt, gt_masks, h, w):
     gt_bboxes = torch.FloatTensor(gt[:, :4]).cpu()
     gt_bboxes[:, [0, 2]] *= w
     gt_bboxes[:, [1, 3]] *= h
     
-    img_numpy = (img.permute(1, 2, 0).cpu().numpy() / 255.0 + np.array(MEANS) / 255.0).astype(np.float32)
-    img_numpy = np.clip(img_numpy, 0, 1)
+    img_numpy = undo_image_transformation(img, w, h)
     
-    if cfg.preserve_aspect_ratio:
-        # Undo padding
-        r_w, r_h = Resize.faster_rcnn_scale(w, h, cfg.min_size, cfg.max_size)
-        img_numpy = img_numpy[:r_h, :r_w]
+    with timer.env('Postprocess'):
+        classes, scores, boxes, masks = [x.cpu().numpy() for x in postprocess(dets_out, w, h)]
 
-        # Undo resizing
-        img_numpy = cv2.resize(img_numpy, (w,h))
-
-        # Get rid of any detections whose centers are outside the image
-        boxes = dets[:, 2:6]
-        boxes = center_size(boxes)
-        s_w, s_h = (r_w/cfg.max_size, r_h/cfg.max_size)
-        not_outside = ((boxes[:, 0] > s_w) + (boxes[:, 1] > s_h)) < 1 # not (a or b)
-        dets = dets[not_outside]
-
-        # A hack to scale the bboxes to the right size
-        w, h = (cfg.max_size / r_w * w, cfg.max_size / r_h * h)
-    else:
-        img_numpy = cv2.resize(img_numpy, (w,h))
-    
-    timer.start('Postprocessing')
-    
-    classes = dets[:, 0]
-    boxes = dets[:, 2:6]
-    boxes[:, [0, 2]] *= w
-    boxes[:, [1, 3]] *= h
-    scores = list(dets[:, 1].cpu().numpy())
-    masks = dets[:, 6:].cpu().numpy()
-
-    score_idx = list(range(len(scores)))
-    score_idx.sort(key=lambda x: -scores[x])
-
-    all_boxes = []
-    for k in score_idx[:args.top_k]:
-        x1, y1, x2, y2 = boxes[k].cpu().numpy().astype(np.int32)
-        
-        box_test = boxes[k].cpu().view([-1, 4])
-        match_idx = torch.max(jaccard(box_test, gt_bboxes), 1)[1].item()
-            
-        all_boxes.append({
-            'score': float(scores[k]),
-            'p1': (x1, y1),
-            'p2': (x2, y2),
-            'class': COCO_CLASSES[classes[k].long().item()],
-            'mask': masks[k, :].reshape(cfg.mask_size, cfg.mask_size),
-            'b1': (gt_bboxes[match_idx, 0], gt_bboxes[match_idx, 1]),
-            'b2': (gt_bboxes[match_idx, 2], gt_bboxes[match_idx, 3])
-        })
-
-    timer.stop('Postprocessing')
-
-    # timer.start('Drawing Image')
-    for j in reversed(range(min(args.top_k, len(all_boxes)))):
-        box_obj = all_boxes[j]
-
-        # if box_obj['score'] < 0.1:
-        #     continue
-
-        p1, p2 = (box_obj['p1'], box_obj['p2'])
-        mask_w, mask_h = (p2[0] - p1[0], p2[1] - p1[1])
-        text_pt = (p1[0], p2[1] - 5)
+    for j in reversed(range(min(args.top_k, classes.shape[0]))):
+        x1, y1, x2, y2 = boxes[j, :]
+        text_pt = (x1, y2 - 5)
         color = COLORS[j % len(COLORS)]
-
-        if mask_w <= 0 or mask_h <= 0:
-            continue
+        _class = COCO_CLASSES[classes[j]]
+        score = scores[j]
         
         if args.display_bboxes:
-            cv2.rectangle(img_numpy, p1, p2, color, 2)
-        
-        if args.display_gt_bboxes:
-            cv2.rectangle(img_numpy, box_obj['b1'], box_obj['b2'], color, 1)
+            cv2.rectangle(img_numpy, (x1, y1), (x2, y2), color, 2)
 
         if args.display_masks:
-            mask = cv2.resize(box_obj['mask'], (mask_w, mask_h), interpolation=cv2.INTER_LINEAR)
-            mask_alpha = (mask > 0.5).astype(np.float32) * 0.0015
+            mask = np.tile(masks[j].reshape(h, w, 1), (1, 1, 3)).astype(np.int32)
             color_np = np.array(color[:3]).reshape(1, 1, 3)
-            mask_overlay = np.tile(color_np, (mask.shape[0], mask.shape[1], 1))
+            color_np = np.tile(color_np, (h, w, 1))
+            mask_color = mask * color_np
 
-            overlay_image_alpha(img_numpy, mask_overlay, p1, mask_alpha)
+            mask_alpha = 0.0015
+
+            # Blend image and mask
+            image_crop = img_numpy * mask
+            img_numpy *= (1-mask)
+            img_numpy += image_crop * (1-mask_alpha) + mask_color * mask_alpha
         
-        text_str = '%s (%.2f)' % (box_obj['class'],box_obj['score']) if args.display_scores else box_obj['class']
+        text_str = '%s (%.2f)' % (_class, score) if args.display_scores else _class
         cv2.putText(img_numpy, text_str, text_pt, cv2.FONT_HERSHEY_PLAIN, 1.5, color, 2, cv2.LINE_AA)
-    # timer.stop('Drawing Image')
     
     timer.print_stats()
 
@@ -349,59 +256,27 @@ def bbox_iou(bbox1, bbox2, iscrowd=False):
 def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, crowd, image_id, detections:Detections=None):
     """ Returns a list of APs for this image, with each element being for a class  """
     if not args.output_coco_json:
-        timer.start('Prepare gt')
-        gt_boxes = torch.Tensor(gt[:, :4])
-        gt_boxes[:, [0, 2]] *= w
-        gt_boxes[:, [1, 3]] *= h
-        gt_classes = list(gt[:, 4].astype(int))
-        gt_masks = torch.Tensor(gt_masks).view(-1, h*w)
+        with timer.env('Prepare gt'):
+            gt_boxes = torch.Tensor(gt[:, :4])
+            gt_boxes[:, [0, 2]] *= w
+            gt_boxes[:, [1, 3]] *= h
+            gt_classes = list(gt[:, 4].astype(int))
+            gt_masks = torch.Tensor(gt_masks).view(-1, h*w)
 
-        if crowd is not None:
-            crowd_masks = torch.Tensor([x[5].reshape(-1) for x in crowd])
-            crowd_boxes = torch.Tensor([x[:4] for x in crowd])
-            crowd_boxes[:, [0, 2]] *= w
-            crowd_boxes[:, [1, 3]] *= h
-            crowd_classes = [int(x[4]) for x in crowd]
+            if crowd is not None:
+                crowd_masks = torch.Tensor([x[5].reshape(-1) for x in crowd])
+                crowd_boxes = torch.Tensor([x[:4] for x in crowd])
+                crowd_boxes[:, [0, 2]] *= w
+                crowd_boxes[:, [1, 3]] *= h
+                crowd_classes = [int(x[4]) for x in crowd]
 
-        timer.stop('Prepare gt')
+    
+    with timer.env('Postprocess'):
+        classes, scores, boxes, masks = postprocess(dets, w, h)
 
-    with timer.env('Sort'):
-        _, sort_idx = dets[:, 1].sort(0, descending=True)
-        dets = dets[sort_idx, :]
-
-    with timer.env('Prepare pred'):
-        if dets.size(0) > args.max_num_detections:
-            dets = dets[:args.max_num_detections]
-        
-        classes = list(dets[:, 0].cpu().numpy().astype(int))
-        scores = list(dets[:, 1].cpu().numpy().astype(float))
-        
-        boxes = dets[:, 2:6]
-        x1, x2 = sanitize_coordinates(boxes[:, 0], boxes[:, 2], w, cast=False)
-        y1, y2 = sanitize_coordinates(boxes[:, 1], boxes[:, 3], h, cast=False)
-        boxes = torch.stack((x1, y1, x2, y2), dim=1)
-        
-        masks = dets[:, 6:].cpu().numpy()
-        full_masks = torch.zeros(masks.shape[0], h, w)
-
-    # Scale up the predicted masks to be comparable to the gt masks
-    with timer.env('Upsample masks'):
-        for i in range(masks.shape[0]):
-            x1, y1, x2, y2 = boxes[i, :].cpu().numpy().astype(np.int32)
-
-            mask_w = x2 - x1
-            mask_h = y2 - y1
-
-            # I don't know how this can happen (since they're sanitized to begin with), but it can
-            if mask_w * mask_h <= 0 or mask_w < 0:
-                continue
-
-            pred_mask = masks[i, :].reshape(cfg.mask_size, cfg.mask_size, 1)
-            local_mask = cv2.resize(pred_mask, (mask_w, mask_h), interpolation=cv2.INTER_LINEAR)
-            local_mask = (local_mask > 0.5).astype(np.float32)
-            full_masks[i, y1:y2, x1:x2] = torch.Tensor(local_mask)
-
-        masks = full_masks.view(-1, h*w)
+        classes = list(classes.cpu().numpy().astype(int))
+        scores = list(scores.cpu().numpy().astype(float))
+        masks = masks.view(-1, h*w)
 
     if args.output_coco_json:
         boxes = boxes.cpu().numpy()
@@ -598,22 +473,13 @@ def evaluate(net, dataset):
             if args.cuda:
                 batch = batch.cuda()
 
-            preds = net(batch).data
-            
-            timer.start('Select preds')
-            dets = preds[0, :, :]
-            non_zero_score_mask = dets[:, 1].gt(0.0).expand(dets.size(1), dets.size(0)).t()
-            dets = torch.masked_select(dets, non_zero_score_mask).view(-1, dets.size(1))
-            timer.stop('Select preds')
-            if dets.size(0) == 0:
-                print('Warning: No detection for img idx %d.' % i)
-                continue
+            preds = net(batch)
 
             # Perform the meat of the operation here
             if args.display:
-                img_numpy = prep_display(dets, img, gt, gt_masks, h, w)
+                img_numpy = prep_display(preds, img, gt, gt_masks, h, w)
             else:
-                prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, crowd, dataset.ids[image_idx], detections)
+                prep_metrics(ap_data, preds, img, gt, gt_masks, h, w, crowd, dataset.ids[image_idx], detections)
             
             if it > 1:
                 frame_times.add(timer.total_time())

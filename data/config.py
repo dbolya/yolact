@@ -98,14 +98,39 @@ vgg16_backbone = Config({
     'pred_aspect_ratios': [ [[1], [1, sqrt(2), 1/sqrt(2), sqrt(3), 1/sqrt(3)][:n]] for n in [3, 5, 5, 5, 3, 3] ],
 })
 
+mask_type = Config({
+    # Direct produces masks directly as the output of each pred module.
+    # Parameters: mask_size, use_gt_bboxes
+    'direct': 0,
+
+    # Lincomb produces coefficients as the output of each pred module then uses those coefficients
+    # to linearly combine features from an earlier convout to create image-sized masks.
+    # Parameters:
+    #   - masks_to_train (int): Since we're producing (near) full image masks, it'd take too much
+    #                           vram to backprop on every single mask. Thus we select only a subset.
+    #   - mask_proto_layer (int or tuple): If int, the layer index of the backbone network to use as
+    #                                      prototype masks. If it's a tuple, create a new layer in
+    #                                      the form (out_channels, kernel_size, **kwdargs).
+    'lincomb': 1,
+})
+
 # Configs
 coco_base_config = Config({
     'dataset': coco_dataset,
     'num_classes': 81,
     'lr_steps': (280000, 360000, 400000),
     'max_iter': 400000,
-    'mask_size': 16,
+    'max_num_detections': 100,
     
+    # See mask_type for details.
+    'mask_type': mask_type.direct,
+    'mask_size': 16,
+    'masks_to_train': 100,
+    'mask_proto_layer': 0,
+
+    # This is filled in at runtime by Yolact's __init__, so don't touch it
+    'mask_dim': None,
+
     # Input image size. If preserve_aspect_ratio is False, min_size is ignored.
     'min_size': 200,
     'max_size': 300,
@@ -141,18 +166,6 @@ coco_base_config = Config({
     'name': 'base_config',
 })
 
-yolact_resnet101_config = coco_base_config.copy({
-    'name': 'yolact_resnet101',
-    'backbone': resnet101_backbone,
-
-    'max_size': 550,
-
-    'train_masks': True,
-    'preserve_aspect_ratio': False,
-    'use_prediction_module': True,
-    'use_yolo_regressors': True,
-})
-
 # Pretty close to the original ssd300 just using resnet101 instead of vgg16
 ssd550_resnet101_config = coco_base_config.copy({
     'name': 'ssd550_resnet101',
@@ -185,24 +198,6 @@ ssd550_resnet101_yolo_matching_config = ssd550_resnet101_config.copy({
     'train_masks': False,
 })
 
-# Close to vanilla ssd300 but bigger!
-ssd550_config = coco_base_config.copy({
-    'name': 'ssd550',
-    'backbone': vgg16_backbone.copy({
-        'args': (vgg16_arch, [(256, 2), (256, 2), (128, 2), (128, 1), (128, 1)], [4]),
-
-        'selected_layers': [4] + list(range(6, 11)),
-        'pred_scales': [[5, 4]]*6,
-        'pred_aspect_ratios': [ [[1], [1, sqrt(2), 1/sqrt(2), sqrt(3), 1/sqrt(3)][:n]] for n in [3, 5, 5, 5, 3, 3] ],
-    }),
-
-    'max_size': 550,
-
-    'train_masks': True,
-    'preserve_aspect_ratio': False,
-    'use_prediction_module': False,
-    'use_yolo_regressors': False,
-})
 
 # Close to vanilla ssd300
 ssd300_config = coco_base_config.copy({
@@ -222,7 +217,52 @@ ssd300_config = coco_base_config.copy({
     'use_yolo_regressors': False,
 })
 
-cfg = ssd550_resnet101_config.copy()
+# Close to vanilla ssd300 but bigger!
+ssd550_config = ssd300_config.copy({
+    'name': 'ssd550',
+    'backbone': ssd300_config.backbone.copy({
+        'args': (vgg16_arch, [(256, 2), (256, 2), (128, 2), (128, 1), (128, 1)], [4]),
+        'selected_layers': [4] + list(range(6, 11)),
+    }),
+
+    'max_size': 550,
+    'mask_size': 16,
+})
+
+yolact_resnet101_config = ssd550_resnet101_config.copy({
+    'name': 'yolact_resnet101',
+
+    'train_masks': True,
+    'preserve_aspect_ratio': False,
+    'use_prediction_module': False,
+    'use_yolo_regressors': True,
+    'use_prediction_matching': True,
+
+    'mask_type': mask_type.lincomb,
+    'masks_to_train': 100,
+    'mask_proto_layer': 0,
+})
+
+yolact_resnet101_dedicated_config = yolact_resnet101_config.copy({
+    'name': 'yolact_resnet101_dedicated',
+    'mask_proto_layer': (256, 3, {'stride': 2}),
+})
+
+yolact_vgg16_config = ssd550_config.copy({
+    'name': 'yolact_vgg16',
+
+    'train_masks': True,
+    'preserve_aspect_ratio': False,
+    'use_prediction_module': False,
+    'use_yolo_regressors': True,
+    'use_prediction_matching': False,
+
+    'mask_type': mask_type.lincomb,
+    'masks_to_train': 100,
+    'mask_proto_layer': 0,
+})
+
+cfg = yolact_resnet101_config.copy()
 
 def set_cfg(config_name:str):
     """ Sets the active config. Works even if cfg is already imported! """

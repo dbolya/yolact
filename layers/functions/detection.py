@@ -1,12 +1,11 @@
 import torch
-from torch.autograd import Function
 from ..box_utils import decode, nms
 from utils import timer
 
-from data import cfg
+from data import cfg, mask_type
 
 
-class Detect(Function):
+class Detect(object):
     """At test time, Detect is the final layer of SSD.  Decode location preds,
     apply non-maximum suppression to location predictions based on conf
     scores and threshold to a top_k number of output predictions for both
@@ -24,7 +23,7 @@ class Detect(Function):
         
         self.cross_class_nms = False
 
-    def forward(self, loc_data, conf_data, mask_data, prior_data):
+    def __call__(self, loc_data, conf_data, mask_data, prior_data, proto_data=None):
         """
         Args:
              loc_data: (tensor) Loc preds from loc layers
@@ -32,12 +31,14 @@ class Detect(Function):
             conf_data: (tensor) Shape: Conf preds from conf layers
                 Shape: [batch, num_priors, num_classes]
             mask_data: (tensor) Mask preds from mask layers
-                Shape: [batch, num_priors, mask_size**2]
+                Shape: [batch, num_priors, mask_dim]
             prior_data: (tensor) Prior boxes and variances from priorbox layers
                 Shape: [num_priors, 4]
+            proto_data: (tensor) If using mask_type.lincomb, the prototype masks
+                Shape: [batch, mask_h, mask_w, mask_dim]
         
         Returns:
-            output of shape (batch_size, top_k, 1 + 1 + 4 + mask_size**2)
+            output of shape (batch_size, top_k, 1 + 1 + 4 + mask_dim)
             These outputs are in the order: class idx, confidence, bbox coords, and mask.
 
             Note that the outputs are sorted only if cross_class_nms is False
@@ -65,7 +66,8 @@ class Detect(Function):
                 else:
                     self.detect_per_class(i, conf_preds, decoded_boxes, mask_data, output)
         
-        return output
+        return {'output': output, 'proto_data': proto_data}
+
 
     def detect_cross_class(self, batch_idx, conf_preds, decoded_boxes, mask_data, output):
         """ Perform nms for only the max scoring class that isn't background (class 0) """
