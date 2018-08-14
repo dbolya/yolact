@@ -240,7 +240,7 @@ yolact_resnet101_config = ssd550_resnet101_config.copy({
     'preserve_aspect_ratio': False,
     'use_prediction_module': False,
     'use_yolo_regressors': True,
-    'use_prediction_matching': True,
+    'use_prediction_matching': False,
 
     'mask_type': mask_type.lincomb,
     'masks_to_train': 100,
