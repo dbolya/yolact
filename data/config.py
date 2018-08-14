@@ -108,9 +108,12 @@ mask_type = Config({
     # Parameters:
     #   - masks_to_train (int): Since we're producing (near) full image masks, it'd take too much
     #                           vram to backprop on every single mask. Thus we select only a subset.
-    #   - mask_proto_layer (int or tuple): If int, the layer index of the backbone network to use as
-    #                                      prototype masks. If it's a tuple, create a new layer in
-    #                                      the form (out_channels, kernel_size, **kwdargs).
+    #   - mask_proto_src (int): The input layer to the mask prototype generation network. This is an
+    #                           index in backbone.layers. Use to use the image itself instead.
+    #   - mask_proto_net (list<tuple>): A list of layers in the mask proto network with the last one
+    #                                   being where the masks are taken from. Each conv layer is in
+    #                                   the form (num_features, kernel_size, **kwdargs). An empty
+    #                                   list means to use the source for prototype masks.
     'lincomb': 1,
 })
 
@@ -126,7 +129,8 @@ coco_base_config = Config({
     'mask_type': mask_type.direct,
     'mask_size': 16,
     'masks_to_train': 100,
-    'mask_proto_layer': 0,
+    'mask_proto_src': None,
+    'mask_proto_net': [(256, 3, {}), (256, 3, {})],
 
     # This is filled in at runtime by Yolact's __init__, so don't touch it
     'mask_dim': None,
@@ -240,12 +244,32 @@ yolact_resnet101_config = ssd550_resnet101_config.copy({
 
     'mask_type': mask_type.lincomb,
     'masks_to_train': 100,
-    'mask_proto_layer': 0,
+    'mask_proto_src': 0,
+    'mask_proto_net': [],
 })
 
 yolact_resnet101_dedicated_config = yolact_resnet101_config.copy({
     'name': 'yolact_resnet101_dedicated',
-    'mask_proto_layer': (256, 3, {'stride': 2}),
+    'mask_proto_src': None,
+    'mask_proto_net': [(256, 3, {'stride': 2})],
+})
+
+yolact_resnet101_deep_config = yolact_resnet101_config.copy({
+    'name': 'yolact_resnet101_deep',
+    'mask_proto_src': 0,
+    'mask_proto_net': [(256, 3, {'stride': 2}), (256, 3, {'stride': 2})] + [(256, 3, {})] * 3,
+})
+
+yolact_resnet101_shallow_config = yolact_resnet101_config.copy({
+    'name': 'yolact_resnet101_shallow',
+    'mask_proto_src': 0,
+    'mask_proto_net': [(256, 3, {'stride': 2}), (256, 3, {'stride': 2})],
+})
+
+yolact_resnet101_conv5_config = yolact_resnet101_config.copy({
+    'name': 'yolact_resnet101_conv5',
+    'mask_proto_src': 3,
+    'mask_proto_net': [(256, 3, {'stride': 2}), (256, 3, {'stride': 2})] + [(256, 3, {})] * 3,
 })
 
 yolact_vgg16_config = ssd550_config.copy({

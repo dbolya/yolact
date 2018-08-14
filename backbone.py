@@ -100,6 +100,7 @@ class VGGBackbone(nn.Module):
         Each layer is a sequence of conv layers usually preceded by a max pooling.
         Adapted from torchvision.models.vgg.make_layers.
         """
+
         layers = []
 
         for v in cfg:

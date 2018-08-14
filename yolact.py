@@ -168,15 +168,17 @@ class Yolact(nn.Module):
         if cfg.mask_type == mask_type.direct:
             cfg.mask_dim = cfg.mask_size**2
         elif cfg.mask_type == mask_type.lincomb:
-            if isinstance(cfg.mask_proto_layer, int):
-                cfg.mask_dim = self.backbone.channels[cfg.mask_proto_layer]
-                self.proto_idx = cfg.mask_proto_layer
-                self.use_backbone_proto = True
-            else:
-                out_channels, kernel_size, kwdargs = cfg.mask_proto_layer
-                cfg.mask_dim = out_channels
-                self.proto = nn.Conv2d(3, out_channels, kernel_size, **kwdargs)
-                self.use_backbone_proto = False
+            self.proto_src = cfg.mask_proto_src
+            in_channels = 3 if self.proto_src is None else self.backbone.channels[self.proto_src]
+
+            def make_layer(layer_cfg):
+                nonlocal in_channels
+                layer = nn.Conv2d(in_channels, layer_cfg[0], layer_cfg[1], **layer_cfg[2])
+                in_channels = layer_cfg[0]
+                return [layer, nn.ReLU(inplace=True)]
+
+            self.proto_net = nn.Sequential(*sum([make_layer(x) for x in cfg.mask_proto_net], []))
+            cfg.mask_dim = in_channels
 
         self.selected_layers = selected_layers
         self.prediction_layers = nn.ModuleList()
@@ -225,11 +227,7 @@ class Yolact(nn.Module):
 
         if cfg.mask_type == mask_type.lincomb:
             with timer.env('proto'):
-                if self.use_backbone_proto:
-                    proto_out = outs[cfg.mask_proto_layer]
-                else:
-                    proto_out = F.relu(self.proto(x))
-                
+                proto_out = self.proto_net(x if self.proto_src is None else outs[self.proto_src])
                 pred_outs.append(proto_out.permute(0, 2, 3, 1).contiguous())
 
         if self.training:
