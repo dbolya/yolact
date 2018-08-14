@@ -100,6 +100,9 @@ def prep_display(dets_out, img, gt, gt_masks, h, w):
     with timer.env('Postprocess'):
         classes, scores, boxes, masks = [x.cpu().numpy() for x in postprocess(dets_out, w, h)]
 
+        if classes.shape[0] == 0:
+            return
+
     for j in reversed(range(min(args.top_k, classes.shape[0]))):
         x1, y1, x2, y2 = boxes[j, :]
         text_pt = (x1, y2 - 5)
@@ -274,9 +277,13 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, crowd, image_id, detect
     with timer.env('Postprocess'):
         classes, scores, boxes, masks = postprocess(dets, w, h)
 
+        if classes.size(0) == 0:
+            return
+
         classes = list(classes.cpu().numpy().astype(int))
         scores = list(scores.cpu().numpy().astype(float))
-        masks = masks.view(-1, h*w)
+        masks = masks.view(-1, h*w).cuda()
+        boxes = boxes.cuda()
 
     if args.output_coco_json:
         boxes = boxes.cpu().numpy()

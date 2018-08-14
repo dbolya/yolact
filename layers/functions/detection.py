@@ -44,16 +44,20 @@ class Detect(object):
             Note that the outputs are sorted only if cross_class_nms is False
         """
 
+        num = loc_data.size(0)  # batch size
+        output = torch.zeros(num, self.top_k, 1 + 1 + 4 + mask_data.size(2))
+
         if cfg.force_cpu_detect:
             loc_data = loc_data.cpu()
             conf_data = conf_data.cpu()
             mask_data = mask_data.cpu()
             prior_data = prior_data.cpu()
+            output = output.cpu()
+            if proto_data is not None:
+                proto_data = proto_data.cpu()
 
         with timer.env('Detect'):
-            num = loc_data.size(0)  # batch size
             num_priors = prior_data.size(0)
-            output = torch.zeros(num, self.top_k, 1 + 1 + 4 + mask_data.size(2))
             conf_preds = conf_data.view(num, num_priors,
                                         self.num_classes).transpose(2, 1)
 
@@ -71,7 +75,7 @@ class Detect(object):
 
     def detect_cross_class(self, batch_idx, conf_preds, decoded_boxes, mask_data, output):
         """ Perform nms for only the max scoring class that isn't background (class 0) """
-        conf_scores, class_labels = torch.max(conf_preds[batch_idx, 1:], 0)
+        conf_scores, class_labels = torch.max(conf_preds[batch_idx, 1:], dim=0)
 
         c_mask = conf_scores.gt(self.conf_thresh)
         scores = conf_scores[c_mask]

@@ -38,9 +38,9 @@ def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear'):
 
         # Resize the prototype masks to the image size. Prserve_aspect_ratio will take care of this later
         if cfg.preserve_aspect_ratio:
-            proto_data = F.interpolate(proto_data, (cfg.max_size, cfg.max_size), mode=interpolation_mode)
+            proto_data = F.interpolate(proto_data, (cfg.max_size, cfg.max_size), mode=interpolation_mode, align_corners=False)
         else:
-            proto_data = F.interpolate(proto_data, (h, w), mode=interpolation_mode)
+            proto_data = F.interpolate(proto_data, (h, w), mode=interpolation_mode, align_corners=False)
 
         proto_data = proto_data[0].permute(1, 2, 0).contiguous()
 
@@ -77,7 +77,7 @@ def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear'):
 
             # Undo resizing
             proto_data.unsqueeze_(0)
-            proto_data = F.interpolate(proto_data, (h, w), mode=interpolation_mode)
+            proto_data = F.interpolate(proto_data, (h, w), mode=interpolation_mode, align_corners=False)
 
             proto_data = proto_data.permute(1, 2, 0).contiguous()
 
@@ -108,7 +108,7 @@ def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear'):
         # "Crop" predicted masks by zeroing out everything not in the predicted bbox
         # TODO: Write a cuda implementation of this to get rid of the loop
         num_dets = boxes.size(0)
-        crop_mask = torch.zeros(h, w, num_dets)
+        crop_mask = torch.zeros(h, w, num_dets, device=masks.device)
         for jdx in range(num_dets):
             crop_mask[y1[jdx]:y2[jdx], x1[jdx]:x2[jdx], jdx] = 1
         masks = masks * crop_mask
@@ -131,7 +131,7 @@ def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear'):
                 continue
             
             mask = masks[jdx, :].view(1, 1, cfg.mask_size, cfg.mask_size)
-            mask = F.interpolate(mask, (mask_h, mask_w), mode=interpolation_mode)
+            mask = F.interpolate(mask, (mask_h, mask_w), mode=interpolation_mode, align_corners=False)
             mask = mask.gt(0.5).float()
             full_masks[jdx, y1:y2, x1:x2] = mask
         
