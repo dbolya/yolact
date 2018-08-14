@@ -266,10 +266,10 @@ yolact_resnet101_shallow_config = yolact_resnet101_config.copy({
     'mask_proto_net': [(256, 3, {'stride': 2}), (256, 3, {'stride': 2})],
 })
 
-yolact_resnet101_conv5_config = yolact_resnet101_config.copy({
-    'name': 'yolact_resnet101_conv5',
-    'mask_proto_src': 3,
-    'mask_proto_net': [(256, 3, {'stride': 2}), (256, 3, {'stride': 2})] + [(256, 3, {})] * 3,
+yolact_resnet101_conv4_config = yolact_resnet101_config.copy({
+    'name': 'yolact_resnet101_conv4',
+    'mask_proto_src': 2,
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 5,
 })
 
 yolact_vgg16_config = ssd550_config.copy({
