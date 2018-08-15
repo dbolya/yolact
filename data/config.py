@@ -280,7 +280,7 @@ yolact_resnet101_deconv4_config = yolact_resnet101_config.copy({
 })
 
 yolact_resnet101_maskrcnn_config = yolact_resnet101_config.copy({
-    'name': 'yolact_resnet101_deconv4',
+    'name': 'yolact_resnet101_maskrcnn',
     'mask_proto_src': 2,
     'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(256, -2, {'stride': 2}), (256, 1, {})],
 })
