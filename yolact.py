@@ -173,7 +173,13 @@ class Yolact(nn.Module):
 
             def make_layer(layer_cfg):
                 nonlocal in_channels
-                layer = nn.Conv2d(in_channels, layer_cfg[0], layer_cfg[1], **layer_cfg[2])
+                kernel_size = layer_cfg[1]
+                
+                if kernel_size > 0:
+                    layer = nn.Conv2d(in_channels, layer_cfg[0], kernel_size, **layer_cfg[2])
+                else:
+                    layer = nn.ConvTranspose2d(in_channels, layer_cfg[0], -kernel_size, **layer_cfg[2])
+                
                 in_channels = layer_cfg[0]
                 return [layer, nn.ReLU(inplace=True)]
 

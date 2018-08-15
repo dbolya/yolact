@@ -49,7 +49,6 @@ def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear'):
     dets = torch.masked_select(dets, non_zero_score_mask).view(-1, dets.size(1))
     
     if dets.size(0) == 0:
-        print('Warning: No detections found.')
         return [torch.Tensor()] * 4 # Warning, this is 4 copies of the same thing
 
     # This doesn't actually do much most of the time since #detections is usually under 100

@@ -101,6 +101,7 @@ def prep_display(dets_out, img, gt, gt_masks, h, w):
         classes, scores, boxes, masks = [x.cpu().numpy() for x in postprocess(dets_out, w, h)]
 
         if classes.shape[0] == 0:
+            print('Warning: No detections found.')
             return
 
     for j in reversed(range(min(args.top_k, classes.shape[0]))):

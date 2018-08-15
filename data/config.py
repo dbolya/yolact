@@ -113,7 +113,8 @@ mask_type = Config({
     #   - mask_proto_net (list<tuple>): A list of layers in the mask proto network with the last one
     #                                   being where the masks are taken from. Each conv layer is in
     #                                   the form (num_features, kernel_size, **kwdargs). An empty
-    #                                   list means to use the source for prototype masks.
+    #                                   list means to use the source for prototype masks. If the
+    #                                   kernel_size is negative, this creates a deconv layer instead.
     'lincomb': 1,
 })
 
@@ -272,6 +273,18 @@ yolact_resnet101_conv4_config = yolact_resnet101_config.copy({
     'mask_proto_net': [(256, 3, {'padding': 1})] * 5,
 })
 
+yolact_resnet101_deconv4_config = yolact_resnet101_config.copy({
+    'name': 'yolact_resnet101_deconv4',
+    'mask_proto_src': 2,
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 3 + [(256, -2, {'stride': 2})] * 2 + [(256, 3, {'padding': 1})],
+})
+
+yolact_resnet101_maskrcnn_config = yolact_resnet101_config.copy({
+    'name': 'yolact_resnet101_deconv4',
+    'mask_proto_src': 2,
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(256, -2, {'stride': 2}), (256, 1, {})],
+})
+
 yolact_vgg16_config = ssd550_config.copy({
     'name': 'yolact_vgg16',
 
@@ -286,7 +299,7 @@ yolact_vgg16_config = ssd550_config.copy({
     'mask_proto_layer': 0,
 })
 
-cfg = yolact_resnet101_config.copy()
+cfg = yolact_resnet101_conv4_config.copy()
 
 def set_cfg(config_name:str):
     """ Sets the active config. Works even if cfg is already imported! """
