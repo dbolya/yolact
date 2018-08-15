@@ -10,10 +10,23 @@ colors = ['#FF0000', '#FF7F00', '#00FF00', '#0000FF', '#4B0082', '#9400D3'];
 settings = {
 	'top_k': 5,
 	'font_height': 20,
-	'display_class': true,
-	'display_score': true,
-	'display_bbox': true,
-	'display_mask': true,
+	'show_class': true,
+	'show_score': true,
+	'show_bbox': true,
+	'show_mask': true,
+	
+	'show_one': false,
+}
+
+function save_settings() {
+	Cookies.set('settings', settings);
+}
+
+function load_settings() {
+	var new_settings = Cookies.getJSON('settings');
+
+	for (var key in new_settings)
+		settings[key] = new_settings[key];
 }
 
 $.urlParam = function(name){
@@ -34,6 +47,8 @@ $(document).ready(function() {
 	if (img_idx === null) img_idx = 0;
 	img_idx = parseInt(img_idx);
 	
+	load_settings();
+
 	$.getJSON('dets/' + config_name + '.json', function(data) {
 		img_idx = (img_idx+data.images.length) % data.images.length;
 		var info = data.info;
@@ -83,13 +98,64 @@ function fill_info(info) {
 }
 
 function fill_controls() {
-	html = '<br>';
+	var html = '';
+
+	var append_html = function() {
+		$('#control_box').append(html);
+		html = '';
+	}
+
+	var make_slider = function (name, setting, min, max) {
+		settings[setting] = Math.min(max, settings[setting]);
+		var value = settings[setting];
+
+		html += '<div class="setting">';
+		html += '<span class="setting_label">' + name + '</span>';
+		html += '<input type="range" min="' + min + '" max="' + max + '" value="' + value + '" id="' + setting + '" class="setting_input">';
+		html += '<span class="setting_value", id="' + setting + '">' + value + '</span>';
+		html += '</div>';
+		append_html();
+
+		$('input#'+setting).change(function(e) {
+			settings[setting] = $('input#'+setting).prop('value');
+			$('span#'+setting).html(settings[setting]);
+			save_settings();
+			render();
+		});
+	}
+
+	var make_toggle = function(name, setting) {
+		html += '<div class="setting" style="grid-template-columns: 1fr 0px 50px;">';
+		html += '<span class="setting_label">' + name + '</span>';
+		html += '<label class="switch">';
+		html += '<input type="checkbox" id="' + setting + '" class="setting_input"' + (settings[setting] ? 'checked' : '') + '>';
+		html += '<span class="slider round"></span>';
+		html += '</label></div>';
+		append_html();
+
+		$('input#' + setting).change(function (e) {
+			settings[setting] = $('input#' + setting).prop('checked');
+			save_settings();
+			render();
+		});
+	}
+
+	
+	make_slider('Top K', 'top_k', 1, dets.length);
+	make_toggle('Show One', 'show_one');
+	html += '<br>';
+	make_toggle('Show BBox', 'show_bbox');
+	make_toggle('Show Class', 'show_class');
+	make_toggle('Show Score', 'show_score');
+
+	html += '<br><br>';
 	html += '<a href="viewer.html?config=' + config_name + '&idx=' + (img_idx-1) +'">Prev</a>';
 	html += '&nbsp;&nbsp;&nbsp;';
 	html += '<a href="viewer.html?config=' + config_name + '&idx=' + (img_idx+1) +'">Next</a>';
-	html += '<br><br><br>';
+	html += '<br><br>';
 	html += '<a href="/">Back</a>';
-	$('#control_box').html(html);
+
+	append_html();
 }
 
 function render() {
@@ -97,7 +163,7 @@ function render() {
 	var ctx = canvas.getContext('2d');
 
 	canvas.style.width='100%';
-	canvas.style.height='95%';
+	canvas.style.height='94%';
 	canvas.width  = canvas.offsetWidth;
 	canvas.height = canvas.offsetHeight;
 
@@ -108,7 +174,10 @@ function render() {
 	ctx.translate(im_x, im_y);
 	ctx.drawImage(img, 0, 0, img.width * scale, img.height * scale);
 
-	for (var i = Math.min(dets.length, settings.top_k)-1; i >= 0 ; i--) {
+	var startIdx = Math.min(dets.length, settings.top_k)-1;
+	var endIdx   = (settings.show_one ? startIdx : 0);
+
+	for (var i = startIdx; i >= endIdx; i--) {
 		ctx.strokeStyle = colors[i % colors.length];
 		ctx.fillStyle   = ctx.strokeStyle;
 		ctx.lineWidth   = 4;
@@ -119,15 +188,15 @@ function render() {
 		var w = dets[i].bbox[2] * scale;
 		var h = dets[i].bbox[3] * scale;
 
-		if (settings.display_bbox) {
+		if (settings.show_bbox) {
 			ctx.strokeRect(x, y, w, h);
 			ctx.stroke();
 		}
 
 		var text_array = []
-		if (settings.display_class)
+		if (settings.show_class)
 			text_array.push(dets[i].category);
-		if (settings.display_score)
+		if (settings.show_score)
 			text_array.push(Math.round(dets[i].score * 1000) / 1000);
 
 		if (text_array.length > 0) {

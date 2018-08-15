@@ -8,11 +8,13 @@
 
 	<!-- Because yes, I live in 2013 and still use jQuery. -->
 	<script src="scripts/jquery.js"></script>
+	<script src="scripts/js.cookie.js"></script>
 	<script src="scripts/viewer.js"></script>
 
 	<link href="https://fonts.googleapis.com/css?family=Open+Sans" rel="stylesheet">
 	<link rel="stylesheet" href="css/index.css">
 	<link rel="stylesheet" href="css/viewer.css">
+	<link rel="stylesheet" href="css/toggle.css">
 </head>
 
 <body>
@@ -20,17 +22,17 @@
 
 	<div id='viewer' class='main'>
 		<div class="info box">
-			Info &nbsp; <span id='config_name'></span><br /><br />
+			<div class='box_title'>Info &nbsp; <span id='config_name'></span></div><br />
 			<div id='info_box'></div>
 		</div>
 		
-		<div class="image box">
-			<span id='image_name'></span> &nbsp; <span id='image_idx'></span>
-			<canvas id='image_canvas' style='vertical-align: center;'></canvas>
+		<div class="image box image_box">
+			<div class='box_title'><span id='image_name'></span> &nbsp; <span id='image_idx'></span></div>
+			<canvas id='image_canvas'></canvas>
 		</div>
 		
 		<div class="controls box">
-			Controls<br>
+			<div class='box_title'>Controls</div><br>
 			<div id='control_box'></div>
 		</div>
 	</div>

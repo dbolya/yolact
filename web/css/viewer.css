@@ -16,6 +16,12 @@
 	margin: 0 10px 10px 10px;
 }
 
+.image_box {
+	display: grid;
+	grid-template-rows: max-content auto;
+	grid-gap: 10px;
+}
+
 #image_idx, #config_name, .info_value {
 	color: rgb(152, 160, 175);
 }
@@ -33,3 +39,26 @@ a {
 a:hover {
 	color: rgb(152, 160, 175);
 }
+
+.setting {
+	display: grid;
+	grid-template-areas: 'label value input';
+	grid-template-columns: max-content 30px 1fr;
+	grid-gap: 20px;
+	padding: 0 10px 0 10px;
+	text-align: left;
+}
+.setting_label { grid-area: label; }
+.setting_input {
+	grid-area: input;
+}
+.setting_value {
+	grid-area: value;
+	color: rgb(152, 160, 175);
+}
+
+.box_title {
+	width: 100%;
+	border-bottom: 1px solid #fff;
+}
+

@@ -10,6 +10,7 @@ D2CBCB
 161925
 */
 
+* { box-sizing: border-box; }
 
 .big {
 	font-size:72px;
