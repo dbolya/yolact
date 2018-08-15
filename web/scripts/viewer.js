@@ -185,6 +185,21 @@ function render() {
 	var startIdx = Math.min(dets.length, settings.top_k)-1;
 	var endIdx   = (settings.show_one ? startIdx : 0);
 
+	// Draw masks behind everything
+	for (var i = startIdx; i >= endIdx; i--) {
+		if (settings.show_mask) {
+			var mask = masks[i];
+			if (typeof mask == 'undefined') {
+				masks[i] = load_RLE(dets[i].mask, hexToRgb(colors[i % colors.length]));
+				masks[i].onload = function() { render(); }
+			} else {
+				ctx.globalAlpha = settings.mask_alpha / 255;
+				ctx.drawImage(mask, 0, 0, mask.width * scale, mask.height * scale);
+				ctx.globalAlpha = 1;
+			}
+		}
+	}
+
 	for (var i = startIdx; i >= endIdx; i--) {
 		ctx.strokeStyle = colors[i % colors.length];
 		ctx.fillStyle   = ctx.strokeStyle;
@@ -195,18 +210,6 @@ function render() {
 		var y = dets[i].bbox[1] * scale;
 		var w = dets[i].bbox[2] * scale;
 		var h = dets[i].bbox[3] * scale;
-
-		if (settings.show_mask) {
-			var mask = masks[i];
-			if (typeof mask == 'undefined') {
-				masks[i] = load_RLE(dets[i].mask, hexToRgb(ctx.strokeStyle));
-				masks[i].onload = function() { render(); }
-			} else {
-				ctx.globalAlpha = settings.mask_alpha / 255;
-				ctx.drawImage(mask, 0, 0, mask.width * scale, mask.height * scale);
-				ctx.globalAlpha = 1;
-			}
-		}
 
 		if (settings.show_bbox) {
 			ctx.strokeRect(x, y, w, h);
