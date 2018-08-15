@@ -4,12 +4,16 @@ img_idx = null;
 
 img = null;
 dets = null;
+masks = null;
 
+// Must be in hex
 colors = ['#FF0000', '#FF7F00', '#00FF00', '#0000FF', '#4B0082', '#9400D3'];
 
 settings = {
 	'top_k': 5,
 	'font_height': 20,
+	'mask_alpha': 100,
+
 	'show_class': true,
 	'show_score': true,
 	'show_bbox': true,
@@ -57,6 +61,7 @@ $(document).ready(function() {
 		// These are globals on purpose
 		dets = data.dets;
 		img = new Image();
+		masks = Array(dets.length);
 
 		img.onload = function() { render(); }
 		img.src = 'image' + data.image_id;
@@ -147,6 +152,9 @@ function fill_controls() {
 	make_toggle('Show BBox', 'show_bbox');
 	make_toggle('Show Class', 'show_class');
 	make_toggle('Show Score', 'show_score');
+	html += '<br>';
+	make_slider('Mask Alpha', 'mask_alpha', 0, 255);
+	make_toggle('Show Mask', 'show_mask');
 
 	html += '<br><br>';
 	html += '<a href="viewer.html?config=' + config_name + '&idx=' + (img_idx-1) +'">Prev</a>';
@@ -187,6 +195,18 @@ function render() {
 		var y = dets[i].bbox[1] * scale;
 		var w = dets[i].bbox[2] * scale;
 		var h = dets[i].bbox[3] * scale;
+
+		if (settings.show_mask) {
+			var mask = masks[i];
+			if (typeof mask == 'undefined') {
+				masks[i] = load_RLE(dets[i].mask, hexToRgb(ctx.strokeStyle));
+				masks[i].onload = function() { render(); }
+			} else {
+				ctx.globalAlpha = settings.mask_alpha / 255;
+				ctx.drawImage(mask, 0, 0, mask.width * scale, mask.height * scale);
+				ctx.globalAlpha = 1;
+			}
+		}
 
 		if (settings.show_bbox) {
 			ctx.strokeRect(x, y, w, h);
