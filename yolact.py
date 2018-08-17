@@ -183,8 +183,13 @@ class Yolact(nn.Module):
                 in_channels = layer_cfg[0]
                 return [layer, nn.ReLU(inplace=True)]
 
-            self.proto_net = nn.Sequential(*sum([make_layer(x) for x in cfg.mask_proto_net], []))
+            # Replace the last ReLU with a sigmoid because we want nice masks with mostly 1 and 0
+            last_nonlinearity = nn.Sigmoid() if cfg.mask_proto_sigmoid else nn.ReLU(inplace=True)
+            self.proto_net = nn.Sequential(*(sum([make_layer(x) for x in cfg.mask_proto_net], [])[:-1] + [last_nonlinearity]))
             cfg.mask_dim = in_channels
+
+            if cfg.mask_proto_bias:
+                cfg.mask_dim += 1
 
         self.selected_layers = selected_layers
         self.prediction_layers = nn.ModuleList()
@@ -234,7 +239,14 @@ class Yolact(nn.Module):
         if cfg.mask_type == mask_type.lincomb:
             with timer.env('proto'):
                 proto_out = self.proto_net(x if self.proto_src is None else outs[self.proto_src])
-                pred_outs.append(proto_out.permute(0, 2, 3, 1).contiguous())
+                proto_out = proto_out.permute(0, 2, 3, 1).contiguous()
+
+                if cfg.mask_proto_bias:
+                    bias_shape = [x for x in proto_out.size()]
+                    bias_shape[-1] = 1
+                    proto_out = torch.cat([proto_out, torch.ones(*bias_shape)], -1)
+
+                pred_outs.append(proto_out)
 
         if self.training:
             return pred_outs

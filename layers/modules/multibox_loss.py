@@ -47,8 +47,18 @@ class MultiBoxLoss(nn.Module):
         self.mask_dim = cfg.mask_dim
         self.use_gt_bboxes = cfg.use_gt_bboxes
         self.train_masks = cfg.train_masks
-        self.mask_alpha = 100
+        
+        # Extra loss coefficients to get all the losses to be in a similar range
+        self.mask_alpha = 0.2 / cfg.mask_dim
+        self.bbox_alpha = 5 if cfg.use_yolo_regressors else 1
 
+        if cfg.mask_type == mask_type.lincomb:
+            self.second_nonlinearity = None
+
+            if cfg.mask_proto_second_nonlinearity == 'sigmoid':
+                self.second_nonlinearity = nn.Sigmoid()
+            elif cfg.mask_proto_second_nonlinearity == 'relu':
+                self.second_nonlinearity = nn.ReLU(inplace=True)
 
     def forward(self, predictions, targets, masks):
         """Multibox Loss
@@ -107,7 +117,7 @@ class MultiBoxLoss(nn.Module):
         pos_idx = pos.unsqueeze(pos.dim()).expand_as(loc_data)
         loc_p = loc_data[pos_idx].view(-1, 4)
         loc_t = loc_t[pos_idx].view(-1, 4)
-        loss_l = F.smooth_l1_loss(loc_p, loc_t, reduction='sum')
+        loss_l = F.smooth_l1_loss(loc_p, loc_t, reduction='sum') * self.bbox_alpha
 
         # Mask Loss
         if self.train_masks:
@@ -118,7 +128,7 @@ class MultiBoxLoss(nn.Module):
                         pos_masks.append(masks[idx][idx_t[idx, pos[idx]]])
                     masks_t = torch.cat(pos_masks, 0)
                     masks_p = mask_data[pos, :].view(-1, self.mask_dim)
-                    loss_m = F.binary_cross_entropy(masks_p, masks_t, reduction='elementwise_mean') * self.mask_alpha
+                    loss_m = F.binary_cross_entropy(masks_p, masks_t, reduction='sum') * self.mask_alpha
                 else:
                     loss_m = self.direct_mask_loss(pos_idx, idx_t, loc_data, mask_data, priors, masks)
             elif cfg.mask_type == mask_type.lincomb:
@@ -194,7 +204,7 @@ class MultiBoxLoss(nn.Module):
                 mask_t = torch.cat(scaled_masks, 0).gt(0.5).float() # Threshold downsampled mask
             
             pos_mask_data = mask_data[idx, cur_pos_idx_squeezed, :]
-            loss_m += F.binary_cross_entropy(pos_mask_data, mask_t, reduction='elementwise_mean') * self.mask_alpha
+            loss_m += F.binary_cross_entropy(pos_mask_data, mask_t, reduction='sum') * self.mask_alpha
 
         return loss_m
     
@@ -233,7 +243,8 @@ class MultiBoxLoss(nn.Module):
 
             # Size: [mask_h, mask_w, num_pos]
             pred_masks = torch.matmul(proto_masks, proto_coef.t())
-            pred_masks = torch.sigmoid(pred_masks)
+            if self.second_nonlinearity is not None:
+                pred_masks = self.second_nonlinearity(pred_masks)
 
             # Take care of all the bad behavior that can be caused by out of bounds coordinates
             x1, x2 = sanitize_coordinates(pos_bboxes[:, 0], pos_bboxes[:, 2], mask_w)
@@ -247,6 +258,9 @@ class MultiBoxLoss(nn.Module):
             pred_masks = pred_masks * crop_mask
 
             mask_t = downsampled_masks[:, :, pos_idx_t]
-            loss_m += F.binary_cross_entropy(pred_masks, mask_t, reduction='elementwise_mean') * self.mask_alpha
+            if cfg.mask_proto_second_nonlinearity == 'sigmoid':
+                loss_m += F.binary_cross_entropy(pred_masks, mask_t, reduction='sum') * self.mask_alpha
+            else:
+                loss_m += F.smooth_l1_loss(pred_masks, mask_t, reduction='sum') * self.mask_alpha
 
         return loss_m

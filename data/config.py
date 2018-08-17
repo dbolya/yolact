@@ -115,6 +115,12 @@ mask_type = Config({
     #                                   the form (num_features, kernel_size, **kwdargs). An empty
     #                                   list means to use the source for prototype masks. If the
     #                                   kernel_size is negative, this creates a deconv layer instead.
+    #   - mask_proto_sigmoid (bool): Whether to sigmoid the proto masks or relu them.
+    #   - mask_proto_bias (bool): Whether to include an extra coefficient that corresponds to a proto
+    #                             mask of all ones.
+    #   - mask_proto_second_nonlinearity (str ['sigmoid'|'relu'|'none']): After summing the prototype
+    #                             masks with the predicted coefficients, what nonlinearity to apply
+    #                             to the final mask.
     'lincomb': 1,
 })
 
@@ -132,6 +138,9 @@ coco_base_config = Config({
     'masks_to_train': 100,
     'mask_proto_src': None,
     'mask_proto_net': [(256, 3, {}), (256, 3, {})],
+    'mask_proto_sigmoid': False,
+    'mask_proto_bias': False,
+    'mask_proto_second_nonlinearity': 'sigmoid',
 
     # This is filled in at runtime by Yolact's __init__, so don't touch it
     'mask_dim': None,
@@ -283,6 +292,46 @@ yolact_resnet101_maskrcnn_config = yolact_resnet101_config.copy({
     'name': 'yolact_resnet101_maskrcnn',
     'mask_proto_src': 2,
     'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(256, -2, {'stride': 2}), (256, 1, {})],
+})
+
+# Start of Ablations
+yolact_resnet101_maskrcnn_1_config = yolact_resnet101_maskrcnn_config.copy({
+    'name': 'yolact_resnet101_maskrcnn_1',
+    'use_yolo_regressors': False,
+})
+yolact_resnet101_maskrcnn_2_config = yolact_resnet101_maskrcnn_config.copy({
+    'name': 'yolact_resnet101_maskrcnn_2',
+    'use_yolo_regressors': False,
+    'mask_proto_sigmoid': True,
+})
+yolact_resnet101_maskrcnn_3_config = yolact_resnet101_maskrcnn_config.copy({
+    'name': 'yolact_resnet101_maskrcnn_3',
+    'use_yolo_regressors': False,
+    'mask_proto_sigmoid': True,
+    'use_prediction_module': True,
+})
+yolact_resnet101_maskrcnn_4_config = yolact_resnet101_maskrcnn_config.copy({
+    'name': 'yolact_resnet101_maskrcnn_4',
+    'use_yolo_regressors': False,
+    'mask_proto_sigmoid': True,
+    'use_prediction_module': True,
+    'mask_proto_bias': True,
+})
+yolact_resnet101_maskrcnn_5_config = yolact_resnet101_maskrcnn_config.copy({
+    'name': 'yolact_resnet101_maskrcnn_5',
+    'use_yolo_regressors': False,
+    'mask_proto_sigmoid': True,
+    'use_prediction_module': True,
+    'mask_proto_bias': True,
+    'mask_proto_second_nonlinearity': 'none',
+})
+yolact_resnet101_maskrcnn_6_config = yolact_resnet101_maskrcnn_config.copy({
+    'name': 'yolact_resnet101_maskrcnn_6',
+    'use_yolo_regressors': False,
+    'mask_proto_sigmoid': True,
+    'use_prediction_module': True,
+    'mask_proto_bias': True,
+    'mask_proto_second_nonlinearity': 'relu',
 })
 
 yolact_vgg16_config = ssd550_config.copy({

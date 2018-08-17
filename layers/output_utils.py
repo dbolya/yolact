@@ -102,7 +102,12 @@ def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear'):
     if cfg.mask_type == mask_type.lincomb:
         # At this points masks is only the coefficients
         masks = torch.matmul(proto_data, masks.t())
-        masks = torch.sigmoid(masks)
+        
+        if cfg.mask_proto_second_nonlinearity == 'sigmoid':
+            masks = torch.sigmoid(masks)
+        elif cfg.mask_proto_second_nonlinearity == 'relu':
+            masks = F.relu(masks, inplace=True)
+        
 
         # "Crop" predicted masks by zeroing out everything not in the predicted bbox
         # TODO: Write a cuda implementation of this to get rid of the loop
