@@ -136,3 +136,4 @@ data/coco/images/
 data/coco/annotations/
 ap_data.pkl
 results/
+logs/
