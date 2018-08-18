@@ -10,6 +10,7 @@ import cv2
 from data import cfg, mask_type, MEANS
 from utils.augmentations import Resize
 from utils.functions import sanitize_coordinates
+from utils import timer
 
 def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear'):
     """
@@ -31,18 +32,6 @@ def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear'):
     """
     
     dets = det_output['output'].data[batch_idx, :, :]
-    
-    if cfg.mask_type == mask_type.lincomb:
-        proto_data = det_output['proto_data'][batch_idx]
-        proto_data = proto_data.permute(2, 0, 1).contiguous().unsqueeze(0)
-
-        # Resize the prototype masks to the image size. Prserve_aspect_ratio will take care of this later
-        if cfg.preserve_aspect_ratio:
-            proto_data = F.interpolate(proto_data, (cfg.max_size, cfg.max_size), mode=interpolation_mode, align_corners=False)
-        else:
-            proto_data = F.interpolate(proto_data, (h, w), mode=interpolation_mode, align_corners=False)
-
-        proto_data = proto_data[0].permute(1, 2, 0).contiguous()
 
     # Select only detections with score > 0
     non_zero_score_mask = dets[:, 1].gt(0.0).expand(dets.size(1), dets.size(0)).t()
@@ -66,20 +55,6 @@ def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear'):
     if cfg.preserve_aspect_ratio:
         r_w, r_h = Resize.faster_rcnn_scale(w, h, cfg.min_size, cfg.max_size)
 
-        # Crop and resize the prototype masks as in undo_image_transformation
-        if cfg.mask_type == mask_type.lincomb:
-            # At this point, proto_data is the input size of the network
-            proto_data = proto_data.permute(2, 0, 1).contiguous()
-            
-            # Undo padding
-            proto_data = proto_data[:, :r_h, :r_w]
-
-            # Undo resizing
-            proto_data.unsqueeze_(0)
-            proto_data = F.interpolate(proto_data, (h, w), mode=interpolation_mode, align_corners=False)
-
-            proto_data = proto_data.permute(1, 2, 0).contiguous()
-
         # Get rid of any detections whose centers are outside the image
         boxes = dets[:, 2:6]
         boxes = center_size(boxes)
@@ -101,24 +76,35 @@ def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear'):
 
     if cfg.mask_type == mask_type.lincomb:
         # At this points masks is only the coefficients
-        masks = torch.matmul(proto_data, masks.t())
+        proto_data = det_output['proto_data'][batch_idx]
         
+        masks = torch.matmul(proto_data, masks.t())
+    
+        # Permute into the correct output shape [num_dets, proto_h, proto_w]
+        masks = masks.permute(2, 0, 1).contiguous()
+    
         if cfg.mask_proto_second_nonlinearity == 'sigmoid':
             masks = torch.sigmoid(masks)
         elif cfg.mask_proto_second_nonlinearity == 'relu':
             masks = F.relu(masks, inplace=True)
-        
+
+        # Scale masks up to the full image
+        if cfg.preserve_aspect_ratio:
+            # Undo padding
+            masks = masks[:, :int(r_h/cfg.max_size*proto_data.size(1)), :int(r_w/cfg.max_size*proto_data.size(2))]
+        masks = F.interpolate(masks.unsqueeze(0), (h, w), mode=interpolation_mode, align_corners=False).squeeze(0)
 
         # "Crop" predicted masks by zeroing out everything not in the predicted bbox
         # TODO: Write a cuda implementation of this to get rid of the loop
         num_dets = boxes.size(0)
-        crop_mask = torch.zeros(h, w, num_dets, device=masks.device)
+        crop_mask = torch.zeros(num_dets, h, w, device=masks.device)
         for jdx in range(num_dets):
-            crop_mask[y1[jdx]:y2[jdx], x1[jdx]:x2[jdx], jdx] = 1
+            crop_mask[jdx, y1[jdx]:y2[jdx], x1[jdx]:x2[jdx]] = 1
         masks = masks * crop_mask
 
-        # Permute into the correct output shape [num_dets, im_h, im_w]
-        masks = masks.permute(2, 0, 1).contiguous().gt(0.5).float()
+        # Binarize the masks
+        masks = masks.gt(0.5).float()
+
 
     elif cfg.mask_type == mask_type.direct:
         # Upscale masks
