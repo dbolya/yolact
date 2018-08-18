@@ -52,9 +52,9 @@ class Detect(object):
             conf_data = conf_data.cpu()
             mask_data = mask_data.cpu()
             prior_data = prior_data.cpu()
-            output = output.cpu()
-            if proto_data is not None:
-                proto_data = proto_data.cpu()
+            # output = output.cpu()
+            # if proto_data is not None:
+            #     proto_data = proto_data.cpu()
 
         with timer.env('Detect'):
             num_priors = prior_data.size(0)

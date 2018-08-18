@@ -52,7 +52,8 @@ class Config(object):
 # Datasets
 coco_dataset = Config({
     'name': 'COCO',
-    'split': 'train2014'
+    'train': 'train2014',
+    'valid': 'val2014'
 })
 
 # Backbones

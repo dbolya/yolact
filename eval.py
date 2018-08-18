@@ -21,6 +21,7 @@ import cProfile
 import pickle
 import json
 import os
+from collections import OrderedDict
 
 import matplotlib.pyplot as plt
 import cv2
@@ -33,58 +34,58 @@ def str2bool(v):
     else:
         raise argparse.ArgumentTypeError('Boolean value expected.')
 
-parser = argparse.ArgumentParser(
-    description='YOLACT COCO Evaluation')
-parser.add_argument('--trained_model',
-                    default='weights/ssd300_mAP_77.43_v2.pth', type=str,
-                    help='Trained state_dict file path to open. If "interrupt", this will open the interrupt file.')
-parser.add_argument('--confidence_threshold', default=0.01, type=float,
-                    help='Detection confidence threshold')
-parser.add_argument('--top_k', default=5, type=int,
-                    help='Further restrict the number of predictions to parse')
-parser.add_argument('--cuda', default=True, type=str2bool,
-                    help='Use cuda to evaulate model')
-parser.add_argument('--coco_root', default=COCO_ROOT,
-                    help='Location of VOC root directory')
-parser.add_argument('--cross_class_nms', default=True, type=str2bool,
-                    help='Whether to use cross-class nms (faster) or do nms per class')
-parser.add_argument('--display_masks', default=True, type=str2bool,
-                    help='Whether or not to display masks over bounding boxes')
-parser.add_argument('--display_bboxes', default=True, type=str2bool,
-                    help='Whether or not to display bboxes around masks')
-parser.add_argument('--display_scores', default=False, type=str2bool,
-                    help='Whether or not to display scores in addition to classes')
-parser.add_argument('--display', dest='display', action='store_true',
-                    help='Display qualitative results instead of quantitative ones.')
-parser.add_argument('--shuffle', dest='shuffle', action='store_true',
-                    help='Shuffles the images when displaying them. Doesn\'t have much of an effect when display is off though.')
-parser.add_argument('--ap_data_file', default='results/ap_data.pkl', type=str,
-                    help='In quantitative mode, the file to save detections before calculating mAP.')
-parser.add_argument('--resume', dest='resume', action='store_true',
-                    help='If display not set, this resumes mAP calculations from the ap_data_file.')
-parser.add_argument('--max_images', default=-1, type=int,
-                    help='The maximum number of images from the dataset to consider. Use -1 for all.')
-parser.add_argument('--output_coco_json', dest='output_coco_json', action='store_true',
-                    help='If display is not set, instead of processing IoU values, this just dumps detections into the coco json file.')
-parser.add_argument('--bbox_det_file', default='results/bbox_detections.json', type=str,
-                    help='The output file for coco bbox results if --coco_results is set.')
-parser.add_argument('--mask_det_file', default='results/mask_detections.json', type=str,
-                    help='The output file for coco mask results if --coco_results is set.')
-parser.add_argument('--config', default=None,
-                    help='The config object to use.')
-parser.add_argument('--output_web_json', dest='output_web_json', action='store_true',
-                    help='If display is not set, instead of processing IoU values, this dumps detections for usage with the detections viewer web thingy.')
-parser.add_argument('--web_det_path', default='web/dets/', type=str,
-                    help='If output_web_json is set, this is the path to dump detections into.')
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(
+        description='YOLACT COCO Evaluation')
+    parser.add_argument('--trained_model',
+                        default='weights/ssd300_mAP_77.43_v2.pth', type=str,
+                        help='Trained state_dict file path to open. If "interrupt", this will open the interrupt file.')
+    parser.add_argument('--confidence_threshold', default=0.01, type=float,
+                        help='Detection confidence threshold')
+    parser.add_argument('--top_k', default=5, type=int,
+                        help='Further restrict the number of predictions to parse')
+    parser.add_argument('--cuda', default=True, type=str2bool,
+                        help='Use cuda to evaulate model')
+    parser.add_argument('--coco_root', default=COCO_ROOT,
+                        help='Location of VOC root directory')
+    parser.add_argument('--cross_class_nms', default=True, type=str2bool,
+                        help='Whether to use cross-class nms (faster) or do nms per class')
+    parser.add_argument('--display_masks', default=True, type=str2bool,
+                        help='Whether or not to display masks over bounding boxes')
+    parser.add_argument('--display_bboxes', default=True, type=str2bool,
+                        help='Whether or not to display bboxes around masks')
+    parser.add_argument('--display_scores', default=False, type=str2bool,
+                        help='Whether or not to display scores in addition to classes')
+    parser.add_argument('--display', dest='display', action='store_true',
+                        help='Display qualitative results instead of quantitative ones.')
+    parser.add_argument('--shuffle', dest='shuffle', action='store_true',
+                        help='Shuffles the images when displaying them. Doesn\'t have much of an effect when display is off though.')
+    parser.add_argument('--ap_data_file', default='results/ap_data.pkl', type=str,
+                        help='In quantitative mode, the file to save detections before calculating mAP.')
+    parser.add_argument('--resume', dest='resume', action='store_true',
+                        help='If display not set, this resumes mAP calculations from the ap_data_file.')
+    parser.add_argument('--max_images', default=-1, type=int,
+                        help='The maximum number of images from the dataset to consider. Use -1 for all.')
+    parser.add_argument('--output_coco_json', dest='output_coco_json', action='store_true',
+                        help='If display is not set, instead of processing IoU values, this just dumps detections into the coco json file.')
+    parser.add_argument('--bbox_det_file', default='results/bbox_detections.json', type=str,
+                        help='The output file for coco bbox results if --coco_results is set.')
+    parser.add_argument('--mask_det_file', default='results/mask_detections.json', type=str,
+                        help='The output file for coco mask results if --coco_results is set.')
+    parser.add_argument('--config', default=None,
+                        help='The config object to use.')
+    parser.add_argument('--output_web_json', dest='output_web_json', action='store_true',
+                        help='If display is not set, instead of processing IoU values, this dumps detections for usage with the detections viewer web thingy.')
+    parser.add_argument('--web_det_path', default='web/dets/', type=str,
+                        help='If output_web_json is set, this is the path to dump detections into.')
 
+    parser.set_defaults(display=False, resume=False, output_coco_json=False, output_web_json=False, shuffle=False)
 
+    global args
+    args = parser.parse_args(argv)
 
-parser.set_defaults(display=False, resume=False, output_coco_json=False, output_web_json=False, shuffle=False)
-
-args = parser.parse_args()
-
-if args.config is not None:
-    set_cfg(args.config)
+    if args.config is not None:
+        set_cfg(args.config)
 
 iou_thresholds = [x / 100 for x in range(50, 100, 5)]
 coco_cats = [] # Call prep_coco_cats to fill this
@@ -98,8 +99,10 @@ def prep_display(dets_out, img, gt, gt_masks, h, w):
     img_numpy = undo_image_transformation(img, w, h)
     
     with timer.env('Postprocess'):
-        classes, scores, boxes, masks = [x.cpu().numpy() for x in postprocess(dets_out, w, h)]
+        t = postprocess(dets_out, w, h)
 
+    with timer.env('Copy'):
+        classes, scores, boxes, masks = [x[:args.top_k].cpu().numpy() for x in t]
         if classes.shape[0] == 0:
             print('Warning: No detections found.')
             return
@@ -448,7 +451,7 @@ class APDataObject:
 
 
 
-def evaluate(net, dataset):
+def evaluate(net, dataset, train_mode=False):
     frame_times = MovingAverage()
     dataset_size = len(dataset) if args.max_images < 0 else args.max_images
 
@@ -516,14 +519,18 @@ def evaluate(net, dataset):
                 else:
                     detections.dump()
             else:
-                print('Saving data...')
-                with open(args.ap_data_file, 'wb') as f:
-                    pickle.dump(ap_data, f)
+                if not train_mode:
+                    print('Saving data...')
+                    with open(args.ap_data_file, 'wb') as f:
+                        pickle.dump(ap_data, f)
 
-                calc_map(ap_data)
+                return calc_map(ap_data)
 
     except KeyboardInterrupt:
         print('Stopping...')
+
+        if train_mode:
+            raise KeyboardInterrupt
 
 def calc_map(ap_data):
     print('Calculating mAP...')
@@ -537,27 +544,35 @@ def calc_map(ap_data):
                 if not ap_obj.is_empty():
                     aps[iou_idx][iou_type].append(ap_obj.get_ap())
 
-    all_maps = {'box': [], 'mask': []}
+    all_maps = {'box': OrderedDict(), 'mask': OrderedDict()}
+
+    # Looking back at it, this code is really hard to read :/
+    for iou_type in ('box', 'mask'):
+        all_maps[iou_type]['all'] = 0 # Make this first in the ordereddict
+        for i, threshold in enumerate(iou_thresholds):
+            mAP = sum(aps[i][iou_type]) / len(aps[i][iou_type]) * 100 if len(aps[i][iou_type]) > 0 else 0
+            all_maps[iou_type][int(threshold*100)] = mAP
+        all_maps[iou_type]['all'] = (sum(all_maps[iou_type].values()) / (len(all_maps[iou_type].values())-1))
     
-    for i, threshold in enumerate(iou_thresholds):
-        print('\nWith IoU Threshold %.2f:' % threshold)
-        
-        bbox_map = sum(aps[i]['box'])  / len(aps[i]['box'])
-        mask_map = sum(aps[i]['mask']) / len(aps[i]['mask'])
-        
-        print('BBox mAP: %.4f' % bbox_map)
-        print('Mask mAP: %.4f' % mask_map)
+    print_maps(all_maps)
+    return all_maps
 
-        all_maps['box'].append(bbox_map)
-        all_maps['mask'].append(mask_map)
-    
-    print('\nTotal mAPs:')
-    print('BBox mAP: %.4f' % (sum(all_maps['box'])  / len(all_maps['box'])))
-    print('Mask mAP: %.4f' % (sum(all_maps['mask']) / len(all_maps['mask'])))
+def print_maps(all_maps):
+    # Warning: hacky 
+    make_row = lambda vals: (' %5s |' * len(vals)) % tuple(vals)
+    make_sep = lambda n:  ('-------+' * n)
 
-
+    print()
+    print(make_row([''] + [('.%d ' % x if isinstance(x, int) else x + ' ') for x in all_maps['box'].keys()]))
+    print(make_sep(len(all_maps['box']) + 1))
+    for iou_type in ('box', 'mask'):
+        print(make_row([iou_type] + ['%.2f' % x for x in all_maps[iou_type].values()]))
+    print(make_sep(len(all_maps['box']) + 1))
+    print()
 
 if __name__ == '__main__':
+    parse_args()
+
     with torch.no_grad():
         if not os.path.exists('results'):
             os.makedirs('results')
@@ -569,7 +584,7 @@ if __name__ == '__main__':
                 calc_map(ap_data)
                 exit()
 
-        dataset = COCODetection(args.coco_root, 'val2014', 
+        dataset = COCODetection(args.coco_root, cfg.dataset.valid, 
                                 BaseTransform(MEANS),
                                 prep_crowds=True)
         
@@ -589,6 +604,7 @@ if __name__ == '__main__':
         if args.cuda:
             net = net.cuda()
             cudnn.benchmark = True
+            cudnn.fastest = True
             torch.set_default_tensor_type('torch.cuda.FloatTensor')
         else:
             torch.set_default_tensor_type('torch.FloatTensor')

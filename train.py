@@ -1,5 +1,5 @@
 from data import *
-from utils.augmentations import SSDAugmentation
+from utils.augmentations import SSDAugmentation, BaseTransform
 from utils.functions import MovingAverage, SavePath
 from layers.modules import MultiBoxLoss
 from yolact import Yolact
@@ -19,6 +19,8 @@ import numpy as np
 import argparse
 import datetime
 
+# Oof
+import eval as eval_script
 
 def str2bool(v):
     return v.lower() in ("yes", "true", "t", "1")
@@ -56,6 +58,10 @@ parser.add_argument('--config', default=None,
                     help='The config object to use.')
 parser.add_argument('--save_interval', default=10000, type=int,
                     help='The number of iterations between saving the model.')
+parser.add_argument('--validation_size', default=5000, type=int,
+                    help='The number of images to use for validation.')
+parser.add_argument('--validation_epoch', default=2, type=int,
+                    help='Output validation information every n iterations. If -1, do no validation.')
 args = parser.parse_args()
 
 if args.config is not None:
@@ -76,8 +82,14 @@ def train():
         os.mkdir(args.save_folder)
 
     dataset = COCODetection(root=args.dataset_root,
-                            image_set=cfg.dataset.split,
+                            image_set=cfg.dataset.train,
                             transform=SSDAugmentation(MEANS))
+    
+    if args.validation_epoch > 0:
+        setup_eval()
+        val_dataset = COCODetection(root=args.dataset_root,
+                                image_set=cfg.dataset.valid,
+                                transform=BaseTransform(MEANS))
 
     if args.visdom:
         import visdom
@@ -169,24 +181,14 @@ def train():
                     adjust_learning_rate(optimizer, args.gamma, step_index)
 
                 # load train data
-                images, targets_tuple = datum
-                targets, masks = targets_tuple
-
-                if args.cuda:
-                    images = Variable(images.cuda(), requires_grad=False)
-                    targets = [Variable(ann.cuda(), requires_grad=False) for ann in targets]
-                    masks = [Variable(mask.cuda(), requires_grad=False) for mask in masks]
-                else:
-                    images = Variable(images, requires_grad=False)
-                    targets = [Variable(ann, requires_grad=False) for ann in targets]
-                    masks = [Variable(mask, requires_grad=False) for mask in masks]
+                images, targets, masks = prepare_data(datum)
                 # forward
                 out = net(images)
                 # backprop
                 optimizer.zero_grad()
                 loss_l, loss_c, loss_m = criterion(out, targets, masks)
                 loss = loss_l + loss_c + loss_m
-                loss.backward() # Do this to free up vram even if loss is infinite
+                loss.backward() # Do this to free up vram even if loss is not finite
                 if torch.isfinite(loss).item():
                     optimizer.step()
                 loc_loss += loss_l.item()
@@ -199,6 +201,7 @@ def train():
                 elapsed   = cur_time - last_time
                 last_time = cur_time
 
+                # Exclude graph setup from the timing information
                 if iteration != args.start_iter:
                     time_avg.add(elapsed)
 
@@ -210,6 +213,7 @@ def train():
                     t = l + c + m
                     print('[%3d] %7d || B: %.3f | C: %.3f | M: %.3f | T: %.3f || ETA: %s || timer: %.3f'
                             % (epoch, iteration, l,c,m,t, eta_str, elapsed), flush=True)
+                    
 
                 if args.visdom:
                     update_vis_plot(iteration, loss_l.item(), loss_c.item(),
@@ -220,7 +224,11 @@ def train():
                 if iteration % args.save_interval == 0 and iteration != args.start_iter:
                     print('Saving state, iter:', iteration)
                     yolact_net.save_weights(save_path(epoch, iteration))
-                
+            
+            # This is a comment that serves to separate white text from other white text
+            if args.validation_epoch > 0:
+                if epoch % args.validation_epoch == 0 and epoch > 0:
+                    compute_validation_map(net, val_dataset)
 
             if args.visdom:
                     update_vis_plot(epoch, loc_loss, conf_loss, epoch_plot, None,
@@ -249,16 +257,6 @@ def adjust_learning_rate(optimizer, gamma, step):
     lr = args.lr * (gamma ** (step))
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
-
-
-def xavier(param):
-    init.xavier_uniform_(param)
-
-
-def weights_init(m):
-    if isinstance(m, nn.Conv2d):
-        xavier(m.weight.data)
-        m.bias.data.zero_()
 
 
 def create_vis_plot(_xlabel, _ylabel, _title, _legend):
@@ -291,6 +289,55 @@ def update_vis_plot(iteration, loc, conf, window1, window2, update_type,
             update=True
         )
 
+def prepare_data(datum):
+    images, (targets, masks) = datum
+    
+    if args.cuda:
+        images = Variable(images.cuda(), requires_grad=False)
+        targets = [Variable(ann.cuda(), requires_grad=False) for ann in targets]
+        masks = [Variable(mask.cuda(), requires_grad=False) for mask in masks]
+    else:
+        images = Variable(images, requires_grad=False)
+        targets = [Variable(ann, requires_grad=False) for ann in targets]
+        masks = [Variable(mask, requires_grad=False) for mask in masks]
+
+    return images, targets, masks
+
+def compute_validation_loss(net, data_loader, criterion):
+    with torch.no_grad():
+        loss_b, loss_m, loss_c = (0, 0, 0)
+        
+        # Don't switch to eval mode because we want to get losses
+        iterations = 0
+        for datum in data_loader:
+            images, targets, masks = prepare_data(datum)
+
+            out = net(images)
+            b, c, m = [x.item() for x in criterion(out, targets, masks)]
+            
+            loss_b += b
+            loss_c += c
+            loss_m += m
+
+            iterations += 1
+            if args.validation_size <= iterations * args.batch_size:
+                break
+        
+        loss_b /= iterations
+        loss_c /= iterations
+        loss_m /= iterations
+        loss_t  = loss_b + loss_c + loss_m
+
+        return (loss_b, loss_c, loss_m, loss_t)
+
+def compute_validation_map(net, dataset):
+    with torch.no_grad():
+        net.eval()
+        eval_script.evaluate(net, dataset, train_mode=True)
+        net.train()
+
+def setup_eval():
+    eval_script.parse_args(['--max_images='+str(args.validation_size)])
 
 if __name__ == '__main__':
     train()
