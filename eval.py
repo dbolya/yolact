@@ -78,8 +78,10 @@ def parse_args(argv=None):
                         help='If display is not set, instead of processing IoU values, this dumps detections for usage with the detections viewer web thingy.')
     parser.add_argument('--web_det_path', default='web/dets/', type=str,
                         help='If output_web_json is set, this is the path to dump detections into.')
-
-    parser.set_defaults(display=False, resume=False, output_coco_json=False, output_web_json=False, shuffle=False)
+    parser.add_argument('--no_bar', dest='no_bar', action='store_true',
+                        help='Do not output the status bar. This is useful for when piping to a file.')
+    
+    parser.set_defaults(no_bar=False, display=False, resume=False, output_coco_json=False, output_web_json=False, shuffle=False)
 
     global args
     args = parser.parse_args(argv)
@@ -501,7 +503,7 @@ def evaluate(net, dataset, train_mode=False):
                 plt.imshow(np.clip(img_numpy, 0, 1))
                 plt.title(str(dataset.ids[image_idx]))
                 plt.show()
-            else:
+            elif not args.no_bar:
                 if it > 1: fps = 1 / frame_times.get_avg()
                 else: fps = 0
                 progress = (it+1) / dataset_size * 100
