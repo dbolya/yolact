@@ -88,9 +88,6 @@ def parse_args(argv=None):
     global args
     args = parser.parse_args(argv)
 
-    if args.config is not None:
-        set_cfg(args.config)
-
 iou_thresholds = [x / 100 for x in range(50, 100, 5)]
 coco_cats = [] # Call prep_coco_cats to fill this
 coco_cats_inv = {}
@@ -575,6 +572,18 @@ def print_maps(all_maps):
 if __name__ == '__main__':
     parse_args()
 
+    if args.trained_model == 'interrupt':
+        args.trained_model = SavePath.get_interrupt('weights/')
+    model_path = SavePath.from_str(args.trained_model)
+
+    if args.config is not None:
+        set_cfg(args.config)
+    else:
+        # TODO: Bad practice? Probably want to do a name lookup instead.
+        args.config = model_path.model_name + '_config'
+        print('Warning: Config not specified. Loading config %s instead.\n' % args.config)
+        set_cfg(args.config)
+
     with torch.no_grad():
         if not os.path.exists('results'):
             os.makedirs('results')
@@ -592,8 +601,6 @@ if __name__ == '__main__':
         
         prep_coco_cats(dataset.coco.cats)
 
-        if args.trained_model == 'interrupt':
-            args.trained_model = SavePath.get_interrupt('weights/')
         if args.output_web_json:
             args.output_coco_json = True
 
