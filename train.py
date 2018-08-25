@@ -157,6 +157,11 @@ def train():
     avg_window = 100
     loss_m_avg, loss_l_avg, loss_c_avg = (MovingAverage(avg_window), MovingAverage(avg_window), MovingAverage(avg_window))
 
+    use_prediction_matching = cfg.use_prediction_matching
+    if cfg.use_prediction_matching:
+        # Wait until the specified iteration to turn on prediction matching
+        cfg.use_prediction_matching = False
+
     print('Begin training!')
     print()
     # try-except so you can use ctrl+c to save early and stop training
@@ -179,6 +184,9 @@ def train():
                 if iteration in cfg.lr_steps:
                     step_index += 1
                     adjust_learning_rate(optimizer, args.gamma, step_index)
+
+                if use_prediction_matching and iteration > cfg.prediction_matching_delay:
+                    cfg.use_prediction_matching = True
 
                 # load train data
                 images, targets, masks = prepare_data(datum)
