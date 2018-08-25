@@ -12,7 +12,7 @@ from utils.augmentations import Resize
 from utils.functions import sanitize_coordinates
 from utils import timer
 
-def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear'):
+def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear', visualize_lincomb=False):
     """
     Postprocesses the output of Yolact on testing mode into a format that makes sense,
     accounting for all the possible configuration settings.
@@ -78,6 +78,9 @@ def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear'):
         # At this points masks is only the coefficients
         proto_data = det_output['proto_data'][batch_idx]
         
+        if visualize_lincomb:
+            display_lincomb(proto_data, masks)
+
         masks = torch.matmul(proto_data, masks.t())
     
         # Permute into the correct output shape [num_dets, proto_h, proto_w]
@@ -152,3 +155,42 @@ def undo_image_transformation(img, w, h):
     else:
         return cv2.resize(img_numpy, (w,h))
 
+
+def display_lincomb(proto_data, masks):
+    for jdx in range(1):
+        import matplotlib.pyplot as plt
+        coeffs = masks[jdx, :].cpu().numpy()
+        idx = np.argsort(-np.abs(coeffs))
+        # plt.bar(list(range(idx.shape[0])), coeffs[idx])
+        # plt.show()
+        
+        coeffs_sort = coeffs[idx]
+        arr_h, arr_w = (8, 8)
+        proto_h, proto_w, _ = proto_data.size()
+        arr_img = np.zeros([proto_h*arr_h, proto_w*arr_w])
+        arr_run = np.zeros([proto_h*arr_h, proto_w*arr_w])
+        test = torch.sum(proto_data, -1).cpu().numpy()
+
+        for y in range(arr_h):
+            for x in range(arr_w):
+                i = arr_w * y + x
+
+                if i == 0:
+                    running_total = proto_data[:, :, idx[i]].cpu().numpy() * coeffs_sort[i]
+                else:
+                    running_total += proto_data[:, :, idx[i]].cpu().numpy() * coeffs_sort[i]
+
+                running_total_nonlin = running_total
+                if cfg.mask_proto_second_nonlinearity == 'sigmoid':
+                    running_total_nonlin = (1/(1+np.exp(-running_total_nonlin)))
+                elif cfg.mask_proto_second_nonlinearity == 'relu':
+                    running_total_nonlin = np.clip(running_total_nonlin, 0, None)
+
+                arr_img[y*proto_h:(y+1)*proto_h, x*proto_w:(x+1)*proto_w] = proto_data[:, :, idx[i]].cpu().numpy() * coeffs_sort[i]
+                arr_run[y*proto_h:(y+1)*proto_h, x*proto_w:(x+1)*proto_w] = (running_total_nonlin > 0.5).astype(np.float)
+        plt.imshow(arr_img)
+        plt.show()
+        plt.imshow(arr_run)
+        plt.show()
+        # plt.imshow(test)
+        # plt.show()

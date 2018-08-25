@@ -80,6 +80,8 @@ def parse_args(argv=None):
                         help='If output_web_json is set, this is the path to dump detections into.')
     parser.add_argument('--no_bar', dest='no_bar', action='store_true',
                         help='Do not output the status bar. This is useful for when piping to a file.')
+    parser.add_argument('--display_lincomb', default=False, type=str2bool,
+                        help='If the config uses lincomb masks, output a visualization of how those masks are created.')
     
     parser.set_defaults(no_bar=False, display=False, resume=False, output_coco_json=False, output_web_json=False, shuffle=False)
 
@@ -101,7 +103,7 @@ def prep_display(dets_out, img, gt, gt_masks, h, w):
     img_numpy = undo_image_transformation(img, w, h)
     
     with timer.env('Postprocess'):
-        t = postprocess(dets_out, w, h)
+        t = postprocess(dets_out, w, h, visualize_lincomb=args.display_lincomb)
 
     with timer.env('Copy'):
         classes, scores, boxes, masks = [x[:args.top_k].cpu().numpy() for x in t]
@@ -531,8 +533,6 @@ def evaluate(net, dataset, train_mode=False):
     except KeyboardInterrupt:
         print('Stopping...')
 
-        if train_mode:
-            raise KeyboardInterrupt
 
 def calc_map(ap_data):
     print('Calculating mAP...')
