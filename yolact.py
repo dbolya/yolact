@@ -102,7 +102,7 @@ class PredictionModule(nn.Module):
         if cfg.mask_type == mask_type.direct:
             mask = torch.sigmoid(mask)
         elif cfg.mask_type == mask_type.lincomb:
-            mask = torch.tanh(mask)
+            mask = cfg.mask_proto_coeff_activation(mask)
         
         priors = self.make_priors(conv_h, conv_w)
 
@@ -183,9 +183,8 @@ class Yolact(nn.Module):
                 in_channels = layer_cfg[0]
                 return [layer, nn.ReLU(inplace=True)]
 
-            # Replace the last ReLU with a sigmoid because we want nice masks with mostly 1 and 0
-            last_nonlinearity = nn.Sigmoid() if cfg.mask_proto_sigmoid else nn.ReLU(inplace=True)
-            self.proto_net = nn.Sequential(*(sum([make_layer(x) for x in cfg.mask_proto_net], [])[:-1] + [last_nonlinearity]))
+            # The -1 here is to remove the last relu because we might want to change it to another function
+            self.proto_net = nn.Sequential(*(sum([make_layer(x) for x in cfg.mask_proto_net], [])[:-1]))
             cfg.mask_dim = in_channels
 
             if cfg.mask_proto_bias:
@@ -240,6 +239,7 @@ class Yolact(nn.Module):
             with timer.env('proto'):
                 proto_out = self.proto_net(x if self.proto_src is None else outs[self.proto_src])
                 proto_out = proto_out.permute(0, 2, 3, 1).contiguous()
+                proto_out = cfg.mask_proto_prototype_activation(proto_out)
 
                 if cfg.mask_proto_bias:
                     bias_shape = [x for x in proto_out.size()]

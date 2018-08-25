@@ -7,7 +7,7 @@ import torch.nn.functional as F
 import numpy as np
 import cv2
 
-from data import cfg, mask_type, MEANS
+from data import cfg, mask_type, MEANS, activation_func
 from utils.augmentations import Resize
 from utils.functions import sanitize_coordinates
 from utils import timer
@@ -85,11 +85,7 @@ def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear', vi
     
         # Permute into the correct output shape [num_dets, proto_h, proto_w]
         masks = masks.permute(2, 0, 1).contiguous()
-    
-        if cfg.mask_proto_second_nonlinearity == 'sigmoid':
-            masks = torch.sigmoid(masks)
-        elif cfg.mask_proto_second_nonlinearity == 'relu':
-            masks = F.relu(masks, inplace=True)
+        masks = cfg.mask_proto_mask_activation(masks)
 
         # Scale masks up to the full image
         if cfg.preserve_aspect_ratio:
@@ -181,10 +177,8 @@ def display_lincomb(proto_data, masks):
                     running_total += proto_data[:, :, idx[i]].cpu().numpy() * coeffs_sort[i]
 
                 running_total_nonlin = running_total
-                if cfg.mask_proto_second_nonlinearity == 'sigmoid':
+                if cfg.mask_proto_mask_activation == activation_func.sigmoid:
                     running_total_nonlin = (1/(1+np.exp(-running_total_nonlin)))
-                elif cfg.mask_proto_second_nonlinearity == 'relu':
-                    running_total_nonlin = np.clip(running_total_nonlin, 0, None)
 
                 arr_img[y*proto_h:(y+1)*proto_h, x*proto_w:(x+1)*proto_w] = proto_data[:, :, idx[i]].cpu().numpy() * coeffs_sort[i]
                 arr_run[y*proto_h:(y+1)*proto_h, x*proto_w:(x+1)*proto_w] = (running_total_nonlin > 0.5).astype(np.float)

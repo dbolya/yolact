@@ -581,7 +581,7 @@ if __name__ == '__main__':
     else:
         # TODO: Bad practice? Probably want to do a name lookup instead.
         args.config = model_path.model_name + '_config'
-        print('Warning: Config not specified. Loading config %s instead.\n' % args.config)
+        print('Config not specified. Loading config %s instead.\n' % args.config)
         set_cfg(args.config)
 
     with torch.no_grad():

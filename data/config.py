@@ -60,6 +60,7 @@ coco_dataset = Config({
 from backbone import ResNetBackbone, VGGBackbone
 from torchvision.models.vgg import cfg as vggcfg
 from math import sqrt
+import torch
 
 resnet101_backbone = Config({
     'name': 'ResNet101',
@@ -116,13 +117,25 @@ mask_type = Config({
     #                                   the form (num_features, kernel_size, **kwdargs). An empty
     #                                   list means to use the source for prototype masks. If the
     #                                   kernel_size is negative, this creates a deconv layer instead.
-    #   - mask_proto_sigmoid (bool): Whether to sigmoid the proto masks or relu them.
     #   - mask_proto_bias (bool): Whether to include an extra coefficient that corresponds to a proto
     #                             mask of all ones.
-    #   - mask_proto_second_nonlinearity (str ['sigmoid'|'relu'|'none']): After summing the prototype
-    #                             masks with the predicted coefficients, what nonlinearity to apply
-    #                             to the final mask.
+    #   - mask_proto_prototype_activation (func): The activation to apply to each prototype mask.
+    #   - mask_proto_mask_activation (func): After summing the prototype masks with the predicted
+    #                                        coeffs, what activation to apply to the final mask.
+    #   - mask_proto_coeff_activation (func): The activation to apply to the mask coefficients.
+    #   - mask_proto_crop (bool): If True, crop the mask with the predicted bbox during training.
+    #   - mask_proto_loss (str [l1|disj]): If not None, apply an l1 or disjunctive regularization
+    #                                      loss directly to the prototype masks.
     'lincomb': 1,
+})
+
+# Self explanitory. For use with mask_proto_*_activation
+activation_func = Config({
+    'tanh': torch.tanh,
+    'sigmoid': torch.sigmoid,
+    'softmax': lambda x: torch.nn.functional.softmax(x, dim=-1),
+    'relu': lambda x: torch.nn.functional.relu(x, inplace=True),
+    'none': lambda x: x,
 })
 
 # Configs
@@ -139,9 +152,12 @@ coco_base_config = Config({
     'masks_to_train': 100,
     'mask_proto_src': None,
     'mask_proto_net': [(256, 3, {}), (256, 3, {})],
-    'mask_proto_sigmoid': False,
     'mask_proto_bias': False,
-    'mask_proto_second_nonlinearity': 'sigmoid',
+    'mask_proto_prototype_activation': activation_func.relu,
+    'mask_proto_mask_activation': activation_func.sigmoid,
+    'mask_proto_coeff_activation': activation_func.tanh,
+    'mask_proto_crop': True,
+    'mask_proto_loss': None,
 
     # This is filled in at runtime by Yolact's __init__, so don't touch it
     'mask_dim': None,
@@ -305,36 +321,70 @@ yolact_resnet101_maskrcnn_1_config = yolact_resnet101_maskrcnn_config.copy({
 yolact_resnet101_maskrcnn_2_config = yolact_resnet101_maskrcnn_config.copy({
     'name': 'yolact_resnet101_maskrcnn_2',
     'use_yolo_regressors': False,
-    'mask_proto_sigmoid': True,
+    'mask_proto_prototype_activation': activation_func.sigmoid,
 })
 yolact_resnet101_maskrcnn_3_config = yolact_resnet101_maskrcnn_config.copy({
     'name': 'yolact_resnet101_maskrcnn_3',
     'use_yolo_regressors': False,
-    'mask_proto_sigmoid': True,
+    'mask_proto_prototype_activation': activation_func.sigmoid,
     'use_prediction_module': True,
 })
 yolact_resnet101_maskrcnn_4_config = yolact_resnet101_maskrcnn_config.copy({
     'name': 'yolact_resnet101_maskrcnn_4',
     'use_yolo_regressors': False,
-    'mask_proto_sigmoid': True,
+    'mask_proto_prototype_activation': activation_func.sigmoid,
     'use_prediction_module': True,
     'mask_proto_bias': True,
 })
 yolact_resnet101_maskrcnn_5_config = yolact_resnet101_maskrcnn_config.copy({
     'name': 'yolact_resnet101_maskrcnn_5',
     'use_yolo_regressors': False,
-    'mask_proto_sigmoid': True,
+    'mask_proto_prototype_activation': activation_func.sigmoid,
     'use_prediction_module': True,
     'mask_proto_bias': True,
-    'mask_proto_second_nonlinearity': 'none',
+    'mask_proto_mask_activation': activation_func.none,
 })
 yolact_resnet101_maskrcnn_6_config = yolact_resnet101_maskrcnn_config.copy({
     'name': 'yolact_resnet101_maskrcnn_6',
     'use_yolo_regressors': False,
-    'mask_proto_sigmoid': True,
+    'mask_proto_prototype_activation': activation_func.sigmoid,
     'use_prediction_module': True,
     'mask_proto_bias': True,
-    'mask_proto_second_nonlinearity': 'relu',
+    'mask_proto_mask_activation': activation_func.relu,
+})
+
+# Ablations 2: Electric Boogaloo
+yrm7_config = yolact_resnet101_maskrcnn_config.copy({
+    'name': 'yrm7',
+    'use_yolo_regressors': False,
+    'mask_proto_coeff_activation': activation_func.sigmoid,
+    'mask_proto_prototype_activation': activation_func.sigmoid,
+    'mask_proto_mask_activation': activation_func.none,
+})
+yrm8_config = yolact_resnet101_maskrcnn_config.copy({
+    'name': 'yrm8',
+    'use_yolo_regressors': False,
+    'mask_proto_coeff_activation': activation_func.softmax,
+    'mask_proto_prototype_activation': activation_func.sigmoid,
+    'mask_proto_mask_activation': activation_func.none,
+})
+yrm9_config = yolact_resnet101_maskrcnn_config.copy({
+    'name': 'yrm9',
+    'use_yolo_regressors': False,
+    'mask_proto_coeff_activation': activation_func.sigmoid,
+    'mask_proto_prototype_activation': activation_func.sigmoid,
+    'mask_proto_mask_activation': activation_func.none,
+    'mask_proto_crop': False,
+})
+yrm10_config = yolact_resnet101_maskrcnn_config.copy({
+    'name': 'yrm10',
+    'use_yolo_regressors': False,
+    'mask_proto_loss': 'l1',
+})
+yrm11_config = yolact_resnet101_maskrcnn_config.copy({
+    'name': 'yrm11',
+    'use_yolo_regressors': False,
+    'mask_proto_loss': 'disj',
 })
 
 yolact_vgg16_config = ssd550_config.copy({

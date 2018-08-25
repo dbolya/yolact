@@ -6,7 +6,7 @@ from torch.autograd import Variable
 from ..box_utils import match, log_sum_exp, decode
 from utils.functions import sanitize_coordinates
 
-from data import cfg, mask_type
+from data import cfg, mask_type, activation_func
 
 class MultiBoxLoss(nn.Module):
     """SSD Weighted Loss Function
@@ -52,13 +52,9 @@ class MultiBoxLoss(nn.Module):
         self.mask_alpha = 0.2 / cfg.mask_dim
         self.bbox_alpha = 5 if cfg.use_yolo_regressors else 1
 
-        if cfg.mask_type == mask_type.lincomb:
-            self.second_nonlinearity = None
-
-            if cfg.mask_proto_second_nonlinearity == 'sigmoid':
-                self.second_nonlinearity = nn.Sigmoid()
-            elif cfg.mask_proto_second_nonlinearity == 'relu':
-                self.second_nonlinearity = nn.ReLU(inplace=True)
+        # If you output a proto mask with this area, your l1 loss will be 1
+        # Note that the area is relative (so 1 would be the entire image)
+        self.l1_expected_area = 100/70/70
 
     def forward(self, predictions, targets, masks):
         """Multibox Loss
@@ -76,6 +72,8 @@ class MultiBoxLoss(nn.Module):
 
             masks (list<tensor>): Ground truth masks for each object in each image,
                 shape: [batch_size][num_objs,im_height,im_width]
+            
+            * Only if mask_type == lincomb
         """
         if cfg.mask_type == mask_type.lincomb:
             loc_data, conf_data, mask_data, priors, proto_data = predictions
@@ -120,6 +118,7 @@ class MultiBoxLoss(nn.Module):
         loss_l = F.smooth_l1_loss(loc_p, loc_t, reduction='sum') * self.bbox_alpha
 
         # Mask Loss
+        loss_p = 0
         if self.train_masks:
             if cfg.mask_type == mask_type.direct:
                 if self.use_gt_bboxes:
@@ -133,6 +132,13 @@ class MultiBoxLoss(nn.Module):
                     loss_m = self.direct_mask_loss(pos_idx, idx_t, loc_data, mask_data, priors, masks)
             elif cfg.mask_type == mask_type.lincomb:
                 loss_m = self.lincomb_mask_loss(pos, idx_t, loc_data, mask_data, priors, proto_data, masks)
+                
+                if cfg.mask_proto_loss is not None:
+                    if cfg.mask_proto_loss == 'l1':
+                        loss_p = torch.mean(torch.abs(proto_data)) / self.l1_expected_area
+                    elif cfg.mask_proto_loss == 'disj':
+                        loss_p = -torch.mean(torch.max(F.log_softmax(proto_data, dim=-1), dim=-1)[0])
+                        
         else:
             loss_m = 0
 
@@ -162,7 +168,7 @@ class MultiBoxLoss(nn.Module):
         loss_l /= N
         loss_c /= N
         loss_m /= N
-        return loss_l, loss_c, loss_m
+        return loss_l, loss_c, loss_m + loss_p
 
 
     def direct_mask_loss(self, pos_idx, idx_t, loc_data, mask_data, priors, masks):
@@ -243,8 +249,7 @@ class MultiBoxLoss(nn.Module):
 
             # Size: [mask_h, mask_w, num_pos]
             pred_masks = torch.matmul(proto_masks, proto_coef.t())
-            if self.second_nonlinearity is not None:
-                pred_masks = self.second_nonlinearity(pred_masks)
+            pred_masks = cfg.mask_proto_mask_activation(pred_masks)
 
             # Take care of all the bad behavior that can be caused by out of bounds coordinates
             x1, x2 = sanitize_coordinates(pos_bboxes[:, 0], pos_bboxes[:, 2], mask_w)
@@ -252,13 +257,14 @@ class MultiBoxLoss(nn.Module):
 
             # "Crop" predicted masks by zeroing out everything not in the predicted bbox
             # TODO: Write a cuda implementation of this to get rid of the loop
-            crop_mask = torch.zeros(mask_h, mask_w, num_pos)
-            for jdx in range(num_pos):
-                crop_mask[y1[jdx]:y2[jdx], x1[jdx]:x2[jdx], jdx] = 1
-            pred_masks = pred_masks * crop_mask
+            if cfg.mask_proto_crop:
+                crop_mask = torch.zeros(mask_h, mask_w, num_pos)
+                for jdx in range(num_pos):
+                    crop_mask[y1[jdx]:y2[jdx], x1[jdx]:x2[jdx], jdx] = 1
+                pred_masks = pred_masks * crop_mask
 
             mask_t = downsampled_masks[:, :, pos_idx_t]
-            if cfg.mask_proto_second_nonlinearity == 'sigmoid':
+            if cfg.mask_proto_mask_activation == activation_func.sigmoid:
                 loss_m += F.binary_cross_entropy(pred_masks, mask_t, reduction='sum') * self.mask_alpha
             else:
                 loss_m += F.smooth_l1_loss(pred_masks, mask_t, reduction='sum') * self.mask_alpha
