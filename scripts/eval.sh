@@ -11,4 +11,4 @@ module load cuda/9.0
 
 cd $SCRATCH/yolact
 
-python3 eval.py --trained_model=$1 --no_bar $2 >> logs/eval/$(basename -- $1).log 2>&1
+python3 eval.py --trained_model=$1 --no_bar $2 > logs/eval/$(basename -- $1).log 2>&1
