@@ -386,6 +386,18 @@ yrm11_config = yolact_resnet101_maskrcnn_config.copy({
     'use_yolo_regressors': False,
     'mask_proto_loss': 'disj',
 })
+yrm12_config = yolact_resnet101_maskrcnn_config.copy({
+    'name': 'yrm12',
+    'use_yolo_regressors': False,
+    'mask_proto_coeff_activation': activation_func.none,
+    'mask_proto_prototype_activation': activation_func.relu,
+    'mask_proto_mask_activation': activation_func.sigmoid,
+})
+yrm13_config = yolact_resnet101_maskrcnn_config.copy({
+    'name': 'yrm13',
+    'use_yolo_regressors': False,
+    'mask_proto_crop': False,
+})
 
 yolact_vgg16_config = ssd550_config.copy({
     'name': 'yolact_vgg16',
