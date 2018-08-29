@@ -52,9 +52,10 @@ class MultiBoxLoss(nn.Module):
         self.mask_alpha = 0.2 / cfg.mask_dim
         self.bbox_alpha = 5 if cfg.use_yolo_regressors else 1
 
-        # If you output a proto mask with this area, your l1 loss will be 1
+        # If you output a proto mask with this area, your l1 loss will be l1_alpha
         # Note that the area is relative (so 1 would be the entire image)
-        self.l1_expected_area = 100/70/70
+        self.l1_expected_area = 20*20/70/70
+        self.l1_alpha = 0.1
 
     def forward(self, predictions, targets, masks):
         """Multibox Loss
@@ -118,7 +119,7 @@ class MultiBoxLoss(nn.Module):
         loss_l = F.smooth_l1_loss(loc_p, loc_t, reduction='sum') * self.bbox_alpha
 
         # Mask Loss
-        loss_p = 0
+        loss_p = 0 # Proto loss
         if self.train_masks:
             if cfg.mask_type == mask_type.direct:
                 if self.use_gt_bboxes:
@@ -135,7 +136,7 @@ class MultiBoxLoss(nn.Module):
                 
                 if cfg.mask_proto_loss is not None:
                     if cfg.mask_proto_loss == 'l1':
-                        loss_p = torch.mean(torch.abs(proto_data)) / self.l1_expected_area
+                        loss_p = torch.mean(torch.abs(proto_data)) / self.l1_expected_area * self.l1_alpha
                     elif cfg.mask_proto_loss == 'disj':
                         loss_p = -torch.mean(torch.max(F.log_softmax(proto_data, dim=-1), dim=-1)[0])
                         
