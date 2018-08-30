@@ -399,6 +399,11 @@ yrm13_config = yolact_resnet101_maskrcnn_config.copy({
     'mask_proto_crop': False,
 })
 
+yrm14_config = yolact_resnet101_maskrcnn_1_config.copy({
+    'name': 'yrm14',
+    'mask_proto_src': 3,
+})
+
 yolact_vgg16_config = ssd550_config.copy({
     'name': 'yolact_vgg16',
 
@@ -413,7 +418,7 @@ yolact_vgg16_config = ssd550_config.copy({
     'mask_proto_layer': 0,
 })
 
-cfg = yolact_resnet101_conv4_config.copy()
+cfg = yrm14_config.copy()
 
 def set_cfg(config_name:str):
     """ Sets the active config. Works even if cfg is already imported! """
