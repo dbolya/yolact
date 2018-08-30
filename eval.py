@@ -453,6 +453,8 @@ class APDataObject:
 
 
 def evaluate(net, dataset, train_mode=False):
+    net.detect.cross_class_nms = args.cross_class_nms
+
     frame_times = MovingAverage()
     dataset_size = len(dataset) if args.max_images < 0 else args.max_images
 
@@ -617,8 +619,6 @@ if __name__ == '__main__':
             torch.set_default_tensor_type('torch.cuda.FloatTensor')
         else:
             torch.set_default_tensor_type('torch.FloatTensor')
-        
-        net.detect.cross_class_nms = args.cross_class_nms
 
         evaluate(net, dataset)
 
