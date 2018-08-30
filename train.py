@@ -236,7 +236,7 @@ def train():
             # This is a comment that serves to separate white text from other white text
             if args.validation_epoch > 0:
                 if epoch % args.validation_epoch == 0 and epoch > 0:
-                    compute_validation_map(net, val_dataset)
+                    compute_validation_map(yolact_net, val_dataset)
 
             if args.visdom:
                     update_vis_plot(epoch, loc_loss, conf_loss, epoch_plot, None,
@@ -338,11 +338,11 @@ def compute_validation_loss(net, data_loader, criterion):
 
         return (loss_b, loss_c, loss_m, loss_t)
 
-def compute_validation_map(net, dataset):
+def compute_validation_map(yolact_net, dataset):
     with torch.no_grad():
-        net.eval()
-        eval_script.evaluate(net, dataset, train_mode=True)
-        net.train()
+        yolact_net.eval()
+        eval_script.evaluate(yolact_net, dataset, train_mode=True)
+        yolact_net.train()
 
 def setup_eval():
     eval_script.parse_args(['--no_bar', '--max_images='+str(args.validation_size)])

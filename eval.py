@@ -452,7 +452,7 @@ class APDataObject:
 
 
 
-def evaluate(net, dataset, train_mode=False):
+def evaluate(net:Yolact, dataset, train_mode=False):
     net.detect.cross_class_nms = args.cross_class_nms
 
     frame_times = MovingAverage()
