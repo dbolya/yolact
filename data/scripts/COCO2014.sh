@@ -65,12 +65,12 @@ rm ./annotations_trainval2014.zip
 # curl -LO https://s3.amazonaws.com/amdegroot-datasets/instances_trainval35k.json.zip
 
 # combine train and val 
-echo "Combining train and val images"
-mkdir ../images/trainval35k
-cd ../images/train2014
-find -maxdepth 1 -name '*.jpg' -exec cp -t ../trainval35k {} + # dir too large for cp
-cd ../val2014
-find -maxdepth 1 -name '*.jpg' -exec cp -t ../trainval35k {} +
+# echo "Combining train and val images"
+# mkdir ../images/trainval35k
+# cd ../images/train2014
+# find -maxdepth 1 -name '*.jpg' -exec cp -t ../trainval35k {} + # dir too large for cp
+# cd ../val2014
+# find -maxdepth 1 -name '*.jpg' -exec cp -t ../trainval35k {} +
 
 
 end=`date +%s`
