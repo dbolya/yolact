@@ -75,10 +75,8 @@ class COCOAnnotationTransform(object):
         for obj in target:
             if 'bbox' in obj:
                 bbox = obj['bbox']
-                bbox[2] += bbox[0]
-                bbox[3] += bbox[1]
                 label_idx = self.label_map[obj['category_id']] - 1
-                final_box = list(np.array(bbox)/scale)
+                final_box = list(np.array([bbox[0], bbox[1], bbox[0]+bbox[2], bbox[1]+bbox[3]])/scale)
                 final_box.append(label_idx)
                 if include_mask:
                     final_box.append(maskUtils.decode(segm_to_RLE(obj['segmentation'], height, width)))
