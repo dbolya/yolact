@@ -338,8 +338,12 @@ class RandomSampleCrop(object):
                 # calculate IoU (jaccard overlap) b/t the cropped and gt boxes
                 overlap = jaccard_numpy(boxes, rect)
 
-                # TODO: Potentially want to fix this bug:
+                # This piece of code is bugged and does nothing:
                 # https://github.com/amdegroot/ssd.pytorch/issues/68
+                #
+                # However, when I fixed it with overlap.max() < min_iou,
+                # it cut the mAP in half (after 8k iterations). So it stays.
+                #
                 # is min and max overlap constraint satisfied? if not try again
                 if overlap.min() < min_iou and max_iou < overlap.max():
                     continue
