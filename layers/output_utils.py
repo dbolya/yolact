@@ -7,7 +7,7 @@ import torch.nn.functional as F
 import numpy as np
 import cv2
 
-from data import cfg, mask_type, MEANS, activation_func
+from data import cfg, mask_type, MEANS, STD, activation_func
 from utils.augmentations import Resize
 from utils.functions import sanitize_coordinates
 from utils import timer
@@ -137,7 +137,15 @@ def undo_image_transformation(img, w, h):
     Takes a transformed image tensor and returns a numpy ndarray that is untransformed.
     Arguments w and h are the original height and width of the image.
     """
-    img_numpy = (img.permute(1, 2, 0).cpu().numpy() / 255.0 + np.array(MEANS) / 255.0).astype(np.float32)
+    img_numpy = img.permute(1, 2, 0).cpu().numpy()
+    img_numpy = img_numpy[:, :, (2, 1, 0)] # To BRG
+
+    if cfg.backbone.transform.normalize:
+        img_numpy = (img_numpy * np.array(STD) + np.array(MEANS)) / 255.0
+    elif cfg.backbone.transform.subtract_means:
+        img_numpy = (img_numpy / 255.0 + np.array(MEANS) / 255.0).astype(np.float32)
+        
+    img_numpy = img_numpy[:, :, (2, 1, 0)] # To RGB
     img_numpy = np.clip(img_numpy, 0, 1)
 
     if cfg.preserve_aspect_ratio:
