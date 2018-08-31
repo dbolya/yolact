@@ -216,10 +216,12 @@ class RandomLightingNoise(object):
                       (2, 0, 1), (2, 1, 0))
 
     def __call__(self, image, masks=None, boxes=None, labels=None):
-        if random.randint(2):
-            swap = self.perms[random.randint(len(self.perms))]
-            shuffle = SwapChannels(swap)  # shuffle channels
-            image = shuffle(image)
+        # Don't shuffle the channels please, why would you do this
+
+        # if random.randint(2):
+        #     swap = self.perms[random.randint(len(self.perms))]
+        #     shuffle = SwapChannels(swap)  # shuffle channels
+        #     image = shuffle(image)
         return image, masks, boxes, labels
 
 
@@ -336,6 +338,8 @@ class RandomSampleCrop(object):
                 # calculate IoU (jaccard overlap) b/t the cropped and gt boxes
                 overlap = jaccard_numpy(boxes, rect)
 
+                # TODO: Potentially want to fix this bug:
+                # https://github.com/amdegroot/ssd.pytorch/issues/68
                 # is min and max overlap constraint satisfied? if not try again
                 if overlap.min() < min_iou and max_iou < overlap.max():
                     continue
