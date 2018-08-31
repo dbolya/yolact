@@ -172,8 +172,6 @@ class COCODetection(data.Dataset):
             target = np.array(target)
             img, masks, boxes, labels = self.transform(img, masks, target[:, :4],
                                                        target[:, 4])
-            # to rgb
-            img = img[:, :, (2, 1, 0)]
 
             target = np.hstack((boxes, np.expand_dims(labels, axis=1)))
 

@@ -9,8 +9,9 @@ HOME = os.path.expanduser("~")
 COLORS = ((255, 0, 0, 128), (0, 255, 0, 128), (0, 0, 255, 128),
           (0, 255, 255, 128), (255, 0, 255, 128), (255, 255, 0, 128))
 
-MEANS = (104, 117, 123)
-
+# These are in BRG and are for ImageNet
+MEANS = (103.94, 116.78, 123.68)
+STD   = (57.38, 57.12, 58.40)
 
 class Config(object):
     """
@@ -62,11 +63,27 @@ from torchvision.models.vgg import cfg as vggcfg
 from math import sqrt
 import torch
 
+
+resnet_transform = Config({
+    'channel_order': 'RGB',
+    'normalize': True,
+    'subtract_means': False
+})
+
+vgg_transform = Config({
+    # Note that though vgg is traditionally BRG,
+    # the channel order of vgg_reducedfc.pth is RGB.
+    'channel_order': 'RGB',
+    'normalize': False,
+    'subtract_means': True
+})
+
 resnet101_backbone = Config({
     'name': 'ResNet101',
     'path': 'resnet101_reducedfc.pth',
     'type': ResNetBackbone,
     'args': ([3, 4, 23, 3],),
+    'transform': resnet_transform,
 
     'selected_layers': list(range(2, 8)),
     'pred_scales': [[1]]*6,
@@ -78,6 +95,7 @@ resnet50_backbone = resnet101_backbone.copy({
     'path': 'resnet50-19c8e357.pth',
     'type': ResNetBackbone,
     'args': ([3, 4, 6, 3],),
+    'transform': resnet_transform,
 })
 
 vgg16_arch = [[64, 64],
@@ -94,6 +112,7 @@ vgg16_backbone = Config({
     'path': 'vgg16_reducedfc.pth',
     'type': VGGBackbone,
     'args': (vgg16_arch, [(256, 2), (128, 2), (128, 1), (128, 1)], [3]),
+    'transform': vgg_transform,
 
     'selected_layers': [3] + list(range(5, 10)),
     'pred_scales': [[5, 4]]*6,
@@ -418,6 +437,7 @@ yolact_vgg16_config = ssd550_config.copy({
     'mask_proto_layer': 0,
 })
 
+# Default config
 cfg = yrm14_config.copy()
 
 def set_cfg(config_name:str):

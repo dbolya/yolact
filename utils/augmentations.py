@@ -5,7 +5,7 @@ import numpy as np
 import types
 from numpy import random
 
-from data import cfg
+from data import cfg, MEANS, STD
 
 
 def intersect(box_a, box_b):
@@ -71,15 +71,6 @@ class ConvertFromInts(object):
         return image.astype(np.float32), masks, boxes, labels
 
 
-class SubtractMeans(object):
-    def __init__(self, mean):
-        self.mean = np.array(mean, dtype=np.float32)
-
-    def __call__(self, image, masks=None, boxes=None, labels=None):
-        image = image.astype(np.float32)
-        image -= self.mean
-        return image.astype(np.float32), masks, boxes, labels
-
 
 class ToAbsoluteCoords(object):
     def __call__(self, image, masks=None, boxes=None, labels=None):
@@ -110,7 +101,7 @@ class Pad(object):
 
     Note: this expects im_w <= width and im_h <= height
     """
-    def __init__(self, width, height, mean=(104, 117, 123), pad_gt=True):
+    def __init__(self, width, height, mean=MEANS, pad_gt=True):
         self.mean = mean
         self.width = width
         self.height = height
@@ -491,6 +482,12 @@ class PhotometricDistort(object):
         return self.rand_light_noise(im, masks, boxes, labels)
 
 class PrepareMasks(object):
+    """
+    Prepares the gt masks for use_gt_bboxes by cropping with the gt box
+    and downsampling the resulting mask to mask_size, mask_size. This
+    function doesn't do anything if cfg.use_gt_bboxes is False.
+    """
+
     def __init__(self, mask_size, use_gt_bboxes):
         self.mask_size = mask_size
         self.use_gt_bboxes = use_gt_bboxes
@@ -523,15 +520,48 @@ class PrepareMasks(object):
 
         return image, new_masks, boxes, labels
 
+class BackboneTransform(object):
+    """
+    Transforms a BRG image made of floats in the range [0, 255] to whatever
+    input the current backbone network needs.
+
+    transform is a transform config object (see config.py).
+    in_channel_order is probably 'BGR' but you do you, kid.
+    """
+    def __init__(self, transform, mean, std, in_channel_order):
+        self.mean = np.array(mean, dtype=np.float32)
+        self.std  = np.array(std,  dtype=np.float32)
+        self.transform = transform
+
+        # Here I use "Algorithms and Coding" to convert string permutations to numbers
+        self.channel_map = {c: idx for idx, c in enumerate(in_channel_order)}
+        self.channel_permutation = [self.channel_map[c] for c in transform.channel_order]
+
+    def __call__(self, img, masks=None, boxes=None, labels=None):
+
+        img = img.astype(np.float32)
+
+        if self.transform.normalize:
+            img = (img - self.mean) / self.std
+        elif self.transform.subtract_means:
+            img = (img - self.mean)
+
+        img = img[:, :, self.channel_permutation]
+
+        return img.astype(np.float32), masks, boxes, labels
+
+
+
+
 class BaseTransform(object):
     """ Transorm to be used when evaluating. """
 
-    def __init__(self, mean):
+    def __init__(self, mean=MEANS, std=STD):
         self.augment = Compose([
             ConvertFromInts(),
             Resize(resize_gt=False),
             Pad(cfg.max_size, cfg.max_size, mean, pad_gt=False),
-            SubtractMeans(mean)
+            BackboneTransform(cfg.backbone.transform, mean, std, 'BRG')
         ])
 
     def __call__(self, img, masks=None, boxes=None, labels=None):
@@ -541,20 +571,19 @@ class BaseTransform(object):
 class SSDAugmentation(object):
     """ Transform to be used when training. """
 
-    def __init__(self, mean=(104, 117, 123)):
-        self.mean = mean
+    def __init__(self, mean=MEANS, std=STD):
         self.augment = Compose([
             ConvertFromInts(),
             ToAbsoluteCoords(),
             PhotometricDistort(),
-            Expand(self.mean),
+            Expand(mean),
             RandomSampleCrop(),
             RandomMirror(),
             Resize(),
-            Pad(cfg.max_size, cfg.max_size, self.mean),
+            Pad(cfg.max_size, cfg.max_size, mean),
             ToPercentCoords(),
             PrepareMasks(cfg.mask_size, cfg.use_gt_bboxes),
-            SubtractMeans(self.mean)
+            BackboneTransform(cfg.backbone.transform, mean, std, 'BRG')
         ])
 
     def __call__(self, img, masks, boxes, labels):

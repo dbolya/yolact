@@ -571,6 +571,8 @@ def print_maps(all_maps):
     print(make_sep(len(all_maps['box']) + 1))
     print()
 
+
+
 if __name__ == '__main__':
     parse_args()
 
@@ -586,6 +588,7 @@ if __name__ == '__main__':
         print('Config not specified. Loading config %s instead.\n' % args.config)
         set_cfg(args.config)
 
+
     with torch.no_grad():
         if not os.path.exists('results'):
             os.makedirs('results')
@@ -598,7 +601,7 @@ if __name__ == '__main__':
                 exit()
 
         dataset = COCODetection(args.coco_root, cfg.dataset.valid, 
-                                BaseTransform(MEANS),
+                                BaseTransform(),
                                 prep_crowds=True)
         
         prep_coco_cats(dataset.coco.cats)
