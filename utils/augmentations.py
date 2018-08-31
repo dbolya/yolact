@@ -561,7 +561,7 @@ class BaseTransform(object):
             ConvertFromInts(),
             Resize(resize_gt=False),
             Pad(cfg.max_size, cfg.max_size, mean, pad_gt=False),
-            BackboneTransform(cfg.backbone.transform, mean, std, 'BRG')
+            BackboneTransform(cfg.backbone.transform, mean, std, 'BGR')
         ])
 
     def __call__(self, img, masks=None, boxes=None, labels=None):
@@ -583,7 +583,7 @@ class SSDAugmentation(object):
             Pad(cfg.max_size, cfg.max_size, mean),
             ToPercentCoords(),
             PrepareMasks(cfg.mask_size, cfg.use_gt_bboxes),
-            BackboneTransform(cfg.backbone.transform, mean, std, 'BRG')
+            BackboneTransform(cfg.backbone.transform, mean, std, 'BGR')
         ])
 
     def __call__(self, img, masks, boxes, labels):
