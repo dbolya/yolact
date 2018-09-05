@@ -440,6 +440,15 @@ yrm14_config = yolact_resnet101_maskrcnn_1_config.copy({
     'mask_proto_src': 3,
 })
 
+yrm15_config = yolact_resnet101_maskrcnn_1_config.copy({
+    'name': 'yrm15',
+    'negative_iou_threshold': 0.3,
+})
+yrm16_config = yolact_resnet101_maskrcnn_1_config.copy({
+    'name': 'yrm16',
+    'mask_proto_normalize_mask_loss': True,
+})
+
 yolact_vgg16_config = ssd550_config.copy({
     'name': 'yolact_vgg16',
 
