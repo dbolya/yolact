@@ -225,6 +225,8 @@ class MultiBoxLoss(nn.Module):
         mask_h = proto_data.size(1)
         mask_w = proto_data.size(2)
 
+        loss_m = 0
+
         for idx in range(mask_data.size(0)):
             with torch.no_grad():
                 downsampled_masks = F.adaptive_avg_pool2d(masks[idx], (mask_h, mask_w))
@@ -280,8 +282,8 @@ class MultiBoxLoss(nn.Module):
                 gt_area  = torch.sum(mask_t,   dim=(0, 1))
                 pre_loss = torch.sum(pre_loss, dim=(0, 1))
 
-                loss_m = torch.sum(pre_loss / (gt_area + 0.00001))
+                loss_m += torch.sum(pre_loss / (gt_area + 0.00001))
             else:
-                loss_m = torch.sum(pre_loss)
+                loss_m += torch.sum(pre_loss)
 
         return loss_m * self.mask_alpha
