@@ -182,6 +182,13 @@ coco_base_config = Config({
     'mask_proto_binarize_downsampled_gt': True,
     'mask_proto_normalize_mask_loss': False,
 
+    # During training, to match detections with gt, first compute the maximum gt IoU for each prior.
+    # Then, any of those priors whose maximum overlap is over the positive threshold, mark as positive.
+    # For any priors whose maximum is less than the negative iou threshold, mark them as negative.
+    # The rest are neutral and not used in calculating the loss.
+    'positive_iou_threshold': 0.5,
+    'negative_iou_threshold': 0.5,
+
     # This is filled in at runtime by Yolact's __init__, so don't touch it
     'mask_dim': None,
 

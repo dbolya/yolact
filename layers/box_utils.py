@@ -74,17 +74,18 @@ def jaccard(box_a, box_b, iscrowd=False):
         return inter / union  # [A,B]
 
 
-def match(threshold, truths, priors, labels, loc_t, conf_t, idx_t, idx, loc_data):
+def match(pos_thresh, neg_thresh, truths, priors, labels, loc_t, conf_t, idx_t, idx, loc_data):
     """Match each prior box with the ground truth box of the highest jaccard
     overlap, encode the bounding boxes, then return the matched indices
     corresponding to both confidence and location preds.
     Args:
-        threshold: (float) The overlap threshold used when mathing boxes.
+        pos_thresh: (float) IoU > pos_thresh ==> positive.
+        neg_thresh: (float) IoU < neg_thresh ==> negative.
         truths: (tensor) Ground truth boxes, Shape: [num_obj, num_priors].
         priors: (tensor) Prior boxes from priorbox layers, Shape: [n_priors,4].
         labels: (tensor) All the class labels for the image, Shape: [num_obj].
         loc_t: (tensor) Tensor to be filled w/ endcoded location targets.
-        conf_t: (tensor) Tensor to be filled w/ matched indices for conf preds.
+        conf_t: (tensor) Tensor to be filled w/ matched indices for conf preds. Note: -1 means neutral.
         idx_t: (tensor) Tensor to be filled w/ the index of the matched gt box for each prior.
         idx: (int) current batch index.
         loc_data: (tensor) The predicted bbox regression coordinates for this batch.
@@ -112,7 +113,8 @@ def match(threshold, truths, priors, labels, loc_t, conf_t, idx_t, idx, loc_data
         best_truth_idx[best_prior_idx[j]] = j
     matches = truths[best_truth_idx]          # Shape: [num_priors,4]
     conf = labels[best_truth_idx] + 1         # Shape: [num_priors]
-    conf[best_truth_overlap < threshold] = 0  # label as background
+    conf[best_truth_overlap < pos_thresh] = -1  # label as neutral
+    conf[best_truth_overlap < neg_thresh] =  0  # label as background
     loc = encode(matches, priors)
     loc_t[idx] = loc    # [num_priors,4] encoded offsets to learn
     conf_t[idx] = conf  # [num_priors] top class label for each prior
@@ -211,7 +213,7 @@ def log_sum_exp(x):
         x (Variable(tensor)): conf_preds from conf layers
     """
     x_max = x.data.max()
-    return torch.log(torch.sum(torch.exp(x-x_max), 1, keepdim=True)) + x_max
+    return torch.log(torch.sum(torch.exp(x-x_max), 1)) + x_max
 
 
 # Original author: Francisco Massa:

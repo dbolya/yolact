@@ -37,13 +37,13 @@ class MultiBoxLoss(nn.Module):
         super(MultiBoxLoss, self).__init__()
         self.use_gpu = use_gpu
         self.num_classes = num_classes
-        self.threshold = overlap_thresh
+        self.pos_threshold = overlap_thresh
+        self.neg_threshold = neg_overlap
         self.background_label = bkg_label
         self.encode_target = encode_target
         self.use_prior_for_matching = prior_for_matching
         self.do_neg_mining = neg_mining
         self.negpos_ratio = neg_pos
-        self.neg_overlap = neg_overlap
         self.mask_dim = cfg.mask_dim
         self.use_gt_bboxes = cfg.use_gt_bboxes
         self.train_masks = cfg.train_masks
@@ -51,6 +51,9 @@ class MultiBoxLoss(nn.Module):
         # Extra loss coefficients to get all the losses to be in a similar range
         self.mask_alpha = 0.2 / cfg.mask_dim
         self.bbox_alpha = 5 if cfg.use_yolo_regressors else 1
+
+        if cfg.mask_proto_normalize_mask_loss:
+            self.mask_alpha *= 35*35
 
         # If you output a proto mask with this area, your l1 loss will be l1_alpha
         # Note that the area is relative (so 1 would be the entire image)
@@ -96,7 +99,8 @@ class MultiBoxLoss(nn.Module):
             truths = targets[idx][:, :-1].data
             labels = targets[idx][:, -1].data
             defaults = priors.data
-            match(self.threshold, truths, defaults, labels,
+            match(self.pos_threshold, self.neg_threshold,
+                  truths, defaults, labels,
                   loc_t, conf_t, idx_t, idx, loc_data[idx])
         if self.use_gpu:
             loc_t = loc_t.cuda()
@@ -145,11 +149,12 @@ class MultiBoxLoss(nn.Module):
 
         # Compute max conf across batch for hard negative mining
         batch_conf = conf_data.view(-1, self.num_classes)
-        loss_c = log_sum_exp(batch_conf) - batch_conf.gather(1, conf_t.view(-1, 1))
+        loss_c = log_sum_exp(batch_conf) - batch_conf[:, 0]
         
         # Hard Negative Mining
         loss_c = loss_c.view(num, -1)
-        loss_c[pos] = 0  # filter out pos boxes for now
+        loss_c[pos]        = 0 # filter out pos boxes
+        loss_c[conf_t < 0] = 0 # filter out neutrals (conf_t = -1)
         _, loss_idx = loss_c.sort(1, descending=True)
         _, idx_rank = loss_idx.sort(1)
         num_pos = pos.long().sum(1, keepdim=True)

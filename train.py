@@ -120,12 +120,12 @@ def train():
     optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=args.momentum,
                           weight_decay=args.weight_decay)
     criterion = MultiBoxLoss(num_classes=cfg.num_classes,
-                             overlap_thresh=0.5,
+                             overlap_thresh=cfg.positive_iou_threshold,
                              prior_for_matching=True,
                              bkg_label=0,
                              neg_mining=True,
                              neg_pos=3,
-                             neg_overlap=0.5,
+                             neg_overlap=cfg.negative_iou_threshold,
                              encode_target=False,
                              use_gpu=args.cuda)
 
