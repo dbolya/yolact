@@ -374,7 +374,8 @@ yolact_resnet101_maskrcnn_6_config = yolact_resnet101_maskrcnn_config.copy({
 
 # Same config just with a different name so we can test bug fixes
 yrm1_config = yolact_resnet101_maskrcnn_1_config.copy({
-    'name': 'yrm1'
+    'name': 'yrm1',
+    'max_iter': 600000,
 })
 
 # Ablations 2: Electric Boogaloo
