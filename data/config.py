@@ -145,6 +145,8 @@ mask_type = Config({
     #   - mask_proto_crop (bool): If True, crop the mask with the predicted bbox during training.
     #   - mask_proto_loss (str [l1|disj]): If not None, apply an l1 or disjunctive regularization
     #                                      loss directly to the prototype masks.
+    #   - mask_proto_binarize_downsampled_gt (bool): Binarize GT after dowsnampling during training?
+    #   - mask_proto_normalize_mask_loss (bool): Whether to normalize mask loss by sum(gt)
     'lincomb': 1,
 })
 
@@ -177,6 +179,8 @@ coco_base_config = Config({
     'mask_proto_coeff_activation': activation_func.tanh,
     'mask_proto_crop': True,
     'mask_proto_loss': None,
+    'mask_proto_binarize_downsampled_gt': True,
+    'mask_proto_normalize_mask_loss': False,
 
     # This is filled in at runtime by Yolact's __init__, so don't touch it
     'mask_dim': None,

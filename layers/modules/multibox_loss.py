@@ -217,8 +217,6 @@ class MultiBoxLoss(nn.Module):
     
 
     def lincomb_mask_loss(self, pos, idx_t, loc_data, mask_data, priors, proto_data, masks):
-        loss_m = 0
-
         mask_h = proto_data.size(1)
         mask_w = proto_data.size(2)
 
@@ -226,7 +224,9 @@ class MultiBoxLoss(nn.Module):
             with torch.no_grad():
                 downsampled_masks = F.adaptive_avg_pool2d(masks[idx], (mask_h, mask_w))
                 downsampled_masks = downsampled_masks.permute(1, 2, 0).contiguous()
-                downsampled_masks = downsampled_masks.gt(0.5).float()
+                
+                if cfg.mask_proto_binarize_downsampled_gt:
+                    downsampled_masks = downsampled_masks.gt(0.5).float()
             
             cur_pos = pos[idx]
             pos_idx_t = idx_t[idx, cur_pos]
@@ -265,9 +265,18 @@ class MultiBoxLoss(nn.Module):
                 pred_masks = pred_masks * crop_mask
 
             mask_t = downsampled_masks[:, :, pos_idx_t]
+            
             if cfg.mask_proto_mask_activation == activation_func.sigmoid:
-                loss_m += F.binary_cross_entropy(pred_masks, mask_t, reduction='sum') * self.mask_alpha
+                pre_loss = F.binary_cross_entropy(pred_masks, mask_t, reduction='none')
             else:
-                loss_m += F.smooth_l1_loss(pred_masks, mask_t, reduction='sum') * self.mask_alpha
+                pre_loss = F.smooth_l1_loss(pred_masks, mask_t, reduction='none')
 
-        return loss_m
+            if cfg.mask_proto_normalize_mask_loss:
+                gt_area  = torch.sum(mask_t,   dim=(0, 1))
+                pre_loss = torch.sum(pre_loss, dim=(0, 1))
+
+                loss_m = torch.sum(pre_loss / (gt_area + 0.00001))
+            else:
+                loss_m = torch.sum(pre_loss)
+
+        return loss_m * self.mask_alpha
