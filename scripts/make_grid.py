@@ -1,21 +1,32 @@
 import numpy as np
-import math
+import math, random
 
 import matplotlib.pyplot as plt
-from matplotlib.widgets import Slider
+from matplotlib.widgets import Slider, Button
 
 
 fig, ax = plt.subplots()
 plt.subplots_adjust(bottom=0.24)
 im_handle = None
 
+save_path = 'grid.np'
+
 center_x, center_y = (0.5, 0.5)
 grid_w, grid_h = (35, 35)
 spacing = 0
 scale = 4
 angle = 0
+grid = None
+
+all_grids = []
+
+# A hack
+disable_render = False
 
 def render():
+	if disable_render:
+		return
+
 	x = np.tile(np.array(list(range(grid_w)), dtype=np.float).reshape(1, grid_w), [grid_h, 1]) - grid_w * center_x
 	y = np.tile(np.array(list(range(grid_h)), dtype=np.float).reshape(grid_h, 1), [1, grid_w]) - grid_h * center_y
 
@@ -38,6 +49,7 @@ def render():
 	line_2 = np.exp(s2 * spacing) * s2
 	line_3 = np.exp(s3 * spacing) * s3
 
+	global grid
 	grid = np.clip(1 - (line_1 + line_2 + line_3) / 3, 0, 1)
 
 	global im_handle
@@ -77,26 +89,85 @@ def update_spacing(val):
 
 	render()
 
+def randomize(val):
+	global center_x, center_y, spacing, scale, angle, disable_render
+
+	center_x, center_y = (random.uniform(0, 1), random.uniform(0, 1))
+	spacing = random.uniform(-0.2, 2)
+	scale = 4 * math.exp(random.uniform(-1, 1))
+	angle = random.uniform(-math.pi, math.pi)
+
+	disable_render = True
+
+	scale_slider.set_val(scale)
+	angle_slider.set_val(angle)
+	centx_slider.set_val(center_x)
+	centy_slider.set_val(center_y)
+	spaci_slider.set_val(spacing)
+
+	disable_render = False
+
+	render()
+
+def add(val):
+	all_grids.append(grid)
+	
+	export_len_text.set_text('Num Grids: ' + str(len(all_grids)))
+	fig.canvas.draw_idle()
+
+def add_randomize(val):
+	add(val)
+	randomize(val)
+
+def export(val):
+	np.stack(all_grids).dump(save_path)
+	print('Saved %d grids to %s.' % (len(all_grids, save_path)))
+
+	all_grids.clear()
+	export_len_text.set_text('Num Grids: ' + str(len(all_grids)))
+	fig.canvas.draw_idle()
+
 render()
 
-axfreq = plt.axes([0.22, 0.19, 0.59, 0.03], facecolor='lightgoldenrodyellow')
-scale_slider = Slider(axfreq, 'Scale', 0.1, 20, valinit=scale, valstep=0.1)
+axis = plt.axes([0.22, 0.19, 0.59, 0.03], facecolor='lightgoldenrodyellow')
+scale_slider = Slider(axis, 'Scale', 0.1, 20, valinit=scale, valstep=0.1)
 scale_slider.on_changed(update_scale)
 
-axfreq = plt.axes([0.22, 0.15, 0.59, 0.03], facecolor='lightgoldenrodyellow')
-angle_slider = Slider(axfreq, 'Angle', -math.pi, math.pi, valinit=angle, valstep=0.1)
+axis = plt.axes([0.22, 0.15, 0.59, 0.03], facecolor='lightgoldenrodyellow')
+angle_slider = Slider(axis, 'Angle', -math.pi, math.pi, valinit=angle, valstep=0.1)
 angle_slider.on_changed(update_angle)
 
-axfreq = plt.axes([0.22, 0.11, 0.59, 0.03], facecolor='lightgoldenrodyellow')
-centx_slider = Slider(axfreq, 'Center X', 0, 1, valinit=center_x, valstep=0.05)
+axis = plt.axes([0.22, 0.11, 0.59, 0.03], facecolor='lightgoldenrodyellow')
+centx_slider = Slider(axis, 'Center X', 0, 1, valinit=center_x, valstep=0.05)
 centx_slider.on_changed(update_centerx)
 
-axfreq = plt.axes([0.22, 0.07, 0.59, 0.03], facecolor='lightgoldenrodyellow')
-centy_slider = Slider(axfreq, 'Center Y', 0, 1, valinit=center_y, valstep=0.05)
+axis = plt.axes([0.22, 0.07, 0.59, 0.03], facecolor='lightgoldenrodyellow')
+centy_slider = Slider(axis, 'Center Y', 0, 1, valinit=center_y, valstep=0.05)
 centy_slider.on_changed(update_centery)
 
-axfreq = plt.axes([0.22, 0.03, 0.59, 0.03], facecolor='lightgoldenrodyellow')
-spaci_slider = Slider(axfreq, 'Spacing', -1, 2, valinit=spacing, valstep=0.05)
+axis = plt.axes([0.22, 0.03, 0.59, 0.03], facecolor='lightgoldenrodyellow')
+spaci_slider = Slider(axis, 'Spacing', -1, 2, valinit=spacing, valstep=0.05)
 spaci_slider.on_changed(update_spacing)
+
+axis = plt.axes([0.8, 0.54, 0.15, 0.05], facecolor='lightgoldenrodyellow')
+rando_button = Button(axis, 'Randomize')
+rando_button.on_clicked(randomize)
+
+axis = plt.axes([0.8, 0.48, 0.15, 0.05], facecolor='lightgoldenrodyellow')
+addgr_button = Button(axis, 'Add')
+addgr_button.on_clicked(add)
+
+# Likely not a good way to do this but whatever
+export_len_text = plt.text(0, 3, 'Num Grids: 0')
+
+axis = plt.axes([0.8, 0.42, 0.15, 0.05], facecolor='lightgoldenrodyellow')
+addra_button = Button(axis, 'Add / Rand')
+addra_button.on_clicked(add_randomize)
+
+axis = plt.axes([0.8, 0.36, 0.15, 0.05], facecolor='lightgoldenrodyellow')
+saveg_button = Button(axis, 'Save')
+saveg_button.on_clicked(export)
+
+
 
 plt.show()
