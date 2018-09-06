@@ -9,7 +9,7 @@ fig, ax = plt.subplots()
 plt.subplots_adjust(bottom=0.24)
 im_handle = None
 
-save_path = 'grid.np'
+save_path = 'grid.npy'
 
 center_x, center_y = (0.5, 0.5)
 grid_w, grid_h = (35, 35)
@@ -125,8 +125,8 @@ def add_randomize(val):
 	randomize(val)
 
 def export(val):
-	np.stack(all_grids).dump(save_path)
-	print('Saved %d grids to "%s".' % (len(all_grids), save_path))
+	np.save(save_path, np.stack(all_grids))
+	print('Saved %d grids to "%s"' % (len(all_grids), save_path))
 
 	global unique
 	unique = False
