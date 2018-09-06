@@ -160,6 +160,10 @@ class MultiBoxLoss(nn.Module):
         num_pos = pos.long().sum(1, keepdim=True)
         num_neg = torch.clamp(self.negpos_ratio*num_pos, max=pos.size(1)-1)
         neg = idx_rank < num_neg.expand_as(idx_rank)
+        
+        # Just in case there aren't enough negatives, don't start using positives as negatives
+        neg[pos]        = 0
+        neg[conf_t < 0] = 0 # Filter out neutrals
 
         # Confidence Loss Including Positive and Negative Examples
         pos_idx = pos.unsqueeze(2).expand_as(conf_data)
