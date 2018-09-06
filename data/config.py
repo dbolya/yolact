@@ -147,16 +147,20 @@ mask_type = Config({
     #                                      loss directly to the prototype masks.
     #   - mask_proto_binarize_downsampled_gt (bool): Binarize GT after dowsnampling during training?
     #   - mask_proto_normalize_mask_loss (bool): Whether to normalize mask loss by sum(gt)
+    #   - mask_proto_grid_file (str): The path to the grid file to use with the next option.
+    #                                 This should be a numpy.dump file with shape [numgrids, h, w]
+    #                                 where h and w are w.r.t. the mask_proto_src convout.
+    #   - mask_proto_use_grid (bool): Whether to add extra grid features to the proto_net input.
     'lincomb': 1,
 })
 
 # Self explanitory. For use with mask_proto_*_activation
 activation_func = Config({
-    'tanh': torch.tanh,
+    'tanh':    torch.tanh,
     'sigmoid': torch.sigmoid,
     'softmax': lambda x: torch.nn.functional.softmax(x, dim=-1),
-    'relu': lambda x: torch.nn.functional.relu(x, inplace=True),
-    'none': lambda x: x,
+    'relu':    lambda x: torch.nn.functional.relu(x, inplace=True),
+    'none':    lambda x: x,
 })
 
 # Configs
@@ -181,6 +185,8 @@ coco_base_config = Config({
     'mask_proto_loss': None,
     'mask_proto_binarize_downsampled_gt': True,
     'mask_proto_normalize_mask_loss': False,
+    'mask_proto_grid_file': 'data/grid.npy',
+    'mask_proto_use_grid':  False,
 
     # During training, to match detections with gt, first compute the maximum gt IoU for each prior.
     # Then, any of those priors whose maximum overlap is over the positive threshold, mark as positive.
@@ -447,6 +453,10 @@ yrm15_config = yolact_resnet101_maskrcnn_1_config.copy({
 yrm16_config = yolact_resnet101_maskrcnn_1_config.copy({
     'name': 'yrm16',
     'mask_proto_normalize_mask_loss': True,
+})
+yrm17_config = yrm13_config.copy({
+    'name': 'yrm17',
+    'mask_proto_use_grid': True,
 })
 
 yolact_vgg16_config = ssd550_config.copy({

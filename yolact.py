@@ -168,8 +168,15 @@ class Yolact(nn.Module):
         if cfg.mask_type == mask_type.direct:
             cfg.mask_dim = cfg.mask_size**2
         elif cfg.mask_type == mask_type.lincomb:
+            if cfg.mask_proto_use_grid:
+                self.grid = torch.Tensor(np.load(cfg.mask_proto_grid_file))
+                self.num_grids = self.grid.size(0)
+            else:
+                self.num_grids = 0
+
             self.proto_src = cfg.mask_proto_src
             in_channels = 3 if self.proto_src is None else self.backbone.channels[self.proto_src]
+            in_channels += self.num_grids
 
             def make_layer(layer_cfg):
                 nonlocal in_channels
@@ -237,7 +244,13 @@ class Yolact(nn.Module):
 
         if cfg.mask_type == mask_type.lincomb:
             with timer.env('proto'):
-                proto_out = self.proto_net(x if self.proto_src is None else outs[self.proto_src])
+                proto_x = x if self.proto_src is None else outs[self.proto_src]
+                
+                if self.num_grids > 0:
+                    grids = self.grid.repeat(proto_x.size(0), 1, 1, 1)
+                    proto_x = torch.cat([proto_x, grids], dim=1)
+
+                proto_out = self.proto_net(proto_x)
                 proto_out = proto_out.permute(0, 2, 3, 1).contiguous()
                 proto_out = cfg.mask_proto_prototype_activation(proto_out)
 
