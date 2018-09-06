@@ -19,6 +19,7 @@ angle = 0
 grid = None
 
 all_grids = []
+unique = False
 
 # A hack
 disable_render = False
@@ -111,6 +112,10 @@ def randomize(val):
 
 def add(val):
 	all_grids.append(grid)
+
+	global unique
+	if not unique:
+		unique = test_uniqueness(np.stack(all_grids))
 	
 	export_len_text.set_text('Num Grids: ' + str(len(all_grids)))
 	fig.canvas.draw_idle()
@@ -121,11 +126,37 @@ def add_randomize(val):
 
 def export(val):
 	np.stack(all_grids).dump(save_path)
-	print('Saved %d grids to %s.' % (len(all_grids, save_path)))
+	print('Saved %d grids to "%s".' % (len(all_grids), save_path))
 
+	global unique
+	unique = False
 	all_grids.clear()
+
 	export_len_text.set_text('Num Grids: ' + str(len(all_grids)))
 	fig.canvas.draw_idle()
+
+def test_uniqueness(grids):
+	# Grids shape [ngrids, h, w]
+	grids = grids.reshape((-1, grid_h, grid_w))
+
+	for y in range(grid_h):
+		for x in range(grid_h):
+			pixel_features = grids[:, y, x]
+
+			# l1 distance for this pixel with every other
+			l1_dist = np.sum(np.abs(grids - np.tile(pixel_features, grid_h*grid_w).reshape((-1, grid_h, grid_w))), axis=0)
+
+			# Equal if l1 distance is really small. Note that this will include this pixel
+			num_equal = np.sum((l1_dist < 0.0001).astype(np.int32))
+
+			if num_equal > 1:
+				print('Pixel at (%d, %d) has %d other pixel%s with the same representation.' % (x, y, num_equal-1, '' if num_equal==2 else 's'))
+				return False
+	
+	print('Each pixel has a distinct representation.')
+	return True
+
+
 
 render()
 
