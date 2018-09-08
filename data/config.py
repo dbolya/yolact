@@ -202,8 +202,7 @@ coco_base_config = Config({
     'min_size': 200,
     'max_size': 300,
     
-    # Whether or not to do post processing on the cpu at test time (usually faster)
-    'force_cpu_detect': True,
+    # Whether or not to do post processing on the cpu at test time
     'force_cpu_nms': True,
 
     # Whether or not to tie the mask loss to 0

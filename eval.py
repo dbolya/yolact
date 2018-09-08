@@ -479,15 +479,15 @@ def evaluate(net:Yolact, dataset, train_mode=False):
         for it, image_idx in enumerate(dataset_indices):
             timer.reset()
 
-            timer.start('Load Data')
-            img, gt, gt_masks, h, w, crowd = dataset.pull_item(image_idx)
-            timer.stop('Load Data')
+            with timer.env('Load Data'):
+                img, gt, gt_masks, h, w, crowd = dataset.pull_item(image_idx)
 
-            batch = Variable(img.unsqueeze(0))
-            if args.cuda:
-                batch = batch.cuda()
+                batch = Variable(img.unsqueeze(0))
+                if args.cuda:
+                    batch = batch.cuda()
 
-            preds = net(batch)
+            with timer.env('Network Extra'):
+                preds = net(batch)
 
             # Perform the meat of the operation here
             if args.display:
