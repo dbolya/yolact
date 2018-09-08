@@ -181,7 +181,7 @@ def train():
                 if iteration == cfg.max_iter:
                     break
 
-                if iteration in cfg.lr_steps:
+                if iteration >= cfg.lr_steps[step_index]:
                     step_index += 1
                     adjust_learning_rate(optimizer, args.gamma, step_index)
 
