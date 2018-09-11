@@ -458,6 +458,48 @@ yrm17_config = yrm13_config.copy({
     'mask_proto_use_grid': True,
 })
 
+
+fixed_ssd_config = yrm13_config.copy({
+    'name': 'fixed_ssd_config',
+
+    'backbone': resnet101_backbone.copy({
+        'selected_layers': list(range(2, 8)),
+        
+        # Numbers derived from SSD300
+        #
+        # Usually, you'd encode these scales as pixel width and height. 
+        # However, if you then increase your input image size, your anchors will be way too small.
+        # To get around that, I encode relative size as scale / convout_size.
+        #
+        # Wait, hold on a second. That doesn't fix that problem whatsoever.
+        # TODO: Encode scales as relative to image size, not convout size.
+        #
+        # Okay, maybe the reasoning could be relative receptive field size.
+        # For instance, a scale of 1 is what one convout pixel directly sees as input from the image.
+        # Of course, there are a lot of 3x3 kernels in here so hopefully the receptive field is larger
+        # than just 1. But you really don't observe that to be the case, do you? ¯\_(ツ)_/¯
+        'pred_scales': [
+            [3.5, 4.95], # 30 / 300 * 35, sqrt((30 / 300) * (60 / 300)) * 35
+            [3.6, 4.90], #
+            [3.3, 4.02], # In general,
+            [2.7, 3.10], #   min / 300 * conv_out_size,
+            [2.1, 2.37], #   sqrt((min / 300) * (max / 300)) * conv_out_size
+            [1.8, 1.92], #
+        ],
+        'pred_aspect_ratios': [ [[1, sqrt(2), 1/sqrt(2), sqrt(3), 1/sqrt(3)][:n], [1]] for n in [3, 5, 5, 5, 3, 3] ],
+    }),
+
+})
+
+fixed_cluster_config = yrm13_config.copy({
+    'name': 'fixed_cluster_config',
+
+    'backbone': fixed_ssd_config.backbone.copy({
+        'pred_aspect_ratios': [ [[1, 0.7, 0.5, 0.3, 1.6][:n], [1]] for n in [3, 5, 5, 5, 3, 3] ],
+    }),
+
+})
+
 yolact_vgg16_config = ssd550_config.copy({
     'name': 'yolact_vgg16',
 
