@@ -27,7 +27,9 @@ These changes really worked, didn't they? :/
  - Install [Pytorch](http://pytorch.org/) 0.4.1 and TorchVision.
  - Install some other packages:
    ```Shell
-   pip3 install cython opencv-python pillow pycocotools 
+   # Cython needs to be installed before pycocotools
+   pip3 install cython
+   pip3 install opencv-python pillow pycocotools matplotlib 
    ```
  - Clone this repository:
    ```Shell
