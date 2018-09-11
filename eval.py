@@ -82,11 +82,17 @@ def parse_args(argv=None):
                         help='Do not output the status bar. This is useful for when piping to a file.')
     parser.add_argument('--display_lincomb', default=False, type=str2bool,
                         help='If the config uses lincomb masks, output a visualization of how those masks are created.')
+    parser.add_argument('--benchmark', default=False, dest='benchmark', action='store_true',
+                        help='Equivalent to running display mode but without displaying an image.')
     
-    parser.set_defaults(no_bar=False, display=False, resume=False, output_coco_json=False, output_web_json=False, shuffle=False)
+    parser.set_defaults(no_bar=False, display=False, resume=False, output_coco_json=False, output_web_json=False, shuffle=False,
+                        benchmark=False)
 
     global args
     args = parser.parse_args(argv)
+
+    if args.output_web_json:
+        args.output_coco_json = True
 
 iou_thresholds = [x / 100 for x in range(50, 100, 5)]
 coco_cats = [] # Call prep_coco_cats to fill this
@@ -134,9 +140,16 @@ def prep_display(dets_out, img, gt, gt_masks, h, w):
         text_str = '%s (%.2f)' % (_class, score) if args.display_scores else _class
         cv2.putText(img_numpy, text_str, text_pt, cv2.FONT_HERSHEY_PLAIN, 1.5, color, 2, cv2.LINE_AA)
     
-    timer.print_stats()
+        timer.print_stats()
 
     return img_numpy
+
+def prep_benchmark(dets_out, h, w):
+    with timer.env('Postprocess'):
+        t = postprocess(dets_out, w, h, visualize_lincomb=args.display_lincomb)
+
+    with timer.env('Copy'):
+        classes, scores, boxes, masks = [x[:args.top_k].cpu().numpy() for x in t]
 
 def prep_coco_cats(cats):
     """ Prepare inverted table for category id lookup given a coco cats object. """
@@ -457,18 +470,18 @@ def evaluate(net:Yolact, dataset, train_mode=False):
 
     frame_times = MovingAverage()
     dataset_size = len(dataset) if args.max_images < 0 else args.max_images
+    progress_bar = ProgressBar(30, dataset_size)
+    print()
 
     try:
-        if not args.display:
+        if not args.display and not args.benchmark:
             # For each class and iou, stores tuples (score, isPositive)
             # Index ap_data[type][iouIdx][classIdx]
             ap_data = {
                 'box' : [[APDataObject() for _ in COCO_CLASSES] for _ in iou_thresholds],
                 'mask': [[APDataObject() for _ in COCO_CLASSES] for _ in iou_thresholds]
             }
-            progress_bar = ProgressBar(30, dataset_size)
             detections = Detections()
-            print()
         else:
             timer.disable('Load Data')
 
@@ -492,9 +505,12 @@ def evaluate(net:Yolact, dataset, train_mode=False):
             # Perform the meat of the operation here
             if args.display:
                 img_numpy = prep_display(preds, img, gt, gt_masks, h, w)
+            elif args.benchmark:
+                prep_benchmark(preds, h, w)
             else:
                 prep_metrics(ap_data, preds, img, gt, gt_masks, h, w, crowd, dataset.ids[image_idx], detections)
             
+            # First couple of images construct the graph so don't include those
             if it > 1:
                 frame_times.add(timer.total_time())
             
@@ -513,7 +529,7 @@ def evaluate(net:Yolact, dataset, train_mode=False):
                     % (repr(progress_bar), it+1, dataset_size, progress, fps), end='')
                 # timer.print_stats()
 
-        if not args.display:
+        if not args.display and not args.benchmark:
             print()
             if args.output_coco_json:
                 print('Dumping detections...')
@@ -528,6 +544,13 @@ def evaluate(net:Yolact, dataset, train_mode=False):
                         pickle.dump(ap_data, f)
 
                 return calc_map(ap_data)
+        elif args.benchmark:
+            print()
+            print()
+            print('Stats for the last frame:')
+            timer.print_stats()
+            avg_seconds = frame_times.get_avg()
+            print('Average: %5.2f fps, %5.2f ms' % (1 / frame_times.get_avg(), 1000*avg_seconds))
 
     except KeyboardInterrupt:
         print('Stopping...')
@@ -593,21 +616,24 @@ if __name__ == '__main__':
         if not os.path.exists('results'):
             os.makedirs('results')
 
-        if args.resume and not args.display:   
-            if args.resume:
-                with open(args.ap_data_file, 'rb') as f:
-                    ap_data = pickle.load(f)
-                calc_map(ap_data)
-                exit()
+        if args.cuda:
+            cudnn.benchmark = True
+            cudnn.fastest = True
+            torch.set_default_tensor_type('torch.cuda.FloatTensor')
+        else:
+            torch.set_default_tensor_type('torch.FloatTensor')
+
+        if args.resume and not args.display:
+            with open(args.ap_data_file, 'rb') as f:
+                ap_data = pickle.load(f)
+            calc_map(ap_data)
+            exit()
 
         dataset = COCODetection(args.coco_root, cfg.dataset.valid, 
                                 BaseTransform(),
                                 prep_crowds=True)
         
         prep_coco_cats(dataset.coco.cats)
-
-        if args.output_web_json:
-            args.output_coco_json = True
 
         print('Loading model...', end='')
         net = Yolact()
@@ -617,11 +643,6 @@ if __name__ == '__main__':
 
         if args.cuda:
             net = net.cuda()
-            cudnn.benchmark = True
-            cudnn.fastest = True
-            torch.set_default_tensor_type('torch.cuda.FloatTensor')
-        else:
-            torch.set_default_tensor_type('torch.FloatTensor')
 
         evaluate(net, dataset)
 
