@@ -409,12 +409,6 @@ class APDataObject:
 
     def get_ap(self) -> float:
         """ Warning: result not cached. """
-        # TODO: clean up this function
-        last_precision = 1
-        last_recall = 0
-        num_true  = 0
-        num_false = 0
-        ap = 0
 
         if self.num_gt_positives == 0:
             return 0
@@ -424,43 +418,43 @@ class APDataObject:
 
         precisions = []
         recalls    = []
+        num_true  = 0
+        num_false = 0
 
+        # Compute the precision-recall curve. The x axis is recalls and the y axis precisions.
         for datum in self.data_points:
             # datum[1] is whether the detection a true or false positive
             if datum[1]: num_true += 1
             else: num_false += 1
             
             precision = num_true / (num_true + num_false)
-            recall = num_true / self.num_gt_positives
+            recall    = num_true / self.num_gt_positives
 
-            # Use trapazoid rule for better integral accuracy
-            # ap += ((precision + last_precision) / 2) * (recall - last_recall)
             precisions.append(precision)
             recalls.append(recall)
-            
-            # last_precision = precision
-            # last_recall = recall
 
+        # Smooth the curve by computing [max(precisions[i:]) for i in range(len(precisions))]
+        # Basically, remove any temporary dips from the curve.
+        # At least that's what I think, idk. COCOEval did it so I do too.
         for i in range(len(precisions)-1, 0, -1):
             if precisions[i] > precisions[i-1]:
                 precisions[i-1] = precisions[i]
 
-        integral_bars = [0] * 101 # idx 0 is recall == 0.0 and idx 100 is recall == 1.00
-        # bar_idx = 0 # bar_idx corresponds to a recall of bar_idx / 100
-
-        # for i in range(len(precisions)):
-        #     if recalls[i]*100 > bar_idx:
-        #         integral_bars[bar_idx] = precisions[i]
-        #         bar_idx += 1
-        test_range = np.array([x / 100 for x in range(101)])
+        # Compute the integral of precision(recall) d_recall from recall=0->1 using fixed-length riemann summation with 101 bars.
+        y_range = [0] * 101 # idx 0 is recall == 0.0 and idx 100 is recall == 1.00
+        x_range = np.array([x / 100 for x in range(101)])
         recalls = np.array(recalls)
-        indices = np.searchsorted(recalls, test_range, side='left')
 
+        # I realize this is weird, but all it does is find the nearest precision(x) for a given x in x_range.
+        # Basically, if the closest recall we have to 0.01 is 0.009 this sets precision(0.01) = precision(0.009).
+        indices = np.searchsorted(recalls, x_range, side='left')
         for bar_idx, precision_idx in enumerate(indices):
             if precision_idx < len(precisions):
-                integral_bars[bar_idx] = precisions[precision_idx]
+                y_range[bar_idx] = precisions[precision_idx]
 
-        return sum(integral_bars) / len(integral_bars)
+        # Finally compute the riemann sum to get our integral.
+        # sum([precision(x) for x in range(0:0.01:1)]) / len(range(0:0.01:1)).
+        return sum(y_range) / len(y_range)
 
 
 
