@@ -51,10 +51,16 @@ class Config(object):
 
 
 # Datasets
-coco_dataset = Config({
-    'name': 'COCO',
+coco2014_dataset = Config({
+    'name': 'COCO 2014',
     'train': 'train2014',
     'valid': 'val2014'
+})
+
+coco_trainval35k_dataset = Config({
+    'name': 'COCO trainval35k',
+    'train': 'trainval35k_',
+    'valid': 'minival5k_'
 })
 
 # Backbones
@@ -165,7 +171,7 @@ activation_func = Config({
 
 # Configs
 coco_base_config = Config({
-    'dataset': coco_dataset,
+    'dataset': coco2014_dataset,
     'num_classes': 81,
     'lr_steps': (280000, 360000, 400000),
     'max_iter': 400000,
@@ -460,7 +466,7 @@ yrm17_config = yrm13_config.copy({
 
 
 fixed_ssd_config = yrm13_config.copy({
-    'name': 'fixed_ssd_config',
+    'name': 'fixed_ssd',
 
     'backbone': resnet101_backbone.copy({
         'selected_layers': list(range(2, 8)),
@@ -492,7 +498,7 @@ fixed_ssd_config = yrm13_config.copy({
 })
 
 fixed_cluster_config = yrm13_config.copy({
-    'name': 'fixed_cluster_config',
+    'name': 'fixed_cluster',
 
     'backbone': fixed_ssd_config.backbone.copy({
         'pred_aspect_ratios': [ [[1, 0.7, 0.5, 0.3, 1.6][:n], [1]] for n in [3, 5, 5, 5, 3, 3] ],

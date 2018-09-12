@@ -100,16 +100,24 @@ class COCODetection(data.Dataset):
         prep_crowds (bool): Whether or not to prepare crowds for the evaluation step.
     """
 
-    def __init__(self, root, image_set='trainval35k', transform=None,
+    def __init__(self, root, image_set='trainval35k_', transform=None,
                  target_transform=COCOAnnotationTransform(), dataset_name='MS COCO', prep_crowds=False):
         sys.path.append(osp.join(root, COCO_API))
         from pycocotools.coco import COCO
-        self.root = osp.join(root, IMAGES, image_set)
+        
+        if image_set.endswith('_'):
+            self.root = osp.join(root, IMAGES)
+        else:
+            self.root = osp.join(root, IMAGES, image_set)
+
         self.coco = COCO(osp.join(root, ANNOTATIONS,
                                   INSTANCES_SET.format(image_set)))
+        
         self.ids = list(self.coco.imgToAnns.keys())
+        
         self.transform = transform
         self.target_transform = target_transform
+        
         self.name = dataset_name
         self.prep_crowds=prep_crowds
 

@@ -447,13 +447,14 @@ class APDataObject:
 
         # I realize this is weird, but all it does is find the nearest precision(x) for a given x in x_range.
         # Basically, if the closest recall we have to 0.01 is 0.009 this sets precision(0.01) = precision(0.009).
+        # I approximate the integral this way, because that's how COCOEval does it.
         indices = np.searchsorted(recalls, x_range, side='left')
         for bar_idx, precision_idx in enumerate(indices):
             if precision_idx < len(precisions):
                 y_range[bar_idx] = precisions[precision_idx]
 
         # Finally compute the riemann sum to get our integral.
-        # sum([precision(x) for x in range(0:0.01:1)]) / len(range(0:0.01:1)).
+        # avg([precision(x) for x in 0:0.01:1])
         return sum(y_range) / len(y_range)
 
 
