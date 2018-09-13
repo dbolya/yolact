@@ -457,7 +457,17 @@ class APDataObject:
         # avg([precision(x) for x in 0:0.01:1])
         return sum(y_range) / len(y_range)
 
+def badhash(x):
+    """
+    Just a quick and dirty hash function for doing a deterministic shuffle based on image_id.
 
+    Source:
+    https://stackoverflow.com/questions/664014/what-integer-hash-function-are-good-that-accepts-an-integer-hash-key
+    """
+    x = (((x >> 16) ^ x) * 0x45d9f3b) & 0xFFFFFFFF
+    x = (((x >> 16) ^ x) * 0x45d9f3b) & 0xFFFFFFFF
+    x = ((x >> 16) ^ x) & 0xFFFFFFFF
+    return x
 
 
 def evaluate(net:Yolact, dataset, train_mode=False):
@@ -466,6 +476,7 @@ def evaluate(net:Yolact, dataset, train_mode=False):
     frame_times = MovingAverage()
     dataset_size = len(dataset) if args.max_images < 0 else args.max_images
     progress_bar = ProgressBar(30, dataset_size)
+    
     print()
 
     if not args.display and not args.benchmark:
@@ -479,9 +490,21 @@ def evaluate(net:Yolact, dataset, train_mode=False):
     else:
         timer.disable('Load Data')
 
-    dataset_indices = list(range(dataset_size))
+    dataset_indices = list(range(len(dataset)))
     if args.shuffle:
         random.shuffle(dataset_indices)
+    else:
+        # Do a deterministic shuffle based on the image ids
+        #
+        # I do this because on python 3.5 dictionary key order is *random*, while in 3.6 it's
+        # the order of insertion. That means on python 3.6, the images come in the order they are in
+        # in the annotations file. For some reason, the first images in the annotations file are
+        # the hardest. To combat this, I use a hard-coded hash function based on the image ids
+        # to shuffle the indices we use. That way, no matter what python version or how pycocotools
+        # handles the data, we get the same result every time.
+        hashed = [badhash(x) for x in dataset.ids]
+        dataset_indices.sort(key=lambda x: hashed[x])
+    dataset_indices = dataset_indices[:dataset_size]
 
     try:
         # Main eval loop
