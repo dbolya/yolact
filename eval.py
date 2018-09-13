@@ -140,7 +140,7 @@ def prep_display(dets_out, img, gt, gt_masks, h, w):
         text_str = '%s (%.2f)' % (_class, score) if args.display_scores else _class
         cv2.putText(img_numpy, text_str, text_pt, cv2.FONT_HERSHEY_PLAIN, 1.5, color, 2, cv2.LINE_AA)
     
-        timer.print_stats()
+    timer.print_stats()
 
     return img_numpy
 
@@ -468,22 +468,23 @@ def evaluate(net:Yolact, dataset, train_mode=False):
     progress_bar = ProgressBar(30, dataset_size)
     print()
 
-    try:
-        if not args.display and not args.benchmark:
-            # For each class and iou, stores tuples (score, isPositive)
-            # Index ap_data[type][iouIdx][classIdx]
-            ap_data = {
-                'box' : [[APDataObject() for _ in COCO_CLASSES] for _ in iou_thresholds],
-                'mask': [[APDataObject() for _ in COCO_CLASSES] for _ in iou_thresholds]
-            }
-            detections = Detections()
-        else:
-            timer.disable('Load Data')
+    if not args.display and not args.benchmark:
+        # For each class and iou, stores tuples (score, isPositive)
+        # Index ap_data[type][iouIdx][classIdx]
+        ap_data = {
+            'box' : [[APDataObject() for _ in COCO_CLASSES] for _ in iou_thresholds],
+            'mask': [[APDataObject() for _ in COCO_CLASSES] for _ in iou_thresholds]
+        }
+        detections = Detections()
+    else:
+        timer.disable('Load Data')
 
-        dataset_indices = list(range(dataset_size))
-        if args.shuffle:
-            random.shuffle(dataset_indices)
-        
+    dataset_indices = list(range(dataset_size))
+    if args.shuffle:
+        random.shuffle(dataset_indices)
+
+    try:
+        # Main eval loop
         for it, image_idx in enumerate(dataset_indices):
             timer.reset()
 
@@ -497,7 +498,7 @@ def evaluate(net:Yolact, dataset, train_mode=False):
             with timer.env('Network Extra'):
                 preds = net(batch)
 
-            # Perform the meat of the operation here
+            # Perform the meat of the operation here depending on our mode.
             if args.display:
                 img_numpy = prep_display(preds, img, gt, gt_masks, h, w)
             elif args.benchmark:
@@ -505,7 +506,8 @@ def evaluate(net:Yolact, dataset, train_mode=False):
             else:
                 prep_metrics(ap_data, preds, img, gt, gt_masks, h, w, crowd, dataset.ids[image_idx], detections)
             
-            # First couple of images construct the graph so don't include those
+            # First couple of images take longer because we're constructing the graph.
+            # Since that's technically initialization, don't include those in the FPS calculations.
             if it > 1:
                 frame_times.add(timer.total_time())
             
@@ -522,7 +524,8 @@ def evaluate(net:Yolact, dataset, train_mode=False):
                 progress_bar.set_val(it+1)
                 print('\rProcessing Images  %s %6d / %6d (%5.2f%%)    %5.2f fps        '
                     % (repr(progress_bar), it+1, dataset_size, progress, fps), end='')
-                # timer.print_stats()
+
+
 
         if not args.display and not args.benchmark:
             print()
