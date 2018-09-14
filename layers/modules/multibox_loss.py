@@ -31,19 +31,14 @@ class MultiBoxLoss(nn.Module):
         See: https://arxiv.org/pdf/1512.02325.pdf for more details.
     """
 
-    def __init__(self, num_classes, overlap_thresh, prior_for_matching,
-                 bkg_label, neg_mining, neg_pos, neg_overlap, encode_target,
-                 use_gpu=True):
+    def __init__(self, num_classes, pos_threshold, neg_threshold, negpos_ratio):
         super(MultiBoxLoss, self).__init__()
-        self.use_gpu = use_gpu
         self.num_classes = num_classes
-        self.pos_threshold = overlap_thresh
-        self.neg_threshold = neg_overlap
-        self.background_label = bkg_label
-        self.encode_target = encode_target
-        self.use_prior_for_matching = prior_for_matching
-        self.do_neg_mining = neg_mining
-        self.negpos_ratio = neg_pos
+        
+        self.pos_threshold = pos_threshold
+        self.neg_threshold = neg_threshold
+        self.negpos_ratio = negpos_ratio
+        
         self.mask_dim = cfg.mask_dim
         self.use_gt_bboxes = cfg.use_gt_bboxes
         self.train_masks = cfg.train_masks
@@ -91,10 +86,12 @@ class MultiBoxLoss(nn.Module):
         num_priors = (priors.size(0))
         num_classes = self.num_classes
 
-        # match priors (default boxes) and ground truth boxes
-        loc_t = torch.Tensor(num, num_priors, 4)
-        conf_t = torch.LongTensor(num, num_priors)
-        idx_t = torch.LongTensor(num, num_priors)
+        # Match priors (default boxes) and ground truth boxes
+        # These tensors will be created with the same device as loc_data
+        loc_t = loc_data.new(num, num_priors, 4)
+        conf_t = loc_data.new(num, num_priors).long()
+        idx_t = loc_data.new(num, num_priors).long()
+
         for idx in range(num):
             truths = targets[idx][:, :-1].data
             labels = targets[idx][:, -1].data
@@ -102,10 +99,6 @@ class MultiBoxLoss(nn.Module):
             match(self.pos_threshold, self.neg_threshold,
                   truths, defaults, labels,
                   loc_t, conf_t, idx_t, idx, loc_data[idx])
-        if self.use_gpu:
-            loc_t = loc_t.cuda()
-            conf_t = conf_t.cuda()
-            idx_t = idx_t.cuda()
 
         # wrap targets
         loc_t = Variable(loc_t, requires_grad=False)

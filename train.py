@@ -113,21 +113,17 @@ def train():
         print('Initializing weights...')
         yolact_net.init_weights(backbone_path=args.save_folder + cfg.backbone.path)
 
-    if args.cuda:
-        cudnn.benchmark = True
-        net = torch.nn.DataParallel(net).cuda()
-
     optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=args.momentum,
                           weight_decay=args.weight_decay)
     criterion = MultiBoxLoss(num_classes=cfg.num_classes,
-                             overlap_thresh=cfg.positive_iou_threshold,
-                             prior_for_matching=True,
-                             bkg_label=0,
-                             neg_mining=True,
-                             neg_pos=3,
-                             neg_overlap=cfg.negative_iou_threshold,
-                             encode_target=False,
-                             use_gpu=args.cuda)
+                             pos_threshold=cfg.positive_iou_threshold,
+                             neg_threshold=cfg.negative_iou_threshold,
+                             negpos_ratio=3)
+
+    if args.cuda:
+        cudnn.benchmark = True
+        net       = nn.DataParallel(net).cuda()
+        criterion = nn.DataParallel(criterion).cuda()
 
     # loss counters
     loc_loss = 0
@@ -138,6 +134,7 @@ def train():
     epoch_size = len(dataset) // args.batch_size
     num_epochs = math.ceil(cfg.max_iter / epoch_size)
     
+    # Which learning rate adjustment step are we on? lr' = lr * gamma ^ step_index
     step_index = 0
 
     if args.visdom:
@@ -157,9 +154,9 @@ def train():
     avg_window = 100
     loss_m_avg, loss_l_avg, loss_c_avg = (MovingAverage(avg_window), MovingAverage(avg_window), MovingAverage(avg_window))
 
+    # Wait until the specified iteration to turn on prediction matching, if the setting is on in the first place
     use_prediction_matching = cfg.use_prediction_matching
     if cfg.use_prediction_matching:
-        # Wait until the specified iteration to turn on prediction matching
         cfg.use_prediction_matching = False
 
     print('Begin training!')
@@ -181,26 +178,32 @@ def train():
                 if iteration == cfg.max_iter:
                     break
 
+                # Adjust the learning rate at the given iterations, but also if we resume from past that iteration
                 if iteration >= cfg.lr_steps[step_index]:
                     step_index += 1
                     adjust_learning_rate(optimizer, args.gamma, step_index)
 
+                # Nothing to see here--just the implementation of a setting we'll never use
                 if use_prediction_matching and iteration > cfg.prediction_matching_delay:
                     cfg.use_prediction_matching = True
 
-                # load train data
+                # Load training data
                 images, targets, masks = prepare_data(datum)
-                # forward
+                
+                # Forward Pass
                 out = net(images)
-                # backprop
+                
+                # Compute Loss
                 optimizer.zero_grad()
-                loss_l, loss_c, loss_m = criterion(out, targets, masks)
+                losses = criterion(out, targets, masks)
+                loss_l, loss_c, loss_m = [x.sum() for x in losses] # Sum here because Dataparallel
                 loss = loss_l + loss_c + loss_m
+                
+                # Backprop
                 loss.backward() # Do this to free up vram even if loss is not finite
                 if torch.isfinite(loss).item():
                     optimizer.step()
-                loc_loss += loss_l.item()
-                conf_loss += loss_c.item()
+                
                 loss_c_avg.add(loss_c.item())
                 loss_l_avg.add(loss_l.item())
                 loss_m_avg.add(loss_m.item())
@@ -224,8 +227,7 @@ def train():
                     
 
                 if args.visdom:
-                    update_vis_plot(iteration, loss_l.item(), loss_c.item(),
-                                    iter_plot, epoch_plot, 'append')
+                    update_vis_plot(iteration, loss_l_avg.get_avg(), loss_c_avg.get_avg(), iter_plot, epoch_plot, 'append')
                 
                 iteration += 1
 
@@ -233,17 +235,13 @@ def train():
                     print('Saving state, iter:', iteration)
                     yolact_net.save_weights(save_path(epoch, iteration))
             
-            # This is a comment that serves to separate white text from other white text
+            # This is done per epoch
             if args.validation_epoch > 0:
                 if epoch % args.validation_epoch == 0 and epoch > 0:
                     compute_validation_map(yolact_net, val_dataset)
 
             if args.visdom:
-                    update_vis_plot(epoch, loc_loss, conf_loss, epoch_plot, None,
-                                    'append', epoch_size)
-                    # reset epoch loss counters
-                    loc_loss = 0
-                    conf_loss = 0
+                    update_vis_plot(epoch, loss_l_avg.get_avg(), loss_c_avg.get_avg(), epoch_plot, None, 'append', epoch_size)
     except KeyboardInterrupt:
         print('Stopping early. Saving network...')
         

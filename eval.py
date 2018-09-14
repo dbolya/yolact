@@ -474,7 +474,7 @@ def evaluate(net:Yolact, dataset, train_mode=False):
     net.detect.cross_class_nms = args.cross_class_nms
 
     frame_times = MovingAverage()
-    dataset_size = len(dataset) if args.max_images < 0 else args.max_images
+    dataset_size = len(dataset) if args.max_images < 0 else min(args.max_images, len(dataset))
     progress_bar = ProgressBar(30, dataset_size)
     
     print()
@@ -491,6 +491,7 @@ def evaluate(net:Yolact, dataset, train_mode=False):
         timer.disable('Load Data')
 
     dataset_indices = list(range(len(dataset)))
+    
     if args.shuffle:
         random.shuffle(dataset_indices)
     else:
@@ -504,6 +505,7 @@ def evaluate(net:Yolact, dataset, train_mode=False):
         # handles the data, we get the same result every time.
         hashed = [badhash(x) for x in dataset.ids]
         dataset_indices.sort(key=lambda x: hashed[x])
+
     dataset_indices = dataset_indices[:dataset_size]
 
     try:
