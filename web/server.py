@@ -32,6 +32,7 @@ class Handler(SimpleHTTPRequestHandler):
 			f = open(path, 'rb')
 		except OSError:
 			self.send_error(HTTPStatus.NOT_FOUND, "File not found")
+			return
 		
 		try:
 			self.send_response(HTTPStatus.OK)
