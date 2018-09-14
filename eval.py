@@ -23,6 +23,8 @@ import json
 import os
 from collections import OrderedDict
 
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import cv2
 

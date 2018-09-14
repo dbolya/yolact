@@ -64,6 +64,10 @@ parser.add_argument('--validation_epoch', default=2, type=int,
                     help='Output validation information every n iterations. If -1, do no validation.')
 args = parser.parse_args()
 
+# FYXTODO
+args.batch_size = 8
+args.num_workers = 0
+
 if args.config is not None:
     set_cfg(args.config)
 
