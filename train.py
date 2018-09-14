@@ -179,7 +179,7 @@ def train():
                     break
 
                 # Adjust the learning rate at the given iterations, but also if we resume from past that iteration
-                if iteration >= cfg.lr_steps[step_index]:
+                if step_index < len(cfg.lr_steps) and iteration >= cfg.lr_steps[step_index]:
                     step_index += 1
                     adjust_learning_rate(optimizer, args.gamma, step_index)
 
