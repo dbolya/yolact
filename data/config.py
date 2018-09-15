@@ -463,9 +463,18 @@ yrm16_config = yolact_resnet101_maskrcnn_1_config.copy({
     'name': 'yrm16',
     'mask_proto_normalize_mask_loss': True,
 })
+yrm16_2_config = yolact_resnet101_maskrcnn_1_config.copy({
+    'name': 'yrm16_2',
+    'mask_proto_normalize_mask_loss': True,
+})
 yrm17_config = yrm13_config.copy({
     'name': 'yrm17',
     'mask_proto_use_grid': True,
+})
+
+yrm18_config = yrm13_config.copy({
+    'name': 'yrm18',
+    'mask_proto_coeff_activation': activation_func.none,
 })
 
 

@@ -48,7 +48,7 @@ class MultiBoxLoss(nn.Module):
         self.bbox_alpha = 5 if cfg.use_yolo_regressors else 1
 
         if cfg.mask_proto_normalize_mask_loss:
-            self.mask_alpha *= 300
+            self.mask_alpha *= 30
 
         # If you output a proto mask with this area, your l1 loss will be l1_alpha
         # Note that the area is relative (so 1 would be the entire image)
@@ -279,7 +279,7 @@ class MultiBoxLoss(nn.Module):
                 gt_area  = torch.sum(mask_t,   dim=(0, 1))
                 pre_loss = torch.sum(pre_loss, dim=(0, 1))
 
-                loss_m += torch.sum(pre_loss / (gt_area + 1))
+                loss_m += torch.sum(pre_loss / (torch.sqrt(gt_area) + 1))
             else:
                 loss_m += torch.sum(pre_loss)
 
