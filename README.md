@@ -36,7 +36,7 @@ These changes really worked, didn't they? :/
    git clone https://github.com/dbolya/yolact.git
    cd yolact
    ```
- - Download the COCO dataset and the 2014/2017 annotations. Note that this script will take a while and dump 14+gb of files into `./data/coco`.
+ - Download the COCO dataset and the 2014/2017 annotations. Note that this script will take a while and dump 21gb of files into `./data/coco`.
    ```Shell
    sh data/scripts/COCO.sh
    ```
