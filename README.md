@@ -31,21 +31,14 @@ These changes really worked, didn't they? :/
    pip3 install cython
    pip3 install opencv-python pillow pycocotools matplotlib 
    ```
- - Clone this repository:
+ - Clone this repository and enter it:
    ```Shell
    git clone https://github.com/dbolya/yolact.git
-
-   # Enter it
    cd yolact
    ```
- - Download the COCO 2014 Dataset. Note that this script will take a while, spam your terminal, and dump 14+gb of files into `./data/coco`.
+ - Download the COCO dataset and the 2014/2017 annotations. Note that this script will take a while and dump 14+gb of files into `./data/coco`.
    ```Shell
-   sh data/scripts/COCO2014.sh
-   ```
- - Create the sets `trainval35k_` and `minival5k_` (this does not copy any images).
-   ```Shell
-   python data/scripts/mix_sets.py trainval35k train2014 : val2014 :35000
-   python data/scripts/mix_sets.py minival5k val2014 -5000:
+   sh data/scripts/COCO.sh
    ```
 
 

@@ -31,9 +31,9 @@ fi
 # Download the image data.
 cd ./images
 echo "Downloading MSCOCO train images ..."
-curl -LO http://images.cocodataset.org/zips/train2014.zip
+curl -LO http://images.cocodataset.org/zips/train2017.zip
 echo "Downloading MSCOCO val images ..."
-curl -LO http://images.cocodataset.org/zips/val2014.zip
+curl -LO http://images.cocodataset.org/zips/val2017.zip
 
 cd ../
 if [ ! -d annotations]
@@ -45,32 +45,23 @@ fi
 cd ./annotations
 echo "Downloading MSCOCO train/val annotations ..."
 curl -LO http://images.cocodataset.org/annotations/annotations_trainval2014.zip
+curl -LO http://images.cocodataset.org/annotations/annotations_trainval2017.zip
 echo "Finished downloading. Now extracting ..."
 
 # Unzip data
 echo "Extracting train images ..."
-unzip ../images/train2014.zip -d ../images
+unzip -qqjd ../images ../images/train2017.zip
 echo "Extracting val images ..."
-unzip ../images/val2014.zip -d ../images
+unzip -qqjd ../images ../images/val2017.zip
 echo "Extracting annotations ..."
-unzip ./annotations_trainval2014.zip -d ..
+unzip -qqd .. ./annotations_trainval2014.zip
+unzip -qqd .. ./annotations_trainval2017.zip
 
 echo "Removing zip files ..."
-rm ../images/train2014.zip
-rm ../images/val2014.zip
+rm ../images/train2017.zip
+rm ../images/val2017.zip
 rm ./annotations_trainval2014.zip
-
-# Download annotations json
-# echo "Downloading trainval35k annotations from S3"
-# curl -LO https://s3.amazonaws.com/amdegroot-datasets/instances_trainval35k.json.zip
-
-# combine train and val 
-# echo "Combining train and val images"
-# mkdir ../images/trainval35k
-# cd ../images/train2014
-# find -maxdepth 1 -name '*.jpg' -exec cp -t ../trainval35k {} + # dir too large for cp
-# cd ../val2014
-# find -maxdepth 1 -name '*.jpg' -exec cp -t ../trainval35k {} +
+rm ./annotations_trainval2017.zip
 
 
 end=`date +%s`

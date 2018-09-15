@@ -100,18 +100,15 @@ class COCODetection(data.Dataset):
         prep_crowds (bool): Whether or not to prepare crowds for the evaluation step.
     """
 
-    def __init__(self, root, image_set='trainval35k_', transform=None,
+    def __init__(self, root, image_set='train2017', transform=None,
                  target_transform=COCOAnnotationTransform(), dataset_name='MS COCO', prep_crowds=False):
         sys.path.append(osp.join(root, COCO_API))
+        
+        # Do this here because we have too many things named COCO
         from pycocotools.coco import COCO
         
-        if image_set.endswith('_'):
-            self.root = osp.join(root, IMAGES)
-        else:
-            self.root = osp.join(root, IMAGES, image_set)
-
-        self.coco = COCO(osp.join(root, ANNOTATIONS,
-                                  INSTANCES_SET.format(image_set)))
+        self.root = osp.join(root, IMAGES)
+        self.coco = COCO(osp.join(root, ANNOTATIONS, INSTANCES_SET.format(image_set)))
         
         self.ids = list(self.coco.imgToAnns.keys())
         
@@ -158,7 +155,10 @@ class COCODetection(data.Dataset):
             crowd = [x for x in target if  ('iscrowd' in x and x['iscrowd'])]
         target = [x for x in target if not ('iscrowd' in x and x['iscrowd'])]
 
-        path = osp.join(self.root, self.coco.loadImgs(img_id)[0]['file_name'])
+        # The split here is to have compatibility with both COCO2014 and 2017 annotations.
+        # In 2014, images have the pattern COCO_{train/val}2014_%012d.jpg, while in 2017 it's %012d.jpg.
+        # Our script downloads the images as %012d.jpg so convert accordingly.
+        path = osp.join(self.root, self.coco.loadImgs(img_id)[0]['file_name'].split('_')[-1])
         assert osp.exists(path), 'Image path does not exist: {}'.format(path)
         img = cv2.imread(path)
         height, width, _ = img.shape

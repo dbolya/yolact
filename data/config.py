@@ -57,10 +57,10 @@ coco2014_dataset = Config({
     'valid': 'val2014'
 })
 
-coco_trainval35k_dataset = Config({
-    'name': 'COCO trainval35k',
-    'train': 'trainval35k_',
-    'valid': 'minival5k_'
+coco2017_dataset = Config({
+    'name': 'COCO 2017',
+    'train': 'train2017', # Trainval35k
+    'valid': 'val2017'    # Minibatch5k
 })
 
 # Backbones
