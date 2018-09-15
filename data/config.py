@@ -445,6 +445,10 @@ yrm13_config = yolact_resnet101_maskrcnn_config.copy({
     'use_yolo_regressors': False,
     'mask_proto_crop': False,
 })
+yrm13_35k_config = yrm13_config.copy({
+    'name': 'yrm13_35k',
+    'dataset': coco2017_dataset,
+})
 
 yrm14_config = yolact_resnet101_maskrcnn_1_config.copy({
     'name': 'yrm14',
