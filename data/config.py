@@ -472,11 +472,6 @@ yrm17_config = yrm13_config.copy({
     'mask_proto_use_grid': True,
 })
 
-yrm18_config = yrm13_config.copy({
-    'name': 'yrm18',
-    'mask_proto_coeff_activation': activation_func.none,
-})
-
 
 fixed_ssd_config = yrm13_config.copy({
     'name': 'fixed_ssd',
@@ -508,6 +503,12 @@ fixed_ssd_config = yrm13_config.copy({
         'pred_aspect_ratios': [ [[1, sqrt(2), 1/sqrt(2), sqrt(3), 1/sqrt(3)][:n], [1]] for n in [3, 5, 5, 5, 3, 3] ],
     }),
 
+})
+
+yrm18_config = yrm13_config.copy({
+    'name': 'yrm18',
+    'mask_proto_coeff_activation': activation_func.none,
+    'backbone': fixed_ssd_config.backbone,
 })
 
 fixed_cluster_config = yrm13_config.copy({
