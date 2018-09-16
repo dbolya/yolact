@@ -36,7 +36,7 @@ echo "Downloading MSCOCO val images ..."
 curl -LO http://images.cocodataset.org/zips/val2017.zip
 
 cd ../
-if [ ! -d annotations]
+if [ ! -d annotations ]
   then
     mkdir -p ./annotations
 fi

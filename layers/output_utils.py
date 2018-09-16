@@ -161,7 +161,11 @@ def undo_image_transformation(img, w, h):
 
 
 def display_lincomb(proto_data, masks):
-    for jdx in range(1):
+    out_masks = torch.matmul(proto_data, masks.t())
+    # out_masks = cfg.mask_proto_mask_activation(out_masks)
+
+    for kdx in range(5):
+        jdx = kdx + 0
         import matplotlib.pyplot as plt
         coeffs = masks[jdx, :].cpu().numpy()
         idx = np.argsort(-np.abs(coeffs))
@@ -169,7 +173,7 @@ def display_lincomb(proto_data, masks):
         # plt.show()
         
         coeffs_sort = coeffs[idx]
-        arr_h, arr_w = (8, 8)
+        arr_h, arr_w = (6,6)
         proto_h, proto_w, _ = proto_data.size()
         arr_img = np.zeros([proto_h*arr_h, proto_w*arr_w])
         arr_run = np.zeros([proto_h*arr_h, proto_w*arr_w])
@@ -188,7 +192,7 @@ def display_lincomb(proto_data, masks):
                 if cfg.mask_proto_mask_activation == activation_func.sigmoid:
                     running_total_nonlin = (1/(1+np.exp(-running_total_nonlin)))
 
-                arr_img[y*proto_h:(y+1)*proto_h, x*proto_w:(x+1)*proto_w] = proto_data[:, :, idx[i]].cpu().numpy() * coeffs_sort[i]
+                arr_img[y*proto_h:(y+1)*proto_h, x*proto_w:(x+1)*proto_w] = (proto_data[:, :, idx[i]] / torch.max(proto_data[:, :, idx[i]])).cpu().numpy() * coeffs_sort[i]
                 arr_run[y*proto_h:(y+1)*proto_h, x*proto_w:(x+1)*proto_w] = (running_total_nonlin > 0.5).astype(np.float)
         plt.imshow(arr_img)
         plt.show()
@@ -196,3 +200,5 @@ def display_lincomb(proto_data, masks):
         plt.show()
         # plt.imshow(test)
         # plt.show()
+        plt.imshow(out_masks[:, :, jdx].cpu().numpy())
+        plt.show()
