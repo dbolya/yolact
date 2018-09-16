@@ -52,9 +52,12 @@ class PredictionModule(nn.Module):
             self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=True)
             self.bn = nn.BatchNorm2d(out_channels)
 
-        self.bbox_layer = nn.Conv2d(out_channels, self.num_priors * 4,                kernel_size=3, padding=1)
-        self.conf_layer = nn.Conv2d(out_channels, self.num_priors * self.num_classes, kernel_size=3, padding=1)
-        self.mask_layer = nn.Conv2d(out_channels, self.num_priors * self.mask_dim,    kernel_size=3, padding=1)
+        self.bbox_layer = nn.Conv2d(out_channels, self.num_priors * 4,                 kernel_size=3, padding=1)
+        self.conf_layer = nn.Conv2d(out_channels, self.num_priors * self.num_classes,  kernel_size=3, padding=1)
+        self.mask_layer = nn.Conv2d(out_channels, self.num_priors * self.mask_dim,     kernel_size=3, padding=1)
+        
+        if cfg.mask_type == mask_type.lincomb and cfg.mask_proto_coeff_gate:
+            self.gate_layer = nn.Conv2d(out_channels, self.num_priors * self.mask_dim, kernel_size=3, padding=1)
 
         self.aspect_ratios = aspect_ratios
         self.scales = scales
@@ -98,11 +101,14 @@ class PredictionModule(nn.Module):
             bbox[:, :, 0] /= conv_w
             bbox[:, :, 1] /= conv_h
 
-
         if cfg.mask_type == mask_type.direct:
             mask = torch.sigmoid(mask)
         elif cfg.mask_type == mask_type.lincomb:
             mask = cfg.mask_proto_coeff_activation(mask)
+
+            if cfg.mask_proto_coeff_gate:
+                gate = self.gate_layer(x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, self.mask_dim)
+                mask = mask * torch.sigmoid(gate)
         
         priors = self.make_priors(conv_h, conv_w)
 

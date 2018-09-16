@@ -67,12 +67,12 @@ def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear', vi
     
     # Actually extract everything from dets now
     classes = dets[:, 0].int()
-    boxes = dets[:, 2:6]
-    x1, x2 = sanitize_coordinates(boxes[:, 0], boxes[:, 2], b_w, cast=True)
-    y1, y2 = sanitize_coordinates(boxes[:, 1], boxes[:, 3], b_h, cast=True)
-    boxes = torch.stack((x1, y1, x2, y2), dim=1)
-    scores = dets[:, 1]
-    masks = dets[:, 6:]
+    boxes   = dets[:, 2:6]
+    x1, x2  = sanitize_coordinates(boxes[:, 0], boxes[:, 2], b_w, cast=True)
+    y1, y2  = sanitize_coordinates(boxes[:, 1], boxes[:, 3], b_h, cast=True)
+    boxes   = torch.stack((x1, y1, x2, y2), dim=1)
+    scores  = dets[:, 1]
+    masks   = dets[:, 6:]
 
     if cfg.mask_type == mask_type.lincomb:
         # At this points masks is only the coefficients

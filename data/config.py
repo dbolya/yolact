@@ -157,6 +157,8 @@ mask_type = Config({
     #                                 This should be a numpy.dump file with shape [numgrids, h, w]
     #                                 where h and w are w.r.t. the mask_proto_src convout.
     #   - mask_proto_use_grid (bool): Whether to add extra grid features to the proto_net input.
+    #   - mask_proto_coeff_gate (bool): Add an extra set of sigmoided coefficients that is multiplied
+    #                                   into the predicted coefficients in order to "gate" them.
     'lincomb': 1,
 })
 
@@ -193,6 +195,7 @@ coco_base_config = Config({
     'mask_proto_normalize_mask_loss': False,
     'mask_proto_grid_file': 'data/grid.npy',
     'mask_proto_use_grid':  False,
+    'mask_proto_coeff_gate': False,
 
     # During training, to match detections with gt, first compute the maximum gt IoU for each prior.
     # Then, any of those priors whose maximum overlap is over the positive threshold, mark as positive.
@@ -509,6 +512,11 @@ yrm18_config = yrm13_config.copy({
     'name': 'yrm18',
     'mask_proto_coeff_activation': activation_func.none,
     'backbone': fixed_ssd_config.backbone,
+})
+
+yrm19_config = yrm18_config.copy({
+    'name': 'yrm19',
+    'mask_proto_coeff_gate': True,
 })
 
 fixed_cluster_config = yrm13_config.copy({
