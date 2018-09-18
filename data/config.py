@@ -453,6 +453,16 @@ yrm13_35k_config = yrm13_config.copy({
     'dataset': coco2017_dataset,
 })
 
+# This config is to emulate the DSSD SSD513 training parameters for an exact comparison.
+yrm13_dssd_35k_config = yrm13_config.copy({
+    'name': 'yrm13_dssd_35k',
+    'dataset': coco2017_dataset,
+
+    # Make sure the batch size is 20 for this
+    'lr_steps': (160000, 220000, 240000),
+    'max_iter': 240000,
+})
+
 yrm14_config = yolact_resnet101_maskrcnn_1_config.copy({
     'name': 'yrm14',
     'mask_proto_src': 3,
