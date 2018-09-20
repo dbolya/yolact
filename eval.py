@@ -84,9 +84,11 @@ def parse_args(argv=None):
                         help='If the config uses lincomb masks, output a visualization of how those masks are created.')
     parser.add_argument('--benchmark', default=False, dest='benchmark', action='store_true',
                         help='Equivalent to running display mode but without displaying an image.')
+    parser.add_argument('--no_sort', default=False, dest='no_sort', action='store_true',
+                        help='Do not sort images by hashed image ID.')
     
     parser.set_defaults(no_bar=False, display=False, resume=False, output_coco_json=False, output_web_json=False, shuffle=False,
-                        benchmark=False)
+                        benchmark=False, no_sort=False, no_hash=False)
 
     global args
     args = parser.parse_args(argv)
@@ -494,7 +496,7 @@ def evaluate(net:Yolact, dataset, train_mode=False):
     
     if args.shuffle:
         random.shuffle(dataset_indices)
-    else:
+    elif not args.no_sort:
         # Do a deterministic shuffle based on the image ids
         #
         # I do this because on python 3.5 dictionary key order is *random*, while in 3.6 it's

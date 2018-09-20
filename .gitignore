@@ -137,3 +137,4 @@ data/coco/annotations/
 ap_data.pkl
 results/
 logs/
+scripts/aws/
