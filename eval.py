@@ -128,12 +128,12 @@ def prep_display(dets_out, img, gt, gt_masks, h, w):
             cv2.rectangle(img_numpy, (x1, y1), (x2, y2), color, 2)
 
         if args.display_masks:
-            mask = np.tile(masks[j].reshape(h, w, 1), (1, 1, 3)).astype(np.int32)
-            color_np = np.array(color[:3]).reshape(1, 1, 3)
+            mask = np.tile(masks[j].reshape(h, w, 1), (1, 1, 3)).astype(np.float32)
+            color_np = np.array(color[:3], dtype=np.float32).reshape(1, 1, 3) / 255.0
             color_np = np.tile(color_np, (h, w, 1))
             mask_color = mask * color_np
 
-            mask_alpha = 0.0015
+            mask_alpha = 0.35
 
             # Blend image and mask
             image_crop = img_numpy * mask
