@@ -86,6 +86,8 @@ def parse_args(argv=None):
                         help='Equivalent to running display mode but without displaying an image.')
     parser.add_argument('--no_sort', default=False, dest='no_sort', action='store_true',
                         help='Do not sort images by hashed image ID.')
+    parser.add_argument('--seed', default=None, type=int,
+                        help='The seed to pass into random.seed. Note: this is only really for the shuffle and does not (I think) affect cuda stuff.')
     
     parser.set_defaults(no_bar=False, display=False, resume=False, output_coco_json=False, output_web_json=False, shuffle=False,
                         benchmark=False, no_sort=False, no_hash=False)
@@ -95,16 +97,15 @@ def parse_args(argv=None):
 
     if args.output_web_json:
         args.output_coco_json = True
+    
+    if args.seed is not None:
+        random.seed(args.seed)
 
 iou_thresholds = [x / 100 for x in range(50, 100, 5)]
 coco_cats = [] # Call prep_coco_cats to fill this
 coco_cats_inv = {}
 
 def prep_display(dets_out, img, gt, gt_masks, h, w):
-    gt_bboxes = torch.FloatTensor(gt[:, :4]).cpu()
-    gt_bboxes[:, [0, 2]] *= w
-    gt_bboxes[:, [1, 3]] *= h
-    
     img_numpy = undo_image_transformation(img, w, h)
     
     with timer.env('Postprocess'):
