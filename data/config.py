@@ -529,6 +529,11 @@ yrm19_config = yrm18_config.copy({
     'mask_proto_coeff_gate': True,
 })
 
+yrm20_config = fixed_ssd_config.copy({
+    'name': 'yrm20',
+    'use_prediction_module': True,
+})
+
 fixed_cluster_config = yrm13_config.copy({
     'name': 'fixed_cluster',
 
