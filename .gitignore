@@ -138,3 +138,5 @@ ap_data.pkl
 results/
 logs/
 scripts/aws/
+scripts/gt.npy
+scripts/proto.npy
