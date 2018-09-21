@@ -159,6 +159,9 @@ mask_type = Config({
     #   - mask_proto_use_grid (bool): Whether to add extra grid features to the proto_net input.
     #   - mask_proto_coeff_gate (bool): Add an extra set of sigmoided coefficients that is multiplied
     #                                   into the predicted coefficients in order to "gate" them.
+    #   - mask_proto_replace_deconv_with_upsample (bool): Replaces all deconvs using upsample with
+    #                                   a scale factor of the given kernel size, followed by a
+    #                                   kernel size 3 padding 1 conv layer.
     'lincomb': 1,
 })
 
@@ -196,6 +199,7 @@ coco_base_config = Config({
     'mask_proto_grid_file': 'data/grid.npy',
     'mask_proto_use_grid':  False,
     'mask_proto_coeff_gate': False,
+    'mask_proto_replace_deconv_with_upsample': False,
 
     # During training, to match detections with gt, first compute the maximum gt IoU for each prior.
     # Then, any of those priors whose maximum overlap is over the positive threshold, mark as positive.
@@ -534,13 +538,9 @@ yrm20_config = fixed_ssd_config.copy({
     'use_prediction_module': True,
 })
 
-fixed_cluster_config = yrm13_config.copy({
-    'name': 'fixed_cluster',
-
-    'backbone': fixed_ssd_config.backbone.copy({
-        'pred_aspect_ratios': [ [[1, 0.7, 0.5, 0.3, 1.6][:n], [1]] for n in [3, 5, 5, 5, 3, 3] ],
-    }),
-
+yrm21_config = fixed_ssd_config.copy({
+    'name': 'yrm21',
+    'mask_proto_replace_deconv_with_upsample': True,
 })
 
 yolact_vgg16_config = ssd550_config.copy({

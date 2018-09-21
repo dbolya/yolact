@@ -191,7 +191,17 @@ class Yolact(nn.Module):
                 if kernel_size > 0:
                     layer = nn.Conv2d(in_channels, layer_cfg[0], kernel_size, **layer_cfg[2])
                 else:
-                    layer = nn.ConvTranspose2d(in_channels, layer_cfg[0], -kernel_size, **layer_cfg[2])
+                    if cfg.mask_proto_replace_deconv_with_upsample:
+                        # Hard coded this so that the interface for upsample is the same as for deconv
+                        layer_cfg[2]['padding'] = 1
+                        layer_cfg[2]['kernel_size'] = 3
+
+                        layer = nn.Sequential(
+                            nn.Upsample(scale_factor=-kernel_size, mode='bilinear', align_corners=False),
+                            nn.ConvTranspose2d(in_channels, layer_cfg[0], **layer_cfg[2])
+                        )
+                    else:
+                        layer = nn.ConvTranspose2d(in_channels, layer_cfg[0], -kernel_size, **layer_cfg[2])
                 
                 in_channels = layer_cfg[0]
                 return [layer, nn.ReLU(inplace=True)]
