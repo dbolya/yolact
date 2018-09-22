@@ -162,6 +162,9 @@ mask_type = Config({
     #   - mask_proto_replace_deconv_with_upsample (bool): Replaces all deconvs using upsample with
     #                                   a scale factor of the given kernel size, followed by a
     #                                   kernel size 3 padding 1 conv layer.
+    #   - mask_proto_least_squares_loss (bool): I'll update this with a description if this actually
+    #                                           works, but for now see the comment in multibox_loss.py
+    #                                           for details, because I'm too lazy ATM.
     'lincomb': 1,
 })
 
@@ -200,6 +203,7 @@ coco_base_config = Config({
     'mask_proto_use_grid':  False,
     'mask_proto_coeff_gate': False,
     'mask_proto_replace_deconv_with_upsample': False,
+    'mask_proto_least_squares_loss': False,
 
     # During training, to match detections with gt, first compute the maximum gt IoU for each prior.
     # Then, any of those priors whose maximum overlap is over the positive threshold, mark as positive.
@@ -541,6 +545,13 @@ yrm20_config = fixed_ssd_config.copy({
 yrm21_config = fixed_ssd_config.copy({
     'name': 'yrm21',
     'mask_proto_replace_deconv_with_upsample': True,
+})
+
+yrm22_config = yrm21_config.copy({
+    'name': 'yrm22',
+    'mask_proto_coeff_activation': activation_func.none,
+    'mask_proto_mask_activation':  activation_func.none,
+    'mask_proto_least_squares_loss': True,
 })
 
 yolact_vgg16_config = ssd550_config.copy({

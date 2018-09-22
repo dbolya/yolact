@@ -49,6 +49,10 @@ class MultiBoxLoss(nn.Module):
 
         if cfg.mask_proto_normalize_mask_loss:
             self.mask_alpha *= 30
+        
+        if cfg.mask_proto_least_squares_loss:
+            self.ls_proto_alpha = 3 * 10
+            self.ls_coeff_alpha = 3 * 1
 
         # If you output a proto mask with this area, your l1 loss will be l1_alpha
         # Note that the area is relative (so 1 would be the entire image)
@@ -231,7 +235,7 @@ class MultiBoxLoss(nn.Module):
                 
                 if cfg.mask_proto_binarize_downsampled_gt:
                     downsampled_masks = downsampled_masks.gt(0.5).float()
-            
+
             cur_pos = pos[idx]
             pos_idx_t = idx_t[idx, cur_pos]
             
@@ -251,24 +255,53 @@ class MultiBoxLoss(nn.Module):
                 pos_idx_t  = pos_idx_t[select]
 
             num_pos = proto_coef.size(0)
+            mask_t = downsampled_masks[:, :, pos_idx_t]
+
+            if cfg.mask_proto_least_squares_loss:
+                # Instead of computing the loss as a downstream task, i.e. with |Proto * coeffs - gt|,
+                # Compute it directly from the least squares solution x in A x = b.
+                # I.e. compute the loss as |x - coeffs| + |Proto * x - gt|
+                #
+                # Remember to use no coeff / mask nonlinearity for this option.
+
+                # Don't compute gradients because backprop through singular svd(A.T * A) is unstable.
+                with torch.no_grad():
+                    # Size: [70*70, num_dets]
+                    b = downsampled_masks.view(-1, downsampled_masks.size(-1))
+                    # Size: [70*70, mask_dim]
+                    A = proto_masks.view(-1, proto_data.size(-1))
+
+                    # Some fancy math stuffs to calculate the inverse of a singular A.T * A
+                    U, s, V = torch.svd(A.t() @ A)
+                    ATA_inv = U / s @ V.t()
+                    
+                    # x is the least squares solution to A x = b (Size: [256, num_dets])
+                    x = (ATA_inv @ A.t()) @ b
+
+                x_pos  = x[:, pos_idx_t]
+                
+                coeff_loss = F.smooth_l1_loss(proto_coef.t(), x_pos, reduction='sum')
+                proto_loss = F.smooth_l1_loss(proto_masks @ x_pos, mask_t, reduction='sum')
+
+                loss_m += self.ls_coeff_alpha * coeff_loss + self.ls_proto_alpha * proto_loss
+
+                continue              
 
             # Size: [mask_h, mask_w, num_pos]
             pred_masks = torch.matmul(proto_masks, proto_coef.t())
             pred_masks = cfg.mask_proto_mask_activation(pred_masks)
 
-            # Take care of all the bad behavior that can be caused by out of bounds coordinates
-            x1, x2 = sanitize_coordinates(pos_bboxes[:, 0], pos_bboxes[:, 2], mask_w)
-            y1, y2 = sanitize_coordinates(pos_bboxes[:, 1], pos_bboxes[:, 3], mask_h)
-
-            # "Crop" predicted masks by zeroing out everything not in the predicted bbox
-            # TODO: Write a cuda implementation of this to get rid of the loop
             if cfg.mask_proto_crop:
+                # Take care of all the bad behavior that can be caused by out of bounds coordinates
+                x1, x2 = sanitize_coordinates(pos_bboxes[:, 0], pos_bboxes[:, 2], mask_w)
+                y1, y2 = sanitize_coordinates(pos_bboxes[:, 1], pos_bboxes[:, 3], mask_h)
+
+                # "Crop" predicted masks by zeroing out everything not in the predicted bbox
+                # TODO: Write a cuda implementation of this to get rid of the loop
                 crop_mask = torch.zeros(mask_h, mask_w, num_pos)
                 for jdx in range(num_pos):
                     crop_mask[y1[jdx]:y2[jdx], x1[jdx]:x2[jdx], jdx] = 1
                 pred_masks = pred_masks * crop_mask
-
-            mask_t = downsampled_masks[:, :, pos_idx_t]
             
             if cfg.mask_proto_mask_activation == activation_func.sigmoid:
                 pre_loss = F.binary_cross_entropy(pred_masks, mask_t, reduction='none')
