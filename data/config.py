@@ -554,6 +554,11 @@ yrm22_config = yrm21_config.copy({
     'mask_proto_least_squares_loss': True,
 })
 
+yrm16_3_config = fixed_ssd_config.copy({
+    'name': 'yrm16_3',
+    'mask_proto_normalize_mask_loss': True,
+})
+
 yolact_vgg16_config = ssd550_config.copy({
     'name': 'yolact_vgg16',
 
