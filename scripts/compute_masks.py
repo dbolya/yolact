@@ -45,7 +45,8 @@ def sigmoid(x):
 	return 1 / (1 + np.exp(-x))
 
 img_fmt = '../data/coco/images/%012d.jpg'
-img_id  = 327872
+with open('info.txt', 'r') as f:
+	img_id = int(f.read())
 
 img = plt.imread(img_fmt % img_id).astype(np.float32)
 h, w, _ = img.shape
@@ -67,16 +68,26 @@ x = np.linalg.lstsq(ls_A, ls_b, rcond=None)[0]
 approximated_masks = (np.matmul(proto_masks, x) > 0.5).astype(np.float32)
 
 num_gt = approximated_masks.shape[2]
-ious = mask_iou(torch.Tensor(approximated_masks.reshape(-1, num_gt).transpose()),
-				torch.Tensor(gt_masks.reshape(-1, num_gt).transpose()))
+ious = mask_iou(torch.Tensor(approximated_masks.reshape(-1, num_gt).T),
+				torch.Tensor(gt_masks.reshape(-1, num_gt).T))
 
 ious = [int(ious[i, i].item() * 100) for i in range(num_gt)]
 ious.sort(key=lambda x: -x)
 
 print(ious)
 
+gt_img = img.copy()
+
+for i in range(num_gt):
+	gt_img = paint_mask(gt_img, gt_masks[:, :, i], COLORS[i % len(COLORS)])
+	
+plt.imshow(gt_img / 255)
+plt.title('GT')
+plt.show()
+
 for i in range(num_gt):
 	img = paint_mask(img, approximated_masks[:, :, i], COLORS[i % len(COLORS)])
 
 plt.imshow(img / 255)
+plt.title('Approximated')
 plt.show()

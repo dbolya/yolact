@@ -88,9 +88,11 @@ def parse_args(argv=None):
                         help='Do not sort images by hashed image ID.')
     parser.add_argument('--seed', default=None, type=int,
                         help='The seed to pass into random.seed. Note: this is only really for the shuffle and does not (I think) affect cuda stuff.')
-    
+    parser.add_argument('--mask_proto_debug', default=False, dest='mask_proto_debug', action='store_true',
+                        help='Outputs stuff for scripts/compute_mask.py.')
+
     parser.set_defaults(no_bar=False, display=False, resume=False, output_coco_json=False, output_web_json=False, shuffle=False,
-                        benchmark=False, no_sort=False, no_hash=False)
+                        benchmark=False, no_sort=False, no_hash=False, mask_proto_debug=False)
 
     global args
     args = parser.parse_args(argv)
@@ -475,6 +477,7 @@ def badhash(x):
 
 def evaluate(net:Yolact, dataset, train_mode=False):
     net.detect.cross_class_nms = args.cross_class_nms
+    cfg.mask_proto_debug = args.mask_proto_debug
 
     frame_times = MovingAverage()
     dataset_size = len(dataset) if args.max_images < 0 else min(args.max_images, len(dataset))
@@ -518,6 +521,12 @@ def evaluate(net:Yolact, dataset, train_mode=False):
 
             with timer.env('Load Data'):
                 img, gt, gt_masks, h, w, crowd = dataset.pull_item(image_idx)
+
+                # Test flag, do not upvote
+                if cfg.mask_proto_debug:
+                    with open('scripts/info.txt', 'w') as f:
+                        f.write(str(dataset.ids[image_idx]))
+                    np.save('scripts/gt.npy', gt_masks)
 
                 batch = Variable(img.unsqueeze(0))
                 if args.cuda:

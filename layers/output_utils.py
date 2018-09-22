@@ -78,6 +78,10 @@ def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear', vi
         # At this points masks is only the coefficients
         proto_data = det_output['proto_data'][batch_idx]
         
+        # Test flag, do not upvote
+        if cfg.mask_proto_debug:
+            np.save('scripts/proto.npy', proto_data.cpu().numpy())
+        
         if visualize_lincomb:
             display_lincomb(proto_data, masks)
 
