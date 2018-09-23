@@ -54,6 +54,10 @@ class PredictionModule(nn.Module):
 
         self.bbox_layer = nn.Conv2d(out_channels, self.num_priors * 4,                 kernel_size=3, padding=1)
         self.conf_layer = nn.Conv2d(out_channels, self.num_priors * self.num_classes,  kernel_size=3, padding=1)
+
+        if cfg.mask_extra_layer:
+            self.extra_mask_layer = nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1)
+
         self.mask_layer = nn.Conv2d(out_channels, self.num_priors * self.mask_dim,     kernel_size=3, padding=1)
         
         if cfg.mask_type == mask_type.lincomb and cfg.mask_proto_coeff_gate:
@@ -93,7 +97,13 @@ class PredictionModule(nn.Module):
 
         bbox = self.bbox_layer(x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, 4)
         conf = self.conf_layer(x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, self.num_classes)
-        mask = self.mask_layer(x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, self.mask_dim)
+        
+        if cfg.mask_extra_layer:
+            extra = self.extra_mask_layer(x)
+            extra = F.relu(extra, inplace=True)
+            mask  = self.mask_layer(extra).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, self.mask_dim)
+        else:
+            mask = self.mask_layer(x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, self.mask_dim)
         
         # See box_utils.decode for an explaination of this
         if cfg.use_yolo_regressors:

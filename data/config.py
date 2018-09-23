@@ -205,6 +205,9 @@ coco_base_config = Config({
     'mask_proto_replace_deconv_with_upsample': False,
     'mask_proto_least_squares_loss': False,
 
+    # Add an extra layer to the mask coefficient predictor
+    'mask_extra_layer': False,
+
     # During training, to match detections with gt, first compute the maximum gt IoU for each prior.
     # Then, any of those priors whose maximum overlap is over the positive threshold, mark as positive.
     # For any priors whose maximum is less than the negative iou threshold, mark them as negative.
@@ -557,6 +560,11 @@ yrm22_config = yrm21_config.copy({
 yrm16_3_config = yrm21_config.copy({
     'name': 'yrm16_3',
     'mask_proto_normalize_mask_loss': True,
+})
+
+yrm23_config = yrm21_config.copy({
+    'name': 'yrm23',
+    'mask_extra_layer': True,
 })
 
 yolact_vgg16_config = ssd550_config.copy({
