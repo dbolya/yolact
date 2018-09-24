@@ -39,20 +39,12 @@ class MultiBoxLoss(nn.Module):
         self.neg_threshold = neg_threshold
         self.negpos_ratio = negpos_ratio
         
-        self.mask_dim = cfg.mask_dim
-        self.use_gt_bboxes = cfg.use_gt_bboxes
-        self.train_masks = cfg.train_masks
-        
         # Extra loss coefficients to get all the losses to be in a similar range
         self.mask_alpha = 0.2 / cfg.mask_dim
         self.bbox_alpha = 5 if cfg.use_yolo_regressors else 1
 
         if cfg.mask_proto_normalize_mask_loss:
             self.mask_alpha *= 30
-        
-        if cfg.mask_proto_least_squares_loss:
-            self.ls_proto_alpha = 3 * 10
-            self.ls_coeff_alpha = 3 * 1
 
         # If you output a proto mask with this area, your l1 loss will be l1_alpha
         # Note that the area is relative (so 1 would be the entire image)
@@ -112,23 +104,26 @@ class MultiBoxLoss(nn.Module):
         pos = conf_t > 0
         num_pos = pos.sum(dim=1, keepdim=True)
 
-        # Localization Loss (Smooth L1)
         # Shape: [batch,num_priors,4]
         pos_idx = pos.unsqueeze(pos.dim()).expand_as(loc_data)
-        loc_p = loc_data[pos_idx].view(-1, 4)
-        loc_t = loc_t[pos_idx].view(-1, 4)
-        loss_l = F.smooth_l1_loss(loc_p, loc_t, reduction='sum') * self.bbox_alpha
+        
+        # Localization Loss (Smooth L1)
+        loss_l = 0
+        if cfg.train_boxes:
+            loc_p = loc_data[pos_idx].view(-1, 4)
+            loc_t = loc_t[pos_idx].view(-1, 4)
+            loss_l = F.smooth_l1_loss(loc_p, loc_t, reduction='sum') * self.bbox_alpha
 
         # Mask Loss
         loss_p = 0 # Proto loss
-        if self.train_masks:
+        if cfg.train_masks:
             if cfg.mask_type == mask_type.direct:
-                if self.use_gt_bboxes:
+                if cfg.use_gt_bboxes:
                     pos_masks = []
                     for idx in range(num):
                         pos_masks.append(masks[idx][idx_t[idx, pos[idx]]])
                     masks_t = torch.cat(pos_masks, 0)
-                    masks_p = mask_data[pos, :].view(-1, self.mask_dim)
+                    masks_p = mask_data[pos, :].view(-1, cfg.mask_dim)
                     loss_m = F.binary_cross_entropy(masks_p, masks_t, reduction='sum') * self.mask_alpha
                 else:
                     loss_m = self.direct_mask_loss(pos_idx, idx_t, loc_data, mask_data, priors, masks)
@@ -255,37 +250,7 @@ class MultiBoxLoss(nn.Module):
                 pos_idx_t  = pos_idx_t[select]
 
             num_pos = proto_coef.size(0)
-            mask_t = downsampled_masks[:, :, pos_idx_t]
-
-            if cfg.mask_proto_least_squares_loss:
-                # Instead of computing the loss as a downstream task, i.e. with |Proto * coeffs - gt|,
-                # Compute it directly from the least squares solution x in A x = b.
-                # I.e. compute the loss as |x - coeffs| + |Proto * x - gt|
-                #
-                # Remember to use no coeff / mask nonlinearity for this option.
-
-                # Don't compute gradients because backprop through singular svd(A.T * A) is unstable.
-                with torch.no_grad():
-                    # Size: [70*70, num_dets]
-                    b = downsampled_masks.view(-1, downsampled_masks.size(-1))
-                    # Size: [70*70, mask_dim]
-                    A = proto_masks.view(-1, proto_data.size(-1))
-
-                    # Some fancy math stuffs to calculate the inverse of a singular A.T * A
-                    U, s, V = torch.svd(A.t() @ A)
-                    ATA_inv = U / s @ V.t()
-                    
-                    # x is the least squares solution to A x = b (Size: [256, num_dets])
-                    x = (ATA_inv @ A.t()) @ b
-
-                x_pos  = x[:, pos_idx_t]
-                
-                coeff_loss = F.smooth_l1_loss(proto_coef.t(), x_pos, reduction='sum')
-                proto_loss = F.smooth_l1_loss(proto_masks @ x_pos, mask_t, reduction='sum')
-
-                loss_m += self.ls_coeff_alpha * coeff_loss + self.ls_proto_alpha * proto_loss
-
-                continue              
+            mask_t = downsampled_masks[:, :, pos_idx_t]          
 
             # Size: [mask_h, mask_w, num_pos]
             pred_masks = torch.matmul(proto_masks, proto_coef.t())

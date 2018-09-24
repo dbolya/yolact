@@ -162,9 +162,6 @@ mask_type = Config({
     #   - mask_proto_replace_deconv_with_upsample (bool): Replaces all deconvs using upsample with
     #                                   a scale factor of the given kernel size, followed by a
     #                                   kernel size 3 padding 1 conv layer.
-    #   - mask_proto_least_squares_loss (bool): I'll update this with a description if this actually
-    #                                           works, but for now see the comment in multibox_loss.py
-    #                                           for details, because I'm too lazy ATM.
     'lincomb': 1,
 })
 
@@ -203,7 +200,6 @@ coco_base_config = Config({
     'mask_proto_use_grid':  False,
     'mask_proto_coeff_gate': False,
     'mask_proto_replace_deconv_with_upsample': False,
-    'mask_proto_least_squares_loss': False,
 
     # Add an extra layer to the mask coefficient predictor
     'mask_extra_layer': False,
@@ -225,8 +221,9 @@ coco_base_config = Config({
     # Whether or not to do post processing on the cpu at test time
     'force_cpu_nms': True,
 
-    # Whether or not to tie the mask loss to 0
+    # Whether or not to tie the mask loss / box loss to 0
     'train_masks': True,
+    'train_boxes': True,
     # If enabled, the gt masks will be cropped using the gt bboxes instead of the predicted ones.
     # This speeds up training time considerably but results in much worse mAP at test time.
     'use_gt_bboxes': False,
@@ -552,9 +549,7 @@ yrm21_config = fixed_ssd_config.copy({
 
 yrm22_config = yrm21_config.copy({
     'name': 'yrm22',
-    'mask_proto_coeff_activation': activation_func.none,
-    'mask_proto_mask_activation':  activation_func.none,
-    'mask_proto_least_squares_loss': True,
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(256, -2, {})] * 2 + [(256, 1, {})],
 })
 
 yrm16_3_config = yrm21_config.copy({
@@ -565,6 +560,11 @@ yrm16_3_config = yrm21_config.copy({
 yrm23_config = yrm21_config.copy({
     'name': 'yrm23',
     'mask_extra_layer': True,
+})
+
+yrm24_config = yrm21_config.copy({
+    'name': 'yrm24',
+    'train_boxes': False,
 })
 
 yolact_vgg16_config = ssd550_config.copy({
