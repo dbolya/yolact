@@ -208,6 +208,7 @@ class Yolact(nn.Module):
 
                         layer = nn.Sequential(
                             nn.Upsample(scale_factor=-kernel_size, mode='bilinear', align_corners=False),
+                            nn.Conv2d(in_channels, layer_cfg[0], **layer_cfg[2]) if cfg.temp_fix else
                             nn.ConvTranspose2d(in_channels, layer_cfg[0], **layer_cfg[2])
                         )
                     else:

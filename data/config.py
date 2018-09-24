@@ -200,6 +200,7 @@ coco_base_config = Config({
     'mask_proto_use_grid':  False,
     'mask_proto_coeff_gate': False,
     'mask_proto_replace_deconv_with_upsample': False,
+    'temp_fix': False,
 
     # Add an extra layer to the mask coefficient predictor
     'mask_extra_layer': False,
@@ -549,6 +550,7 @@ yrm21_config = fixed_ssd_config.copy({
 
 yrm22_config = yrm21_config.copy({
     'name': 'yrm22',
+    'temp_fix': True,
     'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(256, -2, {})] * 2 + [(256, 1, {})],
 })
 
@@ -582,7 +584,7 @@ yolact_vgg16_config = ssd550_config.copy({
 })
 
 # Default config
-cfg = yrm14_config.copy()
+cfg = yrm21_config.copy()
 
 def set_cfg(config_name:str):
     """ Sets the active config. Works even if cfg is already imported! """
