@@ -104,11 +104,16 @@ def train():
     if args.resume:
         if args.resume == 'interrupt':
             args.resume = SavePath.get_interrupt(args.save_folder)
-        print('Resuming training, loading {}...'.format(args.resume))
-        yolact_net.load_weights(args.resume)
+        elif args.resume == 'latest':
+            args.resume = SavePath.get_latest(args.save_folder, cfg.name)
+        
+        # get_latest and get_interrupt can return None
+        if args.resume:
+            print('Resuming training, loading {}...'.format(args.resume))
+            yolact_net.load_weights(args.resume)
 
-        if args.start_iter == -1:
-            args.start_iter = SavePath.from_str(args.resume).iteration
+            if args.start_iter == -1:
+                args.start_iter = SavePath.from_str(args.resume).iteration
     else:
         print('Initializing weights...')
         yolact_net.init_weights(backbone_path=args.save_folder + cfg.backbone.path)
@@ -128,7 +133,7 @@ def train():
     # loss counters
     loc_loss = 0
     conf_loss = 0
-    iteration = args.start_iter
+    iteration = max(args.start_iter, 0)
     last_time = time.time()
 
     epoch_size = len(dataset) // args.batch_size
