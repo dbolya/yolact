@@ -634,13 +634,16 @@ def print_maps(all_maps):
 if __name__ == '__main__':
     parse_args()
 
-    if args.trained_model == 'interrupt':
-        args.trained_model = SavePath.get_interrupt('weights/')
-    model_path = SavePath.from_str(args.trained_model)
-
     if args.config is not None:
         set_cfg(args.config)
-    else:
+
+    if args.trained_model == 'interrupt':
+        args.trained_model = SavePath.get_interrupt('weights/')
+    elif args.trained_model == 'latest':
+        args.trained_model = SavePath.get_latest('weights/', cfg.name)
+    model_path = SavePath.from_str(args.trained_model)
+
+    if args.config is None:
         # TODO: Bad practice? Probably want to do a name lookup instead.
         args.config = model_path.model_name + '_config'
         print('Config not specified. Loading config %s instead.\n' % args.config)
