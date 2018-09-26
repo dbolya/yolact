@@ -43,7 +43,7 @@ class MultiBoxLoss(nn.Module):
         self.mask_alpha = 0.2 / cfg.mask_dim
         self.bbox_alpha = 5 if cfg.use_yolo_regressors else 1
 
-        if cfg.mask_proto_normalize_mask_loss:
+        if cfg.mask_proto_normalize_mask_loss_by_sqrt_area:
             self.mask_alpha *= 30
 
         # If you output a proto mask with this area, your l1 loss will be l1_alpha
@@ -217,7 +217,7 @@ class MultiBoxLoss(nn.Module):
         return loss_m
     
 
-    def lincomb_mask_loss(self, pos, idx_t, loc_data, mask_data, priors, proto_data, masks):
+    def lincomb_mask_loss(self, pos, idx_t, loc_data, mask_data, priors, proto_data, masks, interpolation_mode='bilinear'):
         mask_h = proto_data.size(1)
         mask_w = proto_data.size(2)
 
@@ -225,11 +225,31 @@ class MultiBoxLoss(nn.Module):
 
         for idx in range(mask_data.size(0)):
             with torch.no_grad():
-                downsampled_masks = F.adaptive_avg_pool2d(masks[idx], (mask_h, mask_w))
+                downsampled_masks = F.interpolate(masks[idx].unsqueeze(0), (mask_h, mask_w),
+                                                  mode=interpolation_mode, align_corners=False).squeeze(0)
                 downsampled_masks = downsampled_masks.permute(1, 2, 0).contiguous()
-                
+
                 if cfg.mask_proto_binarize_downsampled_gt:
                     downsampled_masks = downsampled_masks.gt(0.5).float()
+
+                # Get rid of gt masks that are so small they get downsampled away
+                very_small_masks = (downsampled_masks.sum(dim=(0,1)) <= 0.0001)
+                for i in range(very_small_masks.size(0)):
+                    if very_small_masks[i]:
+                        pos[idx][idx_t[idx] == i] = 0
+
+                if cfg.mask_proto_reweight_mask_loss:
+                    # Ensure that the gt is binary
+                    if not cfg.mask_proto_binarize_downsampled_gt:
+                        bin_gt = downsampled_masks.gt(0.5).float()
+                    else:
+                        bin_gt = downsampled_masks
+
+                    gt_foreground_norm = bin_gt     / (torch.sum(bin_gt,   dim=(0,1), keepdim=True) + 0.0001)
+                    gt_background_norm = (1-bin_gt) / (torch.sum(1-bin_gt, dim=(0,1), keepdim=True) + 0.0001)
+
+                    mask_reweighting   = gt_foreground_norm + gt_background_norm
+                    mask_reweighting  *= mask_h * mask_w
 
             cur_pos = pos[idx]
             pos_idx_t = idx_t[idx, cur_pos]
@@ -273,12 +293,13 @@ class MultiBoxLoss(nn.Module):
             else:
                 pre_loss = F.smooth_l1_loss(pred_masks, mask_t, reduction='none')
 
-            if cfg.mask_proto_normalize_mask_loss:
-                gt_area  = torch.sum(mask_t,   dim=(0, 1))
-                pre_loss = torch.sum(pre_loss, dim=(0, 1))
+            if cfg.mask_proto_normalize_mask_loss_by_sqrt_area:
+                gt_area  = torch.sum(mask_t,   dim=(0, 1), keepdim=True)
+                pre_loss = pre_loss / (torch.sqrt(gt_area) + 0.0001)
+            
+            if cfg.mask_proto_reweight_mask_loss:
+                pre_loss = pre_loss / mask_reweighting[:, :, pos_idx_t]
 
-                loss_m += torch.sum(pre_loss / (torch.sqrt(gt_area) + 1))
-            else:
-                loss_m += torch.sum(pre_loss)
+            loss_m += torch.sum(pre_loss)
 
         return loss_m * self.mask_alpha

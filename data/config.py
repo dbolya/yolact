@@ -152,7 +152,9 @@ mask_type = Config({
     #   - mask_proto_loss (str [l1|disj]): If not None, apply an l1 or disjunctive regularization
     #                                      loss directly to the prototype masks.
     #   - mask_proto_binarize_downsampled_gt (bool): Binarize GT after dowsnampling during training?
-    #   - mask_proto_normalize_mask_loss (bool): Whether to normalize mask loss by sum(gt)
+    #   - mask_proto_normalize_mask_loss_by_sqrt_area (bool): Whether to normalize mask loss by sqrt(sum(gt))
+    #   - mask_proto_reweight_mask_loss (bool): Reweight mask loss such that background is divided by
+    #                                           #background and foreground is divided by #foreground.
     #   - mask_proto_grid_file (str): The path to the grid file to use with the next option.
     #                                 This should be a numpy.dump file with shape [numgrids, h, w]
     #                                 where h and w are w.r.t. the mask_proto_src convout.
@@ -195,7 +197,8 @@ coco_base_config = Config({
     'mask_proto_crop': True,
     'mask_proto_loss': None,
     'mask_proto_binarize_downsampled_gt': True,
-    'mask_proto_normalize_mask_loss': False,
+    'mask_proto_normalize_mask_loss_by_sqrt_area': False,
+    'mask_proto_reweight_mask_loss': False,
     'mask_proto_grid_file': 'data/grid.npy',
     'mask_proto_use_grid':  False,
     'mask_proto_coeff_gate': False,
@@ -483,11 +486,11 @@ yrm15_config = yolact_resnet101_maskrcnn_1_config.copy({
 })
 yrm16_config = yolact_resnet101_maskrcnn_1_config.copy({
     'name': 'yrm16',
-    'mask_proto_normalize_mask_loss': True,
+    'mask_proto_normalize_mask_loss_by_sqrt_area': True,
 })
 yrm16_2_config = yolact_resnet101_maskrcnn_1_config.copy({
     'name': 'yrm16_2',
-    'mask_proto_normalize_mask_loss': True,
+    'mask_proto_normalize_mask_loss_by_sqrt_area': True,
 })
 yrm17_config = yrm13_config.copy({
     'name': 'yrm17',
@@ -556,7 +559,7 @@ yrm22_config = yrm21_config.copy({
 
 yrm16_3_config = yrm21_config.copy({
     'name': 'yrm16_3',
-    'mask_proto_normalize_mask_loss': True,
+    'mask_proto_normalize_mask_loss_by_sqrt_area': True,
 })
 
 yrm23_config = yrm21_config.copy({
@@ -567,6 +570,16 @@ yrm23_config = yrm21_config.copy({
 yrm24_config = yrm21_config.copy({
     'name': 'yrm24',
     'train_boxes': False,
+})
+
+# Some masks were downsampled to 0 and still being trained on.
+yrm21_downsample_fix_config = yrm21_config.copy({
+    'name': 'yrm21_downsample_fix'
+})
+
+yrm25_config = yrm21_config.copy({
+    'name': 'yrm25',
+    'mask_proto_reweight_mask_loss': True,
 })
 
 yolact_vgg16_config = ssd550_config.copy({
