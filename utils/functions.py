@@ -159,7 +159,10 @@ class SavePath:
         for p in Path(save_folder).glob(config + '_*'):
             path_name = str(p)
 
-            save = SavePath.from_str(path_name)
+            try:
+                save = SavePath.from_str(path_name)
+            except:
+                continue 
             
             if save.model_name == config and save.iteration > max_iter:
                 max_iter = save.iteration
