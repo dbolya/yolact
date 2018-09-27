@@ -224,7 +224,7 @@ class MultiBoxLoss(nn.Module):
         mask_w = proto_data.size(2)
 
         # Make sure to store a copy of this because we edit it to get rid of all-zero masks
-        pos = pos.clone()
+        # pos = pos.clone()
 
         loss_m = 0
 
