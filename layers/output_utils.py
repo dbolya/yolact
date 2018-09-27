@@ -12,7 +12,8 @@ from utils.augmentations import Resize
 from utils.functions import sanitize_coordinates
 from utils import timer
 
-def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear', visualize_lincomb=False):
+def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear',
+                visualize_lincomb=False, crop_masks=True):
     """
     Postprocesses the output of Yolact on testing mode into a format that makes sense,
     accounting for all the possible configuration settings.
@@ -99,11 +100,12 @@ def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear', vi
 
         # "Crop" predicted masks by zeroing out everything not in the predicted bbox
         # TODO: Write a cuda implementation of this to get rid of the loop
-        num_dets = boxes.size(0)
-        crop_mask = torch.zeros(num_dets, h, w, device=masks.device)
-        for jdx in range(num_dets):
-            crop_mask[jdx, y1[jdx]:y2[jdx], x1[jdx]:x2[jdx]] = 1
-        masks = masks * crop_mask
+        if crop_masks:
+            num_dets = boxes.size(0)
+            crop_mask = torch.zeros(num_dets, h, w, device=masks.device)
+            for jdx in range(num_dets):
+                crop_mask[jdx, y1[jdx]:y2[jdx], x1[jdx]:x2[jdx]] = 1
+            masks = masks * crop_mask
 
         # Binarize the masks
         masks = masks.gt(0.5).float()

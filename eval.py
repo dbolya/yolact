@@ -90,9 +90,11 @@ def parse_args(argv=None):
                         help='The seed to pass into random.seed. Note: this is only really for the shuffle and does not (I think) affect cuda stuff.')
     parser.add_argument('--mask_proto_debug', default=False, dest='mask_proto_debug', action='store_true',
                         help='Outputs stuff for scripts/compute_mask.py.')
+    parser.add_argument('--no_crop', default=False, dest='crop', action='store_false',
+                        help='Do not crop output masks with the predicted bounding box.')
 
     parser.set_defaults(no_bar=False, display=False, resume=False, output_coco_json=False, output_web_json=False, shuffle=False,
-                        benchmark=False, no_sort=False, no_hash=False, mask_proto_debug=False)
+                        benchmark=False, no_sort=False, no_hash=False, mask_proto_debug=False, crop=True)
 
     global args
     args = parser.parse_args(argv)
@@ -111,7 +113,7 @@ def prep_display(dets_out, img, gt, gt_masks, h, w):
     img_numpy = undo_image_transformation(img, w, h)
     
     with timer.env('Postprocess'):
-        t = postprocess(dets_out, w, h, visualize_lincomb=args.display_lincomb)
+        t = postprocess(dets_out, w, h, visualize_lincomb=args.display_lincomb, crop_masks=args.crop)
 
     with timer.env('Copy'):
         classes, scores, boxes, masks = [x[:args.top_k].cpu().numpy() for x in t]
@@ -151,7 +153,7 @@ def prep_display(dets_out, img, gt, gt_masks, h, w):
 
 def prep_benchmark(dets_out, h, w):
     with timer.env('Postprocess'):
-        t = postprocess(dets_out, w, h, visualize_lincomb=args.display_lincomb)
+        t = postprocess(dets_out, w, h, crop_masks=args.crop)
 
     with timer.env('Copy'):
         classes, scores, boxes, masks = [x[:args.top_k].cpu().numpy() for x in t]
@@ -298,7 +300,7 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, crowd, image_id, detect
 
     
     with timer.env('Postprocess'):
-        classes, scores, boxes, masks = postprocess(dets, w, h)
+        classes, scores, boxes, masks = postprocess(dets, w, h, crop_masks=args.crop)
 
         if classes.size(0) == 0:
             return
