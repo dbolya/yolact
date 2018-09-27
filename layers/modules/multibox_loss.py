@@ -45,6 +45,8 @@ class MultiBoxLoss(nn.Module):
 
         if cfg.mask_proto_normalize_mask_loss_by_sqrt_area:
             self.mask_alpha *= 30
+        if cfg.mask_proto_reweight_mask_loss:
+            self.mask_alpha /= 4
 
         # If you output a proto mask with this area, your l1 loss will be l1_alpha
         # Note that the area is relative (so 1 would be the entire image)

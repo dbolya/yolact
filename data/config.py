@@ -142,6 +142,8 @@ mask_type = Config({
     #                                   the form (num_features, kernel_size, **kwdargs). An empty
     #                                   list means to use the source for prototype masks. If the
     #                                   kernel_size is negative, this creates a deconv layer instead.
+    #                                   If the kernel_size is negative and the num_features is None,
+    #                                   this creates a simple bilinear interpolation layer instead.
     #   - mask_proto_bias (bool): Whether to include an extra coefficient that corresponds to a proto
     #                             mask of all ones.
     #   - mask_proto_prototype_activation (func): The activation to apply to each prototype mask.
@@ -161,9 +163,6 @@ mask_type = Config({
     #   - mask_proto_use_grid (bool): Whether to add extra grid features to the proto_net input.
     #   - mask_proto_coeff_gate (bool): Add an extra set of sigmoided coefficients that is multiplied
     #                                   into the predicted coefficients in order to "gate" them.
-    #   - mask_proto_replace_deconv_with_upsample (bool): Replaces all deconvs using upsample with
-    #                                   a scale factor of the given kernel size, followed by a
-    #                                   kernel size 3 padding 1 conv layer.
     'lincomb': 1,
 })
 
@@ -202,8 +201,6 @@ coco_base_config = Config({
     'mask_proto_grid_file': 'data/grid.npy',
     'mask_proto_use_grid':  False,
     'mask_proto_coeff_gate': False,
-    'mask_proto_replace_deconv_with_upsample': False,
-    'temp_fix': False,
 
     # Add an extra layer to the mask coefficient predictor
     'mask_extra_layer': False,
@@ -546,15 +543,17 @@ yrm20_config = fixed_ssd_config.copy({
     'use_prediction_module': True,
 })
 
+# This config will not work anymore (it was a bug)
+# Any configs based off of it will also not work
 yrm21_config = fixed_ssd_config.copy({
     'name': 'yrm21',
+    # This option doesn't exit anymore
     'mask_proto_replace_deconv_with_upsample': True,
 })
 
-yrm22_config = yrm21_config.copy({
+yrm22_config = fixed_ssd_config.copy({
     'name': 'yrm22',
-    'temp_fix': True,
-    'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(256, -2, {})] * 2 + [(256, 1, {})],
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(None, -2, {}), (256, 3, {'padding': 1})] * 2 + [(256, 1, {})],
 })
 
 yrm16_3_config = yrm21_config.copy({
@@ -577,10 +576,20 @@ yrm21_downsample_fix_config = yrm21_config.copy({
     'name': 'yrm21_downsample_fix'
 })
 
-yrm25_config = yrm21_config.copy({
+yrm25_config = yrm22_config.copy({
     'name': 'yrm25',
     'mask_proto_reweight_mask_loss': True,
 })
+
+# This is a big boi, tread with caution
+yrm26_config = yrm22_config.copy({
+    'name': 'yrm26',
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(None, -2, {}), (256, 3, {'padding': 1})] * 3 + [(256, 1, {})],
+})
+
+
+
+
 
 yolact_vgg16_config = ssd550_config.copy({
     'name': 'yolact_vgg16',
@@ -597,7 +606,7 @@ yolact_vgg16_config = ssd550_config.copy({
 })
 
 # Default config
-cfg = yrm21_config.copy()
+cfg = yrm22_config.copy()
 
 def set_cfg(config_name:str):
     """ Sets the active config. Works even if cfg is already imported! """

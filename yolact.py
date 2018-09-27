@@ -8,6 +8,7 @@ from math import sqrt
 
 from data.config import cfg, mask_type
 from layers import Detect
+from layers.interpolate import InterpolateModule
 from backbone import construct_backbone
 
 import torch.backends.cudnn as cudnn
@@ -36,8 +37,6 @@ class PredictionModule(nn.Module):
                                        boxes with an area of 20x20px. If the scale is
                                        .5 on the other hand, this layer would consider
                                        bounding boxes with area 10x10px, etc.
-        - num_classes:   The number of classes to consider for classification.
-        - mask_size:     The side length of the downsampled predicted mask.
     """
     
     def __init__(self, in_channels, out_channels=1024, aspect_ratios=[[1]], scales=[1]):
@@ -196,25 +195,25 @@ class Yolact(nn.Module):
 
             def make_layer(layer_cfg):
                 nonlocal in_channels
+                num_channels = layer_cfg[0]
                 kernel_size = layer_cfg[1]
                 
+                # Possible patterns:
+                # ( 256, 3, {}) -> conv
+                # ( 256,-2, {}) -> deconv
+                # (None,-2, {}) -> bilinear interpolate
+                #
+                # You know it would have probably been simpler just to adopt a 'c' 'd' 'u' naming scheme.
+                # Whatever, it's too late now.
                 if kernel_size > 0:
-                    layer = nn.Conv2d(in_channels, layer_cfg[0], kernel_size, **layer_cfg[2])
+                    layer = nn.Conv2d(in_channels, num_channels, kernel_size, **layer_cfg[2])
                 else:
-                    if cfg.mask_proto_replace_deconv_with_upsample:
-                        # Hard coded this so that the interface for upsample is the same as for deconv
-                        layer_cfg[2]['padding'] = 1
-                        layer_cfg[2]['kernel_size'] = 3
-
-                        layer = nn.Sequential(
-                            nn.Upsample(scale_factor=-kernel_size, mode='bilinear', align_corners=False),
-                            nn.Conv2d(in_channels, layer_cfg[0], **layer_cfg[2]) if cfg.temp_fix else
-                            nn.ConvTranspose2d(in_channels, layer_cfg[0], **layer_cfg[2])
-                        )
+                    if num_channels is None:
+                        layer = InterpolateModule(scale_factor=-kernel_size, mode='bilinear', align_corners=False, **layer_cfg[2])
                     else:
-                        layer = nn.ConvTranspose2d(in_channels, layer_cfg[0], -kernel_size, **layer_cfg[2])
+                        layer = nn.ConvTranspose2d(in_channels, num_channels, -kernel_size, **layer_cfg[2])
                 
-                in_channels = layer_cfg[0]
+                in_channels = num_channels if num_channels is not None else in_channels
                 return [layer, nn.ReLU(inplace=True)]
 
             # The -1 here is to remove the last relu because we might want to change it to another function
