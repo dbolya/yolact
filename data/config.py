@@ -163,6 +163,9 @@ mask_type = Config({
     #   - mask_proto_use_grid (bool): Whether to add extra grid features to the proto_net input.
     #   - mask_proto_coeff_gate (bool): Add an extra set of sigmoided coefficients that is multiplied
     #                                   into the predicted coefficients in order to "gate" them.
+    #   - mask_proto_prototypes_as_features (bool): For each prediction module, downsample the prototypes
+    #                                 to the convout size of that module and supply the prototypes as input
+    #                                 in addition to the already supplied backbone features.
     'lincomb': 1,
 })
 
@@ -201,6 +204,7 @@ coco_base_config = Config({
     'mask_proto_grid_file': 'data/grid.npy',
     'mask_proto_use_grid':  False,
     'mask_proto_coeff_gate': False,
+    'mask_proto_prototypes_as_features': False,
 
     # Add extra layers between the backbone and the network heads
     # The order is (bbox, conf, mask)
@@ -593,7 +597,10 @@ yrm27_config = yrm22_config.copy({
     'extra_layers': (1, 1, 1)
 })
 
-
+yrm28_config = yrm22_config.copy({
+    'name': 'yrm28',
+    'mask_proto_prototypes_as_features': True,
+})
 
 
 

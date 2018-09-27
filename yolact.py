@@ -45,6 +45,9 @@ class PredictionModule(nn.Module):
         self.num_classes = cfg.num_classes
         self.mask_dim    = cfg.mask_dim
         self.num_priors  = sum(len(x) for x in aspect_ratios)
+        
+        if cfg.mask_proto_prototypes_as_features:
+            out_channels += self.mask_dim
 
         if cfg.use_prediction_module:
             self.block = Bottleneck(in_channels, out_channels // 4)
@@ -266,15 +269,6 @@ class Yolact(nn.Module):
         with timer.env('pass1'):
             outs = self.backbone(x)
 
-        with timer.env('pass2'):
-            pred_outs = ([], [], [], [])
-            for idx, pred_layer in zip(self.selected_layers, self.prediction_layers):
-                p = pred_layer(outs[idx])
-                for out, pred in zip(pred_outs, p):
-                    out.append(pred)
-
-        pred_outs = [torch.cat(x, -2) for x in pred_outs]
-
         if cfg.mask_type == mask_type.lincomb:
             with timer.env('proto'):
                 proto_x = x if self.proto_src is None else outs[self.proto_src]
@@ -284,15 +278,39 @@ class Yolact(nn.Module):
                     proto_x = torch.cat([proto_x, grids], dim=1)
 
                 proto_out = self.proto_net(proto_x)
-                proto_out = proto_out.permute(0, 2, 3, 1).contiguous()
                 proto_out = cfg.mask_proto_prototype_activation(proto_out)
+                
+                if cfg.mask_proto_prototypes_as_features:
+                    proto_downsampled = proto_out.clone()
+                
+                # Move the features last so the multipliaction is easy
+                proto_out = proto_out.permute(0, 2, 3, 1).contiguous()
 
                 if cfg.mask_proto_bias:
                     bias_shape = [x for x in proto_out.size()]
                     bias_shape[-1] = 1
                     proto_out = torch.cat([proto_out, torch.ones(*bias_shape)], -1)
 
-                pred_outs.append(proto_out)
+        with timer.env('pass2'):
+            pred_outs = ([], [], [], [])
+            
+            for idx, pred_layer in zip(self.selected_layers, self.prediction_layers):
+                pred_x = outs[idx]
+
+                if cfg.mask_type == mask_type.lincomb and cfg.mask_proto_prototypes_as_features:
+                    # Scale the prototypes down to the current prediction layer's size and add it as inputs
+                    proto_downsampled = F.interpolate(proto_downsampled, size=outs[idx].size()[2:], mode='bilinear', align_corners=False)
+                    pred_x = torch.cat([pred_x, proto_downsampled], dim=1)
+
+                p = pred_layer(pred_x)
+                
+                for out, pred in zip(pred_outs, p):
+                    out.append(pred)
+
+        pred_outs = [torch.cat(x, -2) for x in pred_outs]
+
+        if cfg.mask_type == mask_type.lincomb:
+            pred_outs.append(proto_out)
 
         if self.training:
             return pred_outs
