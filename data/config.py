@@ -202,8 +202,9 @@ coco_base_config = Config({
     'mask_proto_use_grid':  False,
     'mask_proto_coeff_gate': False,
 
-    # Add an extra layer to the mask coefficient predictor
-    'mask_extra_layer': False,
+    # Add extra layers between the backbone and the network heads
+    # The order is (bbox, conf, mask)
+    'extra_layers': (0, 0, 0),
 
     # During training, to match detections with gt, first compute the maximum gt IoU for each prior.
     # Then, any of those priors whose maximum overlap is over the positive threshold, mark as positive.
@@ -563,7 +564,7 @@ yrm16_3_config = yrm21_config.copy({
 
 yrm23_config = yrm21_config.copy({
     'name': 'yrm23',
-    'mask_extra_layer': True,
+    'extra_layers': (0, 0, 1),
 })
 
 yrm24_config = yrm21_config.copy({
@@ -585,6 +586,11 @@ yrm25_config = yrm22_config.copy({
 yrm26_config = yrm22_config.copy({
     'name': 'yrm26',
     'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(None, -2, {}), (256, 3, {'padding': 1})] * 3 + [(256, 1, {})],
+})
+
+yrm27_config = yrm22_config.copy({
+    'name': 'yrm27',
+    'extra_layers': (1, 1, 1)
 })
 
 

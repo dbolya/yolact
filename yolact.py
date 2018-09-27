@@ -53,11 +53,20 @@ class PredictionModule(nn.Module):
 
         self.bbox_layer = nn.Conv2d(out_channels, self.num_priors * 4,                 kernel_size=3, padding=1)
         self.conf_layer = nn.Conv2d(out_channels, self.num_priors * self.num_classes,  kernel_size=3, padding=1)
-
-        if cfg.mask_extra_layer:
-            self.extra_mask_layer = nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1)
-
         self.mask_layer = nn.Conv2d(out_channels, self.num_priors * self.mask_dim,     kernel_size=3, padding=1)
+        
+        # What is this ugly lambda doing in the middle of all this clean prediction module code?
+        def make_extra(num_layers):
+            if num_layers == 0:
+                return lambda x: x
+            else:
+                # Looks more complicated than it is. This just creates an array of num_layers alternating conv-relu
+                return nn.Sequential(*sum([[
+                    nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
+                    nn.ReLU(inplace=True)
+                ] for _ in range(num_layers)], []))
+
+        self.bbox_extra, self.conf_extra, self.mask_extra = [make_extra(x) for x in cfg.extra_layers]
         
         if cfg.mask_type == mask_type.lincomb and cfg.mask_proto_coeff_gate:
             self.gate_layer = nn.Conv2d(out_channels, self.num_priors * self.mask_dim, kernel_size=3, padding=1)
@@ -94,15 +103,13 @@ class PredictionModule(nn.Module):
             # TODO: Possibly switch this out for a product
             x = a + b
 
-        bbox = self.bbox_layer(x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, 4)
-        conf = self.conf_layer(x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, self.num_classes)
-        
-        if cfg.mask_extra_layer:
-            extra = self.extra_mask_layer(x)
-            extra = F.relu(extra, inplace=True)
-            mask  = self.mask_layer(extra).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, self.mask_dim)
-        else:
-            mask = self.mask_layer(x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, self.mask_dim)
+        bbox_x = self.bbox_extra(x)
+        conf_x = self.conf_extra(x)
+        mask_x = self.mask_extra(x)
+
+        bbox = self.bbox_layer(bbox_x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, 4)
+        conf = self.conf_layer(conf_x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, self.num_classes)
+        mask = self.mask_layer(mask_x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, self.mask_dim)
         
         # See box_utils.decode for an explaination of this
         if cfg.use_yolo_regressors:
