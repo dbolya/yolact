@@ -221,6 +221,9 @@ class MultiBoxLoss(nn.Module):
         mask_h = proto_data.size(1)
         mask_w = proto_data.size(2)
 
+        # Make sure to store a copy of this because we edit it to get rid of all-zero masks
+        pos = pos.clone()
+
         loss_m = 0
 
         for idx in range(mask_data.size(0)):
@@ -301,7 +304,7 @@ class MultiBoxLoss(nn.Module):
                 pre_loss = pre_loss / (torch.sqrt(gt_area) + 0.0001)
             
             if cfg.mask_proto_reweight_mask_loss:
-                pre_loss = pre_loss / mask_reweighting[:, :, pos_idx_t]
+                pre_loss = pre_loss * mask_reweighting[:, :, pos_idx_t]
 
             loss_m += torch.sum(pre_loss)
 
