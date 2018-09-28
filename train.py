@@ -101,19 +101,18 @@ def train():
     net = yolact_net
     net.train()
 
-    if args.resume:
-        if args.resume == 'interrupt':
-            args.resume = SavePath.get_interrupt(args.save_folder)
-        elif args.resume == 'latest':
-            args.resume = SavePath.get_latest(args.save_folder, cfg.name)
-        
-        # get_latest and get_interrupt can return None
-        if args.resume:
-            print('Resuming training, loading {}...'.format(args.resume))
-            yolact_net.load_weights(args.resume)
+    # Both of these can set args.resume to None, so do them before the check    
+    if args.resume == 'interrupt':
+        args.resume = SavePath.get_interrupt(args.save_folder)
+    elif args.resume == 'latest':
+        args.resume = SavePath.get_latest(args.save_folder, cfg.name)
 
-            if args.start_iter == -1:
-                args.start_iter = SavePath.from_str(args.resume).iteration
+    if args.resume is not None:
+        print('Resuming training, loading {}...'.format(args.resume))
+        yolact_net.load_weights(args.resume)
+
+        if args.start_iter == -1:
+            args.start_iter = SavePath.from_str(args.resume).iteration
     else:
         print('Initializing weights...')
         yolact_net.init_weights(backbone_path=args.save_folder + cfg.backbone.path)
