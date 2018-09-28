@@ -577,8 +577,8 @@ yrm24_config = yrm21_config.copy({
 })
 
 # Some masks were downsampled to 0 and still being trained on.
-yrm21_downsample_fix_config = yrm21_config.copy({
-    'name': 'yrm21_downsample_fix'
+yrm22_downsample_fix_config = yrm22_config.copy({
+    'name': 'yrm22_downsample_fix'
 })
 
 yrm25_config = yrm22_config.copy({
