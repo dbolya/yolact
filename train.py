@@ -343,6 +343,8 @@ def compute_validation_loss(net, data_loader, criterion):
 def compute_validation_map(yolact_net, dataset):
     with torch.no_grad():
         yolact_net.eval()
+        print()
+        print("Computing validation mAP (this may take a while)...", flush=True)
         eval_script.evaluate(yolact_net, dataset, train_mode=True)
         yolact_net.train()
 
