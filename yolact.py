@@ -281,7 +281,11 @@ class Yolact(nn.Module):
                 proto_out = cfg.mask_proto_prototype_activation(proto_out)
                 
                 if cfg.mask_proto_prototypes_as_features:
+                    # Clone here because we don't want to pemute this, though idk if contiguous makes this unnecessary
                     proto_downsampled = proto_out.clone()
+
+                    if cfg.mask_proto_prototypes_as_features_no_grad:
+                        proto_downsampled = proto_out.detach()
                 
                 # Move the features last so the multipliaction is easy
                 proto_out = proto_out.permute(0, 2, 3, 1).contiguous()

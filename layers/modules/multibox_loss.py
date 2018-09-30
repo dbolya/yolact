@@ -223,8 +223,9 @@ class MultiBoxLoss(nn.Module):
         mask_h = proto_data.size(1)
         mask_w = proto_data.size(2)
 
-        # Make sure to store a copy of this because we edit it to get rid of all-zero masks
-        # pos = pos.clone()
+        if cfg.mask_proto_remove_empty_masks:
+            # Make sure to store a copy of this because we edit it to get rid of all-zero masks
+            pos = pos.clone()
 
         loss_m = 0
 
@@ -237,11 +238,12 @@ class MultiBoxLoss(nn.Module):
                 if cfg.mask_proto_binarize_downsampled_gt:
                     downsampled_masks = downsampled_masks.gt(0.5).float()
 
-                # Get rid of gt masks that are so small they get downsampled away
-                # very_small_masks = (downsampled_masks.sum(dim=(0,1)) <= 0.0001)
-                # for i in range(very_small_masks.size(0)):
-                #     if very_small_masks[i]:
-                #         pos[idx, idx_t[idx] == i] = 0
+                if cfg.mask_proto_remove_empty_masks:
+                    # Get rid of gt masks that are so small they get downsampled away
+                    very_small_masks = (downsampled_masks.sum(dim=(0,1)) <= 0.0001)
+                    for i in range(very_small_masks.size(0)):
+                        if very_small_masks[i]:
+                            pos[idx, idx_t[idx] == i] = 0
 
                 if cfg.mask_proto_reweight_mask_loss:
                     # Ensure that the gt is binary

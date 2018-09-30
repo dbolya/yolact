@@ -166,6 +166,9 @@ mask_type = Config({
     #   - mask_proto_prototypes_as_features (bool): For each prediction module, downsample the prototypes
     #                                 to the convout size of that module and supply the prototypes as input
     #                                 in addition to the already supplied backbone features.
+    #   - mask_proto_prototypes_as_features_no_grad (bool): If the above is set, don't backprop gradients to
+    #                                 to the prototypes from the network head.
+    #   - mask_proto_remove_empty_masks (bool): Remove masks that are downsampled to 0 during loss calculations.
     'lincomb': 1,
 })
 
@@ -205,6 +208,8 @@ coco_base_config = Config({
     'mask_proto_use_grid':  False,
     'mask_proto_coeff_gate': False,
     'mask_proto_prototypes_as_features': False,
+    'mask_proto_prototypes_as_features_no_grad': False,
+    'mask_proto_remove_empty_masks': False,
 
     # Add extra layers between the backbone and the network heads
     # The order is (bbox, conf, mask)
@@ -600,6 +605,16 @@ yrm27_config = yrm22_config.copy({
 yrm28_config = yrm22_config.copy({
     'name': 'yrm28',
     'mask_proto_prototypes_as_features': True,
+})
+
+yrm29_config = yrm22_config.copy({
+    'name': 'yrm29',
+    'mask_proto_remove_empty_masks': True,
+})
+
+yrm28_2_config = yrm28_config.copy({
+    'name': 'yrm28_2',
+    'mask_proto_prototypes_as_features_no_grad': True, 
 })
 
 
