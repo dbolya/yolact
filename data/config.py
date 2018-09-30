@@ -594,7 +594,7 @@ yrm25_config = yrm22_config.copy({
 # This is a big boi, tread with caution
 yrm26_config = yrm22_config.copy({
     'name': 'yrm26',
-    'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(None, -2, {}), (256, 3, {'padding': 1})] * 3 + [(256, 1, {})],
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(None, -1.8, {}), (256, 3, {'padding': 1})] * 3 + [(256, 1, {})],
 })
 
 yrm27_config = yrm22_config.copy({
