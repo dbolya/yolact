@@ -595,6 +595,10 @@ yrm25_config = yrm22_config.copy({
 yrm26_config = yrm22_config.copy({
     'name': 'yrm26',
     'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(None, -1.8, {}), (256, 3, {'padding': 1})] * 3 + [(256, 1, {})],
+
+    # Because this is such a big boi, we use batch size 6. lr_steps / 6 * 8
+    'lr_steps': (373333, 480000, 533333),
+    'max_iter': 533333,
 })
 
 yrm27_config = yrm22_config.copy({
