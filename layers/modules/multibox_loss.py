@@ -53,7 +53,7 @@ class MultiBoxLoss(nn.Module):
         self.l1_expected_area = 20*20/70/70
         self.l1_alpha = 0.1
 
-    def forward(self, predictions, targets, masks):
+    def forward(self, predictions, targets, masks, num_crowds):
         """Multibox Loss
         Args:
             predictions (tuple): A tuple containing loc preds, conf preds,
@@ -69,6 +69,9 @@ class MultiBoxLoss(nn.Module):
 
             masks (list<tensor>): Ground truth masks for each object in each image,
                 shape: [batch_size][num_objs,im_height,im_width]
+
+            num_crowds (list<int>): Number of crowd annotations per batch. The crowd
+                annotations should be the last num_crowds elements of targets and masks.
             
             * Only if mask_type == lincomb
         """
@@ -90,12 +93,27 @@ class MultiBoxLoss(nn.Module):
         conf_t = loc_data.new(num, num_priors).long()
         idx_t = loc_data.new(num, num_priors).long()
 
+        defaults = priors.data
+
         for idx in range(num):
             truths = targets[idx][:, :-1].data
             labels = targets[idx][:, -1].data
-            defaults = priors.data
+
+            # Split the crowd annotations because they come bundled in
+            cur_crowds = num_crowds[idx]
+            if cur_crowds > 0:
+                split = lambda x: (x[-cur_crowds:], x[:-cur_crowds])
+                crowd_boxes, truths = split(truths)
+
+                # We don't use the crowd labels or masks
+                _, labels = split(labels)
+                _, masks[idx] = split(masks[idx])
+            else:
+                crowd_boxes = None
+
+            
             match(self.pos_threshold, self.neg_threshold,
-                  truths, defaults, labels,
+                  truths, defaults, labels, crowd_boxes,
                   loc_t, conf_t, idx_t, idx, loc_data[idx])
 
         # wrap targets

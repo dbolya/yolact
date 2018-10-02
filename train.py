@@ -192,14 +192,14 @@ def train():
                     cfg.use_prediction_matching = True
 
                 # Load training data
-                images, targets, masks = prepare_data(datum)
+                images, targets, masks, num_crowds = prepare_data(datum)
                 
                 # Forward Pass
                 out = net(images)
                 
                 # Compute Loss
                 optimizer.zero_grad()
-                losses = criterion(out, targets, masks)
+                losses = criterion(out, targets, masks, num_crowds)
                 loss_l, loss_c, loss_m = [x.sum() for x in losses] # Sum here because Dataparallel
                 loss = loss_l + loss_c + loss_m
                 
@@ -300,7 +300,7 @@ def update_vis_plot(iteration, loc, conf, window1, window2, update_type,
         )
 
 def prepare_data(datum):
-    images, (targets, masks) = datum
+    images, (targets, masks, num_crowds) = datum
     
     if args.cuda:
         images = Variable(images.cuda(), requires_grad=False)
@@ -311,7 +311,7 @@ def prepare_data(datum):
         targets = [Variable(ann, requires_grad=False) for ann in targets]
         masks = [Variable(mask, requires_grad=False) for mask in masks]
 
-    return images, targets, masks
+    return images, targets, masks, num_crowds
 
 def compute_validation_loss(net, data_loader, criterion):
     with torch.no_grad():

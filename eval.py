@@ -281,7 +281,7 @@ def bbox_iou(bbox1, bbox2, iscrowd=False):
         ret = jaccard(bbox1, bbox2, iscrowd)
     return ret.cpu()
 
-def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, crowd, image_id, detections:Detections=None):
+def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, num_crowd, image_id, detections:Detections=None):
     """ Returns a list of APs for this image, with each element being for a class  """
     if not args.output_coco_json:
         with timer.env('Prepare gt'):
@@ -291,14 +291,13 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, crowd, image_id, detect
             gt_classes = list(gt[:, 4].astype(int))
             gt_masks = torch.Tensor(gt_masks).view(-1, h*w)
 
-            if crowd is not None:
-                crowd_masks = torch.Tensor([x[5].reshape(-1) for x in crowd])
-                crowd_boxes = torch.Tensor([x[:4] for x in crowd])
-                crowd_boxes[:, [0, 2]] *= w
-                crowd_boxes[:, [1, 3]] *= h
-                crowd_classes = [int(x[4]) for x in crowd]
+            if num_crowd > 0:
+                split = lambda x: (x[-num_crowd:], x[:-num_crowd])
+                crowd_boxes  , gt_boxes   = split(gt_boxes)
+                crowd_masks  , gt_masks   = split(gt_masks)
+                crowd_classes, gt_classes = split(gt_classes)
+            num_crowd = 0
 
-    
     with timer.env('Postprocess'):
         classes, scores, boxes, masks = postprocess(dets, w, h, crop_masks=args.crop)
 
@@ -309,6 +308,7 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, crowd, image_id, detect
         scores = list(scores.cpu().numpy().astype(float))
         masks = masks.view(-1, h*w).cuda()
         boxes = boxes.cuda()
+
 
     if args.output_coco_json:
         boxes = boxes.cpu().numpy()
@@ -326,7 +326,7 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, crowd, image_id, detect
     mask_iou_cache = mask_iou(masks, gt_masks)
     bbox_iou_cache = bbox_iou(boxes.float(), gt_boxes.float())
 
-    if crowd is not None:
+    if num_crowd > 0:
         crowd_mask_iou_cache = mask_iou(masks, crowd_masks, iscrowd=True)
         crowd_bbox_iou_cache = bbox_iou(boxes.float(), crowd_boxes.float(), iscrowd=True)
     else:
@@ -375,7 +375,7 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, crowd, image_id, detect
                         # If the detection matches a crowd, we can just ignore it
                         matched_crowd = False
 
-                        if crowd is not None:
+                        if num_crowd > 0:
                             for j in range(len(crowd_classes)):
                                 if crowd_classes[j] != _class:
                                     continue
@@ -522,7 +522,7 @@ def evaluate(net:Yolact, dataset, train_mode=False):
             timer.reset()
 
             with timer.env('Load Data'):
-                img, gt, gt_masks, h, w, crowd = dataset.pull_item(image_idx)
+                img, gt, gt_masks, h, w, num_crowd = dataset.pull_item(image_idx)
 
                 # Test flag, do not upvote
                 if cfg.mask_proto_debug:
@@ -543,7 +543,7 @@ def evaluate(net:Yolact, dataset, train_mode=False):
             elif args.benchmark:
                 prep_benchmark(preds, h, w)
             else:
-                prep_metrics(ap_data, preds, img, gt, gt_masks, h, w, crowd, dataset.ids[image_idx], detections)
+                prep_metrics(ap_data, preds, img, gt, gt_masks, h, w, num_crowd, dataset.ids[image_idx], detections)
             
             # First couple of images take longer because we're constructing the graph.
             # Since that's technically initialization, don't include those in the FPS calculations.
@@ -669,9 +669,7 @@ if __name__ == '__main__':
             calc_map(ap_data)
             exit()
 
-        dataset = COCODetection(args.coco_root, cfg.dataset.valid, 
-                                BaseTransform(),
-                                prep_crowds=True)
+        dataset = COCODetection(args.coco_root, cfg.dataset.valid, BaseTransform())
         
         prep_coco_cats(dataset.coco.cats)
 

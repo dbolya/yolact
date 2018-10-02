@@ -222,6 +222,10 @@ coco_base_config = Config({
     'positive_iou_threshold': 0.5,
     'negative_iou_threshold': 0.5,
 
+    # If less than 1, anchors treated as a negative that have a crowd iou over this threshold with
+    # the crowd boxes will be treated as a neutral.
+    'crowd_iou_threshold': 1,
+
     # This is filled in at runtime by Yolact's __init__, so don't touch it
     'mask_dim': None,
 
@@ -566,6 +570,16 @@ yrm22_config = fixed_ssd_config.copy({
     'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(None, -2, {}), (256, 3, {'padding': 1})] * 2 + [(256, 1, {})],
 })
 
+yrm22_2_config = yrm22_config.copy({
+    'name': 'yrm22_2',
+    'crowd_iou_threshold': 1,
+})
+
+yrm22_crowd_config = yrm22_config.copy({
+    'name': 'yrm22_crowd',
+    'crowd_iou_threshold': 0.7,
+})
+
 yrm16_3_config = yrm21_config.copy({
     'name': 'yrm16_3',
     'mask_proto_normalize_mask_loss_by_sqrt_area': True,
@@ -581,10 +595,6 @@ yrm24_config = yrm21_config.copy({
     'train_boxes': False,
 })
 
-# Some masks were downsampled to 0 and still being trained on.
-yrm22_downsample_fix_config = yrm22_config.copy({
-    'name': 'yrm22_downsample_fix'
-})
 
 yrm25_config = yrm22_config.copy({
     'name': 'yrm25',

@@ -17,14 +17,18 @@ def detection_collate(batch):
     Return:
         A tuple containing:
             1) (tensor) batch of images stacked on their 0 dim
-            2) (list<tensor>, list<tensor>) annotations for a given image are stacked
+            2) (list<tensor>, list<tensor>, list<int>) annotations for a given image are stacked
                 on 0 dim. The output gt is a tuple of annotations and masks.
     """
     targets = []
     imgs = []
     masks = []
+    num_crowds = []
+
     for sample in batch:
         imgs.append(sample[0])
         targets.append(torch.FloatTensor(sample[1][0]))
         masks.append(torch.FloatTensor(sample[1][1]))
-    return torch.stack(imgs, 0), (targets, masks)
+        num_crowds.append(sample[1][2])
+
+    return torch.stack(imgs, 0), (targets, masks, num_crowds)
