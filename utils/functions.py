@@ -153,7 +153,7 @@ class SavePath:
     @staticmethod
     def get_latest(save_folder, config):
         """ Note: config should be config.name. """
-        max_iter = 0
+        max_iter = -1
         max_name = None
 
         for p in Path(save_folder).glob(config + '_*'):
