@@ -65,7 +65,7 @@ parser.add_argument('--validation_epoch', default=2, type=int,
 args = parser.parse_args()
 
 # FYXTODO
-args.batch_size = 8
+args.batch_size = 4
 args.num_workers = 0
 
 if args.config is not None:
@@ -227,7 +227,7 @@ def train():
                     m = loss_m_avg.get_avg()
                     t = l + c + m
                     print('[%3d] %7d || B: %.3f | C: %.3f | M: %.3f | T: %.3f || ETA: %s || timer: %.3f'
-                            % (epoch, iteration, l,c,m,t, eta_str, elapsed), flush=True)
+                            % (epoch, iteration, l,c,m,t, eta_str, elapsed))
                     
 
                 if args.visdom:

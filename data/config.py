@@ -523,7 +523,7 @@ yolact_vgg16_config = ssd550_config.copy({
 # Default config
 cfg = yrm14_config.copy()
 
-def set_cfg(config_name:str):
+def set_cfg(config_name):
     """ Sets the active config. Works even if cfg is already imported! """
     global cfg
 
