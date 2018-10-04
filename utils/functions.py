@@ -148,3 +148,24 @@ class SavePath:
     def get_interrupt(save_folder):
         for p in Path(save_folder).glob('*_interrupt.pth'): 
             return str(p)
+        return None
+    
+    @staticmethod
+    def get_latest(save_folder, config):
+        """ Note: config should be config.name. """
+        max_iter = -1
+        max_name = None
+
+        for p in Path(save_folder).glob(config + '_*'):
+            path_name = str(p)
+
+            try:
+                save = SavePath.from_str(path_name)
+            except:
+                continue 
+            
+            if save.model_name == config and save.iteration > max_iter:
+                max_iter = save.iteration
+                max_name = path_name
+
+        return max_name

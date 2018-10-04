@@ -140,3 +140,9 @@ data/coco/annotations/
 ap_data.pkl
 results/
 logs/
+scripts/aws/
+scripts/gt.npy
+scripts/proto.npy
+scripts/info.txt
+test.pkl
+testeval.py

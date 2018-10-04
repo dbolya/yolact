@@ -10,21 +10,18 @@ Usage: python data/scripts/mix_sets.py output_name [set1 range1 [set2 range2 [..
 
 To use, specify the output annotation name and any number of set + range pairs, where the sets
 are in the form instances_<set_name>.json and ranges are python-evalable ranges. The resulting
-json will be spit out as instances_<output_name>_.json in the same folder as the input sets.
-
-Note that the "_" is to tell our COCODetection data loader that the image file names contain folders.
-This is so you don't have to copy all the images into the same directory or use symlinks.
+json will be spit out as instances_<output_name>.json in the same folder as the input sets.
 
 For instance,
-    python data/scripts/mix_sets.py trainval35k train2014 : val2014 :35000
+    python data/scripts/mix_sets.py trainval35k train2014 : val2014 :-5000
 
-This will create an instance_trainval35k_.json file with all images and corresponding annotations
+This will create an instance_trainval35k.json file with all images and corresponding annotations
 from train2014 and the first 35000 images from val2014.
 
 You can also specify only one set:
     python data/scripts/mix_sets.py minival5k val2014 -5000:
 
-This will take the last 5k images from val2014 and put it in instances_minival5k_.json.
+This will take the last 5k images from val2014 and put it in instances_minival5k.json.
 """
 
 annotations_path = 'data/coco/annotations/instances_%s.json'
@@ -55,17 +52,13 @@ if __name__ == '__main__':
 		print('Building image index...')
 		image_idx = {x['id']: x for x in set_json['images']}
 
-		# Add the parent path to the image file name, so you don't have to symlink them
-		for val in image_idx.values():
-			val['file_name'] = set_name + '/' + val['file_name']
-
 		print('Collecting annotations...')
 		anns_idx = defaultdict(lambda: [])
 
 		for ann in set_json['annotations']:
 			anns_idx[ann['image_id']].append(ann)
 
-		export_ids = list(anns_idx.keys())
+		export_ids = list(image_idx.keys())
 		export_ids.sort()
 		export_ids = eval('export_ids[%s]' % range_str, {}, {'export_ids': export_ids})
 
@@ -77,5 +70,5 @@ if __name__ == '__main__':
 		print('Done.\n')
 
 	print('Saving result...')
-	with open(annotations_path % (out_name + '_'), 'w') as out_file:
+	with open(annotations_path % (out_name), 'w') as out_file:
 		json.dump(out, out_file)

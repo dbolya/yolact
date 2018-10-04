@@ -105,9 +105,13 @@ def train():
     net = yolact_net
     net.train()
 
-    if args.resume:
-        if args.resume == 'interrupt':
-            args.resume = SavePath.get_interrupt(args.save_folder)
+    # Both of these can set args.resume to None, so do them before the check    
+    if args.resume == 'interrupt':
+        args.resume = SavePath.get_interrupt(args.save_folder)
+    elif args.resume == 'latest':
+        args.resume = SavePath.get_latest(args.save_folder, cfg.name)
+
+    if args.resume is not None:
         print('Resuming training, loading {}...'.format(args.resume))
         yolact_net.load_weights(args.resume)
 
@@ -132,7 +136,7 @@ def train():
     # loss counters
     loc_loss = 0
     conf_loss = 0
-    iteration = args.start_iter
+    iteration = max(args.start_iter, 0)
     last_time = time.time()
 
     epoch_size = len(dataset) // args.batch_size
@@ -192,14 +196,14 @@ def train():
                     cfg.use_prediction_matching = True
 
                 # Load training data
-                images, targets, masks = prepare_data(datum)
+                images, targets, masks, num_crowds = prepare_data(datum)
                 
                 # Forward Pass
                 out = net(images)
                 
                 # Compute Loss
                 optimizer.zero_grad()
-                losses = criterion(out, targets, masks)
+                losses = criterion(out, targets, masks, num_crowds)
                 loss_l, loss_c, loss_m = [x.sum() for x in losses] # Sum here because Dataparallel
                 loss = loss_l + loss_c + loss_m
                 
@@ -300,7 +304,7 @@ def update_vis_plot(iteration, loc, conf, window1, window2, update_type,
         )
 
 def prepare_data(datum):
-    images, (targets, masks) = datum
+    images, (targets, masks, num_crowds) = datum
     
     if args.cuda:
         images = Variable(images.cuda(), requires_grad=False)
@@ -311,7 +315,7 @@ def prepare_data(datum):
         targets = [Variable(ann, requires_grad=False) for ann in targets]
         masks = [Variable(mask, requires_grad=False) for mask in masks]
 
-    return images, targets, masks
+    return images, targets, masks, num_crowds
 
 def compute_validation_loss(net, data_loader, criterion):
     with torch.no_grad():
@@ -343,6 +347,8 @@ def compute_validation_loss(net, data_loader, criterion):
 def compute_validation_map(yolact_net, dataset):
     with torch.no_grad():
         yolact_net.eval()
+        print()
+        print("Computing validation mAP (this may take a while)...", flush=True)
         eval_script.evaluate(yolact_net, dataset, train_mode=True)
         yolact_net.train()
 

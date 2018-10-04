@@ -364,8 +364,16 @@ class RandomSampleCrop(object):
                 # mask in that both m1 and m2 are true
                 mask = m1 * m2
 
+                # [0 ... 0 for num_gt and then 1 ... 1 for num_crowds]
+                num_crowds = labels['num_crowds']
+                crowd_mask = np.zeros(mask.shape, dtype=np.int32)
+
+                if num_crowds > 0:
+                    crowd_mask[-num_crowds:] = 1
+
                 # have any valid boxes? try again if not
-                if not mask.any():
+                # Also make sure you have at least one regular gt
+                if not mask.any() or np.sum(1-crowd_mask[mask]) == 0:
                     continue
 
                 # take only the matching gt masks
@@ -375,7 +383,12 @@ class RandomSampleCrop(object):
                 current_boxes = boxes[mask, :].copy()
 
                 # take only matching gt labels
-                current_labels = labels[mask]
+                labels['labels'] = labels['labels'][mask]
+                current_labels = labels
+
+                # We now might have fewer crowd annotations
+                if num_crowds > 0:
+                    labels['num_crowds'] = np.sum(crowd_mask[mask])
 
                 # should we use the box left and top corner or the crop's
                 current_boxes[:, :2] = np.maximum(current_boxes[:, :2],
@@ -430,14 +443,14 @@ class Expand(object):
 
 
 class RandomMirror(object):
-    def __call__(self, image, masks, boxes, classes):
+    def __call__(self, image, masks, boxes, labels):
         _, width, _ = image.shape
         if random.randint(2):
             image = image[:, ::-1]
             masks = masks[:, :, ::-1]
             boxes = boxes.copy()
             boxes[:, 0::2] = width - boxes[:, 2::-2]
-        return image, masks, boxes, classes
+        return image, masks, boxes, labels
 
 
 class SwapChannels(object):

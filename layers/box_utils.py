@@ -52,7 +52,7 @@ def intersect(box_a, box_b):
 def jaccard(box_a, box_b, iscrowd=False):
     """Compute the jaccard overlap of two sets of boxes.  The jaccard overlap
     is simply the intersection over union of two boxes.  Here we operate on
-    ground truth boxes and default boxes.
+    ground truth boxes and default boxes. If iscrowd=True, put the crowd in box_b.
     E.g.:
         A ∩ B / A ∪ B = A ∩ B / (area(A) + area(B) - A ∩ B)
     Args:
@@ -74,7 +74,7 @@ def jaccard(box_a, box_b, iscrowd=False):
         return inter / union  # [A,B]
 
 
-def match(pos_thresh, neg_thresh, truths, priors, labels, loc_t, conf_t, idx_t, idx, loc_data):
+def match(pos_thresh, neg_thresh, truths, priors, labels, crowd_boxes, loc_t, conf_t, idx_t, idx, loc_data):
     """Match each prior box with the ground truth box of the highest jaccard
     overlap, encode the bounding boxes, then return the matched indices
     corresponding to both confidence and location preds.
@@ -84,6 +84,7 @@ def match(pos_thresh, neg_thresh, truths, priors, labels, loc_t, conf_t, idx_t, 
         truths: (tensor) Ground truth boxes, Shape: [num_obj, num_priors].
         priors: (tensor) Prior boxes from priorbox layers, Shape: [n_priors,4].
         labels: (tensor) All the class labels for the image, Shape: [num_obj].
+        crowd_boxes: (tensor) All the crowd box annotations or None if there are none.
         loc_t: (tensor) Tensor to be filled w/ endcoded location targets.
         conf_t: (tensor) Tensor to be filled w/ matched indices for conf preds. Note: -1 means neutral.
         idx_t: (tensor) Tensor to be filled w/ the index of the matched gt box for each prior.
@@ -92,33 +93,45 @@ def match(pos_thresh, neg_thresh, truths, priors, labels, loc_t, conf_t, idx_t, 
     Return:
         The matched indices corresponding to 1)location and 2)confidence preds.
     """
-    # jaccard index
-    overlaps = jaccard(
-        truths,
-        decode(loc_data, priors) if cfg.use_prediction_matching else point_form(priors)
-    )
-    # (Bipartite Matching)
-    # [1,num_objects] best prior for each ground truth
-    best_prior_overlap, best_prior_idx = overlaps.max(1, keepdim=True)
-    # [1,num_priors] best ground truth for each prior
-    best_truth_overlap, best_truth_idx = overlaps.max(0, keepdim=True)
-    best_truth_idx.squeeze_(0)
-    best_truth_overlap.squeeze_(0)
-    best_prior_idx.squeeze_(1)
-    best_prior_overlap.squeeze_(1)
-    best_truth_overlap.index_fill_(0, best_prior_idx, 2)  # ensure best prior
-    # TODO refactor: index  best_prior_idx with long tensor
-    # ensure every gt matches with its prior of max overlap
+    decoded_priors = decode(loc_data, priors) if cfg.use_prediction_matching else point_form(priors)
+    
+    # Size [num_objects, num_priors]
+    overlaps = jaccard(truths, decoded_priors)
+
+    # Size [num_objects] best prior for each ground truth
+    best_prior_overlap, best_prior_idx = overlaps.max(1)
+    # Size [num_priors] best ground truth for each prior
+    best_truth_overlap, best_truth_idx = overlaps.max(0)
+    
+    # For the best prior for each gt object, set its overlap to 2. This ensures
+    # that it won't get thresholded out in the threshold step even if the IoU is
+    # under the negative threshold. This is because we want at least one anchor
+    # to match with each ground truth or else we'd be wasting training data.
+    best_truth_overlap.index_fill_(0, best_prior_idx, 2)
+
+    # Set the index of the pair (prior, gt) we set the overlap for above.
     for j in range(best_prior_idx.size(0)):
         best_truth_idx[best_prior_idx[j]] = j
-    matches = truths[best_truth_idx]          # Shape: [num_priors,4]
-    conf = labels[best_truth_idx] + 1         # Shape: [num_priors]
+
+    matches = truths[best_truth_idx]            # Shape: [num_priors,4]
+    conf = labels[best_truth_idx] + 1           # Shape: [num_priors]
+
     conf[best_truth_overlap < pos_thresh] = -1  # label as neutral
     conf[best_truth_overlap < neg_thresh] =  0  # label as background
+
+    # Deal with crowd annotations for COCO
+    if crowd_boxes is not None and cfg.crowd_iou_threshold < 1:
+        # Size [num_priors, num_crowds]
+        crowd_overlaps = jaccard(decoded_priors, crowd_boxes, iscrowd=True)
+        # Size [num_priors]
+        best_crowd_overlap, best_crowd_idx = crowd_overlaps.max(1)
+        # Set non-positives with crowd iou of over the threshold to be neutral.
+        conf[(conf <= 0) & (best_crowd_overlap > cfg.crowd_iou_threshold)] = -1
+
     loc = encode(matches, priors)
-    loc_t[idx] = loc    # [num_priors,4] encoded offsets to learn
-    conf_t[idx] = conf  # [num_priors] top class label for each prior
-    idx_t[idx] = best_truth_idx # [num_priors] indices for lookup
+    loc_t[idx]  = loc    # [num_priors,4] encoded offsets to learn
+    conf_t[idx] = conf   # [num_priors] top class label for each prior
+    idx_t[idx]  = best_truth_idx # [num_priors] indices for lookup
 
 
 def encode(matched, priors):

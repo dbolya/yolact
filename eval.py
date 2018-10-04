@@ -86,29 +86,36 @@ def parse_args(argv=None):
                         help='If the config uses lincomb masks, output a visualization of how those masks are created.')
     parser.add_argument('--benchmark', default=False, dest='benchmark', action='store_true',
                         help='Equivalent to running display mode but without displaying an image.')
-    
+    parser.add_argument('--no_sort', default=False, dest='no_sort', action='store_true',
+                        help='Do not sort images by hashed image ID.')
+    parser.add_argument('--seed', default=None, type=int,
+                        help='The seed to pass into random.seed. Note: this is only really for the shuffle and does not (I think) affect cuda stuff.')
+    parser.add_argument('--mask_proto_debug', default=False, dest='mask_proto_debug', action='store_true',
+                        help='Outputs stuff for scripts/compute_mask.py.')
+    parser.add_argument('--no_crop', default=False, dest='crop', action='store_false',
+                        help='Do not crop output masks with the predicted bounding box.')
+
     parser.set_defaults(no_bar=False, display=False, resume=False, output_coco_json=False, output_web_json=False, shuffle=False,
-                        benchmark=False)
+                        benchmark=False, no_sort=False, no_hash=False, mask_proto_debug=False, crop=True)
 
     global args
     args = parser.parse_args(argv)
 
     if args.output_web_json:
         args.output_coco_json = True
+    
+    if args.seed is not None:
+        random.seed(args.seed)
 
 iou_thresholds = [x / 100 for x in range(50, 100, 5)]
 coco_cats = [] # Call prep_coco_cats to fill this
 coco_cats_inv = {}
 
 def prep_display(dets_out, img, gt, gt_masks, h, w):
-    gt_bboxes = torch.FloatTensor(gt[:, :4]).cpu()
-    gt_bboxes[:, [0, 2]] *= w
-    gt_bboxes[:, [1, 3]] *= h
-    
     img_numpy = undo_image_transformation(img, w, h)
     
     with timer.env('Postprocess'):
-        t = postprocess(dets_out, w, h, visualize_lincomb=args.display_lincomb)
+        t = postprocess(dets_out, w, h, visualize_lincomb=args.display_lincomb, crop_masks=args.crop)
 
     with timer.env('Copy'):
         classes, scores, boxes, masks = [x[:args.top_k].cpu().numpy() for x in t]
@@ -127,12 +134,12 @@ def prep_display(dets_out, img, gt, gt_masks, h, w):
             cv2.rectangle(img_numpy, (x1, y1), (x2, y2), color, 2)
 
         if args.display_masks:
-            mask = np.tile(masks[j].reshape(h, w, 1), (1, 1, 3)).astype(np.int32)
-            color_np = np.array(color[:3]).reshape(1, 1, 3)
+            mask = np.tile(masks[j].reshape(h, w, 1), (1, 1, 3)).astype(np.float32)
+            color_np = np.array(color[:3], dtype=np.float32).reshape(1, 1, 3) / 255.0
             color_np = np.tile(color_np, (h, w, 1))
             mask_color = mask * color_np
 
-            mask_alpha = 0.0015
+            mask_alpha = 0.35
 
             # Blend image and mask
             image_crop = img_numpy * mask
@@ -148,7 +155,7 @@ def prep_display(dets_out, img, gt, gt_masks, h, w):
 
 def prep_benchmark(dets_out, h, w):
     with timer.env('Postprocess'):
-        t = postprocess(dets_out, w, h, visualize_lincomb=args.display_lincomb)
+        t = postprocess(dets_out, w, h, crop_masks=args.crop)
 
     with timer.env('Copy'):
         classes, scores, boxes, masks = [x[:args.top_k].cpu().numpy() for x in t]
@@ -276,7 +283,7 @@ def bbox_iou(bbox1, bbox2, iscrowd=False):
         ret = jaccard(bbox1, bbox2, iscrowd)
     return ret.cpu()
 
-def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, crowd, image_id, detections:Detections=None):
+def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, num_crowd, image_id, detections:Detections=None):
     """ Returns a list of APs for this image, with each element being for a class  """
     if not args.output_coco_json:
         with timer.env('Prepare gt'):
@@ -286,16 +293,15 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, crowd, image_id, detect
             gt_classes = list(gt[:, 4].astype(int))
             gt_masks = torch.Tensor(gt_masks).view(-1, h*w)
 
-            if crowd is not None:
-                crowd_masks = torch.Tensor([x[5].reshape(-1) for x in crowd])
-                crowd_boxes = torch.Tensor([x[:4] for x in crowd])
-                crowd_boxes[:, [0, 2]] *= w
-                crowd_boxes[:, [1, 3]] *= h
-                crowd_classes = [int(x[4]) for x in crowd]
+            if num_crowd > 0:
+                split = lambda x: (x[-num_crowd:], x[:-num_crowd])
+                crowd_boxes  , gt_boxes   = split(gt_boxes)
+                crowd_masks  , gt_masks   = split(gt_masks)
+                crowd_classes, gt_classes = split(gt_classes)
+            num_crowd = 0
 
-    
     with timer.env('Postprocess'):
-        classes, scores, boxes, masks = postprocess(dets, w, h)
+        classes, scores, boxes, masks = postprocess(dets, w, h, crop_masks=args.crop)
 
         if classes.size(0) == 0:
             return
@@ -304,6 +310,7 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, crowd, image_id, detect
         scores = list(scores.cpu().numpy().astype(float))
         masks = masks.view(-1, h*w).cuda()
         boxes = boxes.cuda()
+
 
     if args.output_coco_json:
         boxes = boxes.cpu().numpy()
@@ -321,7 +328,7 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, crowd, image_id, detect
     mask_iou_cache = mask_iou(masks, gt_masks)
     bbox_iou_cache = bbox_iou(boxes.float(), gt_boxes.float())
 
-    if crowd is not None:
+    if num_crowd > 0:
         crowd_mask_iou_cache = mask_iou(masks, crowd_masks, iscrowd=True)
         crowd_bbox_iou_cache = bbox_iou(boxes.float(), crowd_boxes.float(), iscrowd=True)
     else:
@@ -370,7 +377,7 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, crowd, image_id, detect
                         # If the detection matches a crowd, we can just ignore it
                         matched_crowd = False
 
-                        if crowd is not None:
+                        if num_crowd > 0:
                             for j in range(len(crowd_classes)):
                                 if crowd_classes[j] != _class:
                                     continue
@@ -474,6 +481,7 @@ def badhash(x):
 
 def evaluate(net:Yolact, dataset, train_mode=False):
     net.detect.cross_class_nms = args.cross_class_nms
+    cfg.mask_proto_debug = args.mask_proto_debug
 
     frame_times = MovingAverage()
     dataset_size = len(dataset) if args.max_images < 0 else min(args.max_images, len(dataset))
@@ -496,7 +504,7 @@ def evaluate(net:Yolact, dataset, train_mode=False):
     
     if args.shuffle:
         random.shuffle(dataset_indices)
-    else:
+    elif not args.no_sort:
         # Do a deterministic shuffle based on the image ids
         #
         # I do this because on python 3.5 dictionary key order is *random*, while in 3.6 it's
@@ -516,7 +524,13 @@ def evaluate(net:Yolact, dataset, train_mode=False):
             timer.reset()
 
             with timer.env('Load Data'):
-                img, gt, gt_masks, h, w, crowd = dataset.pull_item(image_idx)
+                img, gt, gt_masks, h, w, num_crowd = dataset.pull_item(image_idx)
+
+                # Test flag, do not upvote
+                if cfg.mask_proto_debug:
+                    with open('scripts/info.txt', 'w') as f:
+                        f.write(str(dataset.ids[image_idx]))
+                    np.save('scripts/gt.npy', gt_masks)
 
                 batch = Variable(img.unsqueeze(0))
                 if args.cuda:
@@ -531,7 +545,7 @@ def evaluate(net:Yolact, dataset, train_mode=False):
             elif args.benchmark:
                 prep_benchmark(preds, h, w)
             else:
-                prep_metrics(ap_data, preds, img, gt, gt_masks, h, w, crowd, dataset.ids[image_idx], detections)
+                prep_metrics(ap_data, preds, img, gt, gt_masks, h, w, num_crowd, dataset.ids[image_idx], detections)
             
             # First couple of images take longer because we're constructing the graph.
             # Since that's technically initialization, don't include those in the FPS calculations.
@@ -624,13 +638,16 @@ def print_maps(all_maps):
 if __name__ == '__main__':
     parse_args()
 
-    if args.trained_model == 'interrupt':
-        args.trained_model = SavePath.get_interrupt('weights/')
-    model_path = SavePath.from_str(args.trained_model)
-
     if args.config is not None:
         set_cfg(args.config)
-    else:
+
+    if args.trained_model == 'interrupt':
+        args.trained_model = SavePath.get_interrupt('weights/')
+    elif args.trained_model == 'latest':
+        args.trained_model = SavePath.get_latest('weights/', cfg.name)
+
+    if args.config is None:
+        model_path = SavePath.from_str(args.trained_model)
         # TODO: Bad practice? Probably want to do a name lookup instead.
         args.config = model_path.model_name + '_config'
         print('Config not specified. Loading config %s instead.\n' % args.config)
@@ -654,9 +671,7 @@ if __name__ == '__main__':
             calc_map(ap_data)
             exit()
 
-        dataset = COCODetection(args.coco_root, cfg.dataset.valid, 
-                                BaseTransform(),
-                                prep_crowds=True)
+        dataset = COCODetection(args.coco_root, cfg.dataset.valid, BaseTransform())
         
         prep_coco_cats(dataset.coco.cats)
 

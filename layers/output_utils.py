@@ -12,7 +12,8 @@ from utils.augmentations import Resize
 from utils.functions import sanitize_coordinates
 from utils import timer
 
-def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear', visualize_lincomb=False):
+def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear',
+                visualize_lincomb=False, crop_masks=True):
     """
     Postprocesses the output of Yolact on testing mode into a format that makes sense,
     accounting for all the possible configuration settings.
@@ -67,16 +68,20 @@ def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear', vi
     
     # Actually extract everything from dets now
     classes = dets[:, 0].int()
-    boxes = dets[:, 2:6]
-    x1, x2 = sanitize_coordinates(boxes[:, 0], boxes[:, 2], b_w, cast=True)
-    y1, y2 = sanitize_coordinates(boxes[:, 1], boxes[:, 3], b_h, cast=True)
-    boxes = torch.stack((x1, y1, x2, y2), dim=1)
-    scores = dets[:, 1]
-    masks = dets[:, 6:]
+    boxes   = dets[:, 2:6]
+    x1, x2  = sanitize_coordinates(boxes[:, 0], boxes[:, 2], b_w, cast=True)
+    y1, y2  = sanitize_coordinates(boxes[:, 1], boxes[:, 3], b_h, cast=True)
+    boxes   = torch.stack((x1, y1, x2, y2), dim=1)
+    scores  = dets[:, 1]
+    masks   = dets[:, 6:]
 
     if cfg.mask_type == mask_type.lincomb:
         # At this points masks is only the coefficients
         proto_data = det_output['proto_data'][batch_idx]
+        
+        # Test flag, do not upvote
+        if cfg.mask_proto_debug:
+            np.save('scripts/proto.npy', proto_data.cpu().numpy())
         
         if visualize_lincomb:
             display_lincomb(proto_data, masks)
@@ -95,11 +100,12 @@ def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear', vi
 
         # "Crop" predicted masks by zeroing out everything not in the predicted bbox
         # TODO: Write a cuda implementation of this to get rid of the loop
-        num_dets = boxes.size(0)
-        crop_mask = torch.zeros(num_dets, h, w, device=masks.device)
-        for jdx in range(num_dets):
-            crop_mask[jdx, y1[jdx]:y2[jdx], x1[jdx]:x2[jdx]] = 1
-        masks = masks * crop_mask
+        if crop_masks:
+            num_dets = boxes.size(0)
+            crop_mask = torch.zeros(num_dets, h, w, device=masks.device)
+            for jdx in range(num_dets):
+                crop_mask[jdx, y1[jdx]:y2[jdx], x1[jdx]:x2[jdx]] = 1
+            masks = masks * crop_mask
 
         # Binarize the masks
         masks = masks.gt(0.5).float()
@@ -161,7 +167,11 @@ def undo_image_transformation(img, w, h):
 
 
 def display_lincomb(proto_data, masks):
-    for jdx in range(1):
+    out_masks = torch.matmul(proto_data, masks.t())
+    # out_masks = cfg.mask_proto_mask_activation(out_masks)
+
+    for kdx in range(5):
+        jdx = kdx + 0
         import matplotlib.pyplot as plt
         coeffs = masks[jdx, :].cpu().numpy()
         idx = np.argsort(-np.abs(coeffs))
@@ -169,7 +179,7 @@ def display_lincomb(proto_data, masks):
         # plt.show()
         
         coeffs_sort = coeffs[idx]
-        arr_h, arr_w = (8, 8)
+        arr_h, arr_w = (6,6)
         proto_h, proto_w, _ = proto_data.size()
         arr_img = np.zeros([proto_h*arr_h, proto_w*arr_w])
         arr_run = np.zeros([proto_h*arr_h, proto_w*arr_w])
@@ -188,7 +198,7 @@ def display_lincomb(proto_data, masks):
                 if cfg.mask_proto_mask_activation == activation_func.sigmoid:
                     running_total_nonlin = (1/(1+np.exp(-running_total_nonlin)))
 
-                arr_img[y*proto_h:(y+1)*proto_h, x*proto_w:(x+1)*proto_w] = proto_data[:, :, idx[i]].cpu().numpy() * coeffs_sort[i]
+                arr_img[y*proto_h:(y+1)*proto_h, x*proto_w:(x+1)*proto_w] = (proto_data[:, :, idx[i]] / torch.max(proto_data[:, :, idx[i]])).cpu().numpy() * coeffs_sort[i]
                 arr_run[y*proto_h:(y+1)*proto_h, x*proto_w:(x+1)*proto_w] = (running_total_nonlin > 0.5).astype(np.float)
         plt.imshow(arr_img)
         plt.show()
@@ -196,3 +206,5 @@ def display_lincomb(proto_data, masks):
         plt.show()
         # plt.imshow(test)
         # plt.show()
+        plt.imshow(out_masks[:, :, jdx].cpu().numpy())
+        plt.show()

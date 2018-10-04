@@ -39,23 +39,21 @@ class MultiBoxLoss(nn.Module):
         self.neg_threshold = neg_threshold
         self.negpos_ratio = negpos_ratio
         
-        self.mask_dim = cfg.mask_dim
-        self.use_gt_bboxes = cfg.use_gt_bboxes
-        self.train_masks = cfg.train_masks
-        
         # Extra loss coefficients to get all the losses to be in a similar range
         self.mask_alpha = 0.2 / cfg.mask_dim
         self.bbox_alpha = 5 if cfg.use_yolo_regressors else 1
 
-        if cfg.mask_proto_normalize_mask_loss:
-            self.mask_alpha *= 300
+        if cfg.mask_proto_normalize_mask_loss_by_sqrt_area:
+            self.mask_alpha *= 30
+        if cfg.mask_proto_reweight_mask_loss:
+            self.mask_alpha /= 4
 
         # If you output a proto mask with this area, your l1 loss will be l1_alpha
         # Note that the area is relative (so 1 would be the entire image)
         self.l1_expected_area = 20*20/70/70
         self.l1_alpha = 0.1
 
-    def forward(self, predictions, targets, masks):
+    def forward(self, predictions, targets, masks, num_crowds):
         """Multibox Loss
         Args:
             predictions (tuple): A tuple containing loc preds, conf preds,
@@ -71,6 +69,9 @@ class MultiBoxLoss(nn.Module):
 
             masks (list<tensor>): Ground truth masks for each object in each image,
                 shape: [batch_size][num_objs,im_height,im_width]
+
+            num_crowds (list<int>): Number of crowd annotations per batch. The crowd
+                annotations should be the last num_crowds elements of targets and masks.
             
             * Only if mask_type == lincomb
         """
@@ -92,12 +93,27 @@ class MultiBoxLoss(nn.Module):
         conf_t = loc_data.new(num, num_priors).long()
         idx_t = loc_data.new(num, num_priors).long()
 
+        defaults = priors.data
+
         for idx in range(num):
             truths = targets[idx][:, :-1].data
             labels = targets[idx][:, -1].data
-            defaults = priors.data
+
+            # Split the crowd annotations because they come bundled in
+            cur_crowds = num_crowds[idx]
+            if cur_crowds > 0:
+                split = lambda x: (x[-cur_crowds:], x[:-cur_crowds])
+                crowd_boxes, truths = split(truths)
+
+                # We don't use the crowd labels or masks
+                _, labels = split(labels)
+                _, masks[idx] = split(masks[idx])
+            else:
+                crowd_boxes = None
+
+            
             match(self.pos_threshold, self.neg_threshold,
-                  truths, defaults, labels,
+                  truths, defaults, labels, crowd_boxes,
                   loc_t, conf_t, idx_t, idx, loc_data[idx])
 
         # wrap targets
@@ -108,23 +124,26 @@ class MultiBoxLoss(nn.Module):
         pos = conf_t > 0
         num_pos = pos.sum(dim=1, keepdim=True)
 
-        # Localization Loss (Smooth L1)
         # Shape: [batch,num_priors,4]
         pos_idx = pos.unsqueeze(pos.dim()).expand_as(loc_data)
-        loc_p = loc_data[pos_idx].view(-1, 4)
-        loc_t = loc_t[pos_idx].view(-1, 4)
-        loss_l = F.smooth_l1_loss(loc_p, loc_t, reduction='sum') * self.bbox_alpha
+        
+        # Localization Loss (Smooth L1)
+        loss_l = 0
+        if cfg.train_boxes:
+            loc_p = loc_data[pos_idx].view(-1, 4)
+            loc_t = loc_t[pos_idx].view(-1, 4)
+            loss_l = F.smooth_l1_loss(loc_p, loc_t, reduction='sum') * self.bbox_alpha
 
         # Mask Loss
         loss_p = 0 # Proto loss
-        if self.train_masks:
+        if cfg.train_masks:
             if cfg.mask_type == mask_type.direct:
-                if self.use_gt_bboxes:
+                if cfg.use_gt_bboxes:
                     pos_masks = []
                     for idx in range(num):
                         pos_masks.append(masks[idx][idx_t[idx, pos[idx]]])
                     masks_t = torch.cat(pos_masks, 0)
-                    masks_p = mask_data[pos, :].view(-1, self.mask_dim)
+                    masks_p = mask_data[pos, :].view(-1, cfg.mask_dim)
                     loss_m = F.binary_cross_entropy(masks_p, masks_t, reduction='sum') * self.mask_alpha
                 else:
                     loss_m = self.direct_mask_loss(pos_idx, idx_t, loc_data, mask_data, priors, masks)
@@ -218,22 +237,50 @@ class MultiBoxLoss(nn.Module):
         return loss_m
     
 
-    def lincomb_mask_loss(self, pos, idx_t, loc_data, mask_data, priors, proto_data, masks):
+    def lincomb_mask_loss(self, pos, idx_t, loc_data, mask_data, priors, proto_data, masks, interpolation_mode='bilinear'):
         mask_h = proto_data.size(1)
         mask_w = proto_data.size(2)
+
+        if cfg.mask_proto_remove_empty_masks:
+            # Make sure to store a copy of this because we edit it to get rid of all-zero masks
+            pos = pos.clone()
 
         loss_m = 0
 
         for idx in range(mask_data.size(0)):
             with torch.no_grad():
-                downsampled_masks = F.adaptive_avg_pool2d(masks[idx], (mask_h, mask_w))
+                downsampled_masks = F.interpolate(masks[idx].unsqueeze(0), (mask_h, mask_w),
+                                                  mode=interpolation_mode, align_corners=False).squeeze(0)
                 downsampled_masks = downsampled_masks.permute(1, 2, 0).contiguous()
-                
+
                 if cfg.mask_proto_binarize_downsampled_gt:
                     downsampled_masks = downsampled_masks.gt(0.5).float()
-            
+
+                if cfg.mask_proto_remove_empty_masks:
+                    # Get rid of gt masks that are so small they get downsampled away
+                    very_small_masks = (downsampled_masks.sum(dim=(0,1)) <= 0.0001)
+                    for i in range(very_small_masks.size(0)):
+                        if very_small_masks[i]:
+                            pos[idx, idx_t[idx] == i] = 0
+
+                if cfg.mask_proto_reweight_mask_loss:
+                    # Ensure that the gt is binary
+                    if not cfg.mask_proto_binarize_downsampled_gt:
+                        bin_gt = downsampled_masks.gt(0.5).float()
+                    else:
+                        bin_gt = downsampled_masks
+
+                    gt_foreground_norm = bin_gt     / (torch.sum(bin_gt,   dim=(0,1), keepdim=True) + 0.0001)
+                    gt_background_norm = (1-bin_gt) / (torch.sum(1-bin_gt, dim=(0,1), keepdim=True) + 0.0001)
+
+                    mask_reweighting   = gt_foreground_norm + gt_background_norm
+                    mask_reweighting  *= mask_h * mask_w
+
             cur_pos = pos[idx]
             pos_idx_t = idx_t[idx, cur_pos]
+
+            if pos_idx_t.size(0) == 0:
+                continue
             
             pos_bboxes = decode(loc_data[idx, :, :], priors.data)
             pos_bboxes = pos_bboxes[cur_pos, :]
@@ -251,36 +298,36 @@ class MultiBoxLoss(nn.Module):
                 pos_idx_t  = pos_idx_t[select]
 
             num_pos = proto_coef.size(0)
+            mask_t = downsampled_masks[:, :, pos_idx_t]          
 
             # Size: [mask_h, mask_w, num_pos]
             pred_masks = torch.matmul(proto_masks, proto_coef.t())
             pred_masks = cfg.mask_proto_mask_activation(pred_masks)
 
-            # Take care of all the bad behavior that can be caused by out of bounds coordinates
-            x1, x2 = sanitize_coordinates(pos_bboxes[:, 0], pos_bboxes[:, 2], mask_w)
-            y1, y2 = sanitize_coordinates(pos_bboxes[:, 1], pos_bboxes[:, 3], mask_h)
-
-            # "Crop" predicted masks by zeroing out everything not in the predicted bbox
-            # TODO: Write a cuda implementation of this to get rid of the loop
             if cfg.mask_proto_crop:
+                # Take care of all the bad behavior that can be caused by out of bounds coordinates
+                x1, x2 = sanitize_coordinates(pos_bboxes[:, 0], pos_bboxes[:, 2], mask_w)
+                y1, y2 = sanitize_coordinates(pos_bboxes[:, 1], pos_bboxes[:, 3], mask_h)
+
+                # "Crop" predicted masks by zeroing out everything not in the predicted bbox
+                # TODO: Write a cuda implementation of this to get rid of the loop
                 crop_mask = torch.zeros(mask_h, mask_w, num_pos)
                 for jdx in range(num_pos):
                     crop_mask[y1[jdx]:y2[jdx], x1[jdx]:x2[jdx], jdx] = 1
                 pred_masks = pred_masks * crop_mask
-
-            mask_t = downsampled_masks[:, :, pos_idx_t]
             
             if cfg.mask_proto_mask_activation == activation_func.sigmoid:
                 pre_loss = F.binary_cross_entropy(pred_masks, mask_t, reduction='none')
             else:
                 pre_loss = F.smooth_l1_loss(pred_masks, mask_t, reduction='none')
 
-            if cfg.mask_proto_normalize_mask_loss:
-                gt_area  = torch.sum(mask_t,   dim=(0, 1))
-                pre_loss = torch.sum(pre_loss, dim=(0, 1))
+            if cfg.mask_proto_normalize_mask_loss_by_sqrt_area:
+                gt_area  = torch.sum(mask_t,   dim=(0, 1), keepdim=True)
+                pre_loss = pre_loss / (torch.sqrt(gt_area) + 0.0001)
+            
+            if cfg.mask_proto_reweight_mask_loss:
+                pre_loss = pre_loss * mask_reweighting[:, :, pos_idx_t]
 
-                loss_m += torch.sum(pre_loss / (gt_area + 1))
-            else:
-                loss_m += torch.sum(pre_loss)
+            loss_m += torch.sum(pre_loss)
 
         return loss_m * self.mask_alpha

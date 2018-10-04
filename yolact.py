@@ -8,6 +8,7 @@ from math import sqrt
 
 from data.config import cfg, mask_type
 from layers import Detect
+from layers.interpolate import InterpolateModule
 from backbone import construct_backbone
 
 import torch.backends.cudnn as cudnn
@@ -36,8 +37,6 @@ class PredictionModule(nn.Module):
                                        boxes with an area of 20x20px. If the scale is
                                        .5 on the other hand, this layer would consider
                                        bounding boxes with area 10x10px, etc.
-        - num_classes:   The number of classes to consider for classification.
-        - mask_size:     The side length of the downsampled predicted mask.
     """
     
     def __init__(self, in_channels, out_channels=1024, aspect_ratios=[[1]], scales=[1]):
@@ -46,15 +45,34 @@ class PredictionModule(nn.Module):
         self.num_classes = cfg.num_classes
         self.mask_dim    = cfg.mask_dim
         self.num_priors  = sum(len(x) for x in aspect_ratios)
+        
+        if cfg.mask_proto_prototypes_as_features:
+            out_channels += self.mask_dim
 
         if cfg.use_prediction_module:
             self.block = Bottleneck(in_channels, out_channels // 4)
             self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=True)
             self.bn = nn.BatchNorm2d(out_channels)
 
-        self.bbox_layer = nn.Conv2d(out_channels, self.num_priors * 4,                kernel_size=3, padding=1)
-        self.conf_layer = nn.Conv2d(out_channels, self.num_priors * self.num_classes, kernel_size=3, padding=1)
-        self.mask_layer = nn.Conv2d(out_channels, self.num_priors * self.mask_dim,    kernel_size=3, padding=1)
+        self.bbox_layer = nn.Conv2d(out_channels, self.num_priors * 4,                 kernel_size=3, padding=1)
+        self.conf_layer = nn.Conv2d(out_channels, self.num_priors * self.num_classes,  kernel_size=3, padding=1)
+        self.mask_layer = nn.Conv2d(out_channels, self.num_priors * self.mask_dim,     kernel_size=3, padding=1)
+        
+        # What is this ugly lambda doing in the middle of all this clean prediction module code?
+        def make_extra(num_layers):
+            if num_layers == 0:
+                return lambda x: x
+            else:
+                # Looks more complicated than it is. This just creates an array of num_layers alternating conv-relu
+                return nn.Sequential(*sum([[
+                    nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
+                    nn.ReLU(inplace=True)
+                ] for _ in range(num_layers)], []))
+
+        self.bbox_extra, self.conf_extra, self.mask_extra = [make_extra(x) for x in cfg.extra_layers]
+        
+        if cfg.mask_type == mask_type.lincomb and cfg.mask_proto_coeff_gate:
+            self.gate_layer = nn.Conv2d(out_channels, self.num_priors * self.mask_dim, kernel_size=3, padding=1)
 
         self.aspect_ratios = aspect_ratios
         self.scales = scales
@@ -88,9 +106,13 @@ class PredictionModule(nn.Module):
             # TODO: Possibly switch this out for a product
             x = a + b
 
-        bbox = self.bbox_layer(x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, 4)
-        conf = self.conf_layer(x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, self.num_classes)
-        mask = self.mask_layer(x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, self.mask_dim)
+        bbox_x = self.bbox_extra(x)
+        conf_x = self.conf_extra(x)
+        mask_x = self.mask_extra(x)
+
+        bbox = self.bbox_layer(bbox_x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, 4)
+        conf = self.conf_layer(conf_x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, self.num_classes)
+        mask = self.mask_layer(mask_x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, self.mask_dim)
         
         # See box_utils.decode for an explaination of this
         if cfg.use_yolo_regressors:
@@ -98,11 +120,14 @@ class PredictionModule(nn.Module):
             bbox[:, :, 0] /= conv_w
             bbox[:, :, 1] /= conv_h
 
-
         if cfg.mask_type == mask_type.direct:
             mask = torch.sigmoid(mask)
         elif cfg.mask_type == mask_type.lincomb:
             mask = cfg.mask_proto_coeff_activation(mask)
+
+            if cfg.mask_proto_coeff_gate:
+                gate = self.gate_layer(x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, self.mask_dim)
+                mask = mask * torch.sigmoid(gate)
         
         priors = self.make_priors(conv_h, conv_w)
 
@@ -180,14 +205,25 @@ class Yolact(nn.Module):
 
             def make_layer(layer_cfg):
                 nonlocal in_channels
+                num_channels = layer_cfg[0]
                 kernel_size = layer_cfg[1]
                 
+                # Possible patterns:
+                # ( 256, 3, {}) -> conv
+                # ( 256,-2, {}) -> deconv
+                # (None,-2, {}) -> bilinear interpolate
+                #
+                # You know it would have probably been simpler just to adopt a 'c' 'd' 'u' naming scheme.
+                # Whatever, it's too late now.
                 if kernel_size > 0:
-                    layer = nn.Conv2d(in_channels, layer_cfg[0], kernel_size, **layer_cfg[2])
+                    layer = nn.Conv2d(in_channels, num_channels, kernel_size, **layer_cfg[2])
                 else:
-                    layer = nn.ConvTranspose2d(in_channels, layer_cfg[0], -kernel_size, **layer_cfg[2])
+                    if num_channels is None:
+                        layer = InterpolateModule(scale_factor=-kernel_size, mode='bilinear', align_corners=False, **layer_cfg[2])
+                    else:
+                        layer = nn.ConvTranspose2d(in_channels, num_channels, -kernel_size, **layer_cfg[2])
                 
-                in_channels = layer_cfg[0]
+                in_channels = num_channels if num_channels is not None else in_channels
                 return [layer, nn.ReLU(inplace=True)]
 
             # The -1 here is to remove the last relu because we might want to change it to another function
@@ -233,15 +269,6 @@ class Yolact(nn.Module):
         with timer.env('pass1'):
             outs = self.backbone(x)
 
-        with timer.env('pass2'):
-            pred_outs = ([], [], [], [])
-            for idx, pred_layer in zip(self.selected_layers, self.prediction_layers):
-                p = pred_layer(outs[idx])
-                for out, pred in zip(pred_outs, p):
-                    out.append(pred)
-
-        pred_outs = [torch.cat(x, -2) for x in pred_outs]
-
         if cfg.mask_type == mask_type.lincomb:
             with timer.env('proto'):
                 proto_x = x if self.proto_src is None else outs[self.proto_src]
@@ -251,15 +278,43 @@ class Yolact(nn.Module):
                     proto_x = torch.cat([proto_x, grids], dim=1)
 
                 proto_out = self.proto_net(proto_x)
-                proto_out = proto_out.permute(0, 2, 3, 1).contiguous()
                 proto_out = cfg.mask_proto_prototype_activation(proto_out)
+                
+                if cfg.mask_proto_prototypes_as_features:
+                    # Clone here because we don't want to pemute this, though idk if contiguous makes this unnecessary
+                    proto_downsampled = proto_out.clone()
+
+                    if cfg.mask_proto_prototypes_as_features_no_grad:
+                        proto_downsampled = proto_out.detach()
+                
+                # Move the features last so the multipliaction is easy
+                proto_out = proto_out.permute(0, 2, 3, 1).contiguous()
 
                 if cfg.mask_proto_bias:
                     bias_shape = [x for x in proto_out.size()]
                     bias_shape[-1] = 1
                     proto_out = torch.cat([proto_out, torch.ones(*bias_shape)], -1)
 
-                pred_outs.append(proto_out)
+        with timer.env('pass2'):
+            pred_outs = ([], [], [], [])
+            
+            for idx, pred_layer in zip(self.selected_layers, self.prediction_layers):
+                pred_x = outs[idx]
+
+                if cfg.mask_type == mask_type.lincomb and cfg.mask_proto_prototypes_as_features:
+                    # Scale the prototypes down to the current prediction layer's size and add it as inputs
+                    proto_downsampled = F.interpolate(proto_downsampled, size=outs[idx].size()[2:], mode='bilinear', align_corners=False)
+                    pred_x = torch.cat([pred_x, proto_downsampled], dim=1)
+
+                p = pred_layer(pred_x)
+                
+                for out, pred in zip(pred_outs, p):
+                    out.append(pred)
+
+        pred_outs = [torch.cat(x, -2) for x in pred_outs]
+
+        if cfg.mask_type == mask_type.lincomb:
+            pred_outs.append(proto_out)
 
         if self.training:
             return pred_outs

@@ -57,10 +57,10 @@ coco2014_dataset = Config({
     'valid': 'val2014'
 })
 
-coco_trainval35k_dataset = Config({
-    'name': 'COCO trainval35k',
-    'train': 'trainval35k_',
-    'valid': 'minival5k_'
+coco2017_dataset = Config({
+    'name': 'COCO 2017',
+    'train': 'train2017', # Trainval35k
+    'valid': 'val2017'    # Minibatch5k
 })
 
 # Backbones
@@ -142,6 +142,8 @@ mask_type = Config({
     #                                   the form (num_features, kernel_size, **kwdargs). An empty
     #                                   list means to use the source for prototype masks. If the
     #                                   kernel_size is negative, this creates a deconv layer instead.
+    #                                   If the kernel_size is negative and the num_features is None,
+    #                                   this creates a simple bilinear interpolation layer instead.
     #   - mask_proto_bias (bool): Whether to include an extra coefficient that corresponds to a proto
     #                             mask of all ones.
     #   - mask_proto_prototype_activation (func): The activation to apply to each prototype mask.
@@ -152,11 +154,21 @@ mask_type = Config({
     #   - mask_proto_loss (str [l1|disj]): If not None, apply an l1 or disjunctive regularization
     #                                      loss directly to the prototype masks.
     #   - mask_proto_binarize_downsampled_gt (bool): Binarize GT after dowsnampling during training?
-    #   - mask_proto_normalize_mask_loss (bool): Whether to normalize mask loss by sum(gt)
+    #   - mask_proto_normalize_mask_loss_by_sqrt_area (bool): Whether to normalize mask loss by sqrt(sum(gt))
+    #   - mask_proto_reweight_mask_loss (bool): Reweight mask loss such that background is divided by
+    #                                           #background and foreground is divided by #foreground.
     #   - mask_proto_grid_file (str): The path to the grid file to use with the next option.
     #                                 This should be a numpy.dump file with shape [numgrids, h, w]
     #                                 where h and w are w.r.t. the mask_proto_src convout.
     #   - mask_proto_use_grid (bool): Whether to add extra grid features to the proto_net input.
+    #   - mask_proto_coeff_gate (bool): Add an extra set of sigmoided coefficients that is multiplied
+    #                                   into the predicted coefficients in order to "gate" them.
+    #   - mask_proto_prototypes_as_features (bool): For each prediction module, downsample the prototypes
+    #                                 to the convout size of that module and supply the prototypes as input
+    #                                 in addition to the already supplied backbone features.
+    #   - mask_proto_prototypes_as_features_no_grad (bool): If the above is set, don't backprop gradients to
+    #                                 to the prototypes from the network head.
+    #   - mask_proto_remove_empty_masks (bool): Remove masks that are downsampled to 0 during loss calculations.
     'lincomb': 1,
 })
 
@@ -190,9 +202,18 @@ coco_base_config = Config({
     'mask_proto_crop': True,
     'mask_proto_loss': None,
     'mask_proto_binarize_downsampled_gt': True,
-    'mask_proto_normalize_mask_loss': False,
+    'mask_proto_normalize_mask_loss_by_sqrt_area': False,
+    'mask_proto_reweight_mask_loss': False,
     'mask_proto_grid_file': 'data/grid.npy',
     'mask_proto_use_grid':  False,
+    'mask_proto_coeff_gate': False,
+    'mask_proto_prototypes_as_features': False,
+    'mask_proto_prototypes_as_features_no_grad': False,
+    'mask_proto_remove_empty_masks': False,
+
+    # Add extra layers between the backbone and the network heads
+    # The order is (bbox, conf, mask)
+    'extra_layers': (0, 0, 0),
 
     # During training, to match detections with gt, first compute the maximum gt IoU for each prior.
     # Then, any of those priors whose maximum overlap is over the positive threshold, mark as positive.
@@ -200,6 +221,10 @@ coco_base_config = Config({
     # The rest are neutral and not used in calculating the loss.
     'positive_iou_threshold': 0.5,
     'negative_iou_threshold': 0.5,
+
+    # If less than 1, anchors treated as a negative that have a crowd iou over this threshold with
+    # the crowd boxes will be treated as a neutral.
+    'crowd_iou_threshold': 1,
 
     # This is filled in at runtime by Yolact's __init__, so don't touch it
     'mask_dim': None,
@@ -211,8 +236,9 @@ coco_base_config = Config({
     # Whether or not to do post processing on the cpu at test time
     'force_cpu_nms': True,
 
-    # Whether or not to tie the mask loss to 0
+    # Whether or not to tie the mask loss / box loss to 0
     'train_masks': True,
+    'train_boxes': True,
     # If enabled, the gt masks will be cropped using the gt bboxes instead of the predicted ones.
     # This speeds up training time considerably but results in much worse mAP at test time.
     'use_gt_bboxes': False,
@@ -445,6 +471,20 @@ yrm13_config = yolact_resnet101_maskrcnn_config.copy({
     'use_yolo_regressors': False,
     'mask_proto_crop': False,
 })
+yrm13_35k_config = yrm13_config.copy({
+    'name': 'yrm13_35k',
+    'dataset': coco2017_dataset,
+})
+
+# This config is to emulate the DSSD SSD513 training parameters for an exact comparison.
+yrm13_dssd_35k_config = yrm13_config.copy({
+    'name': 'yrm13_dssd_35k',
+    'dataset': coco2017_dataset,
+
+    # Make sure the batch size is 20 for this
+    'lr_steps': (160000, 220000, 240000),
+    'max_iter': 240000,
+})
 
 yrm14_config = yolact_resnet101_maskrcnn_1_config.copy({
     'name': 'yrm14',
@@ -457,7 +497,11 @@ yrm15_config = yolact_resnet101_maskrcnn_1_config.copy({
 })
 yrm16_config = yolact_resnet101_maskrcnn_1_config.copy({
     'name': 'yrm16',
-    'mask_proto_normalize_mask_loss': True,
+    'mask_proto_normalize_mask_loss_by_sqrt_area': True,
+})
+yrm16_2_config = yolact_resnet101_maskrcnn_1_config.copy({
+    'name': 'yrm16_2',
+    'mask_proto_normalize_mask_loss_by_sqrt_area': True,
 })
 yrm17_config = yrm13_config.copy({
     'name': 'yrm17',
@@ -497,14 +541,112 @@ fixed_ssd_config = yrm13_config.copy({
 
 })
 
-fixed_cluster_config = yrm13_config.copy({
-    'name': 'fixed_cluster',
-
-    'backbone': fixed_ssd_config.backbone.copy({
-        'pred_aspect_ratios': [ [[1, 0.7, 0.5, 0.3, 1.6][:n], [1]] for n in [3, 5, 5, 5, 3, 3] ],
-    }),
-
+yrm18_config = yrm13_config.copy({
+    'name': 'yrm18',
+    'mask_proto_coeff_activation': activation_func.none,
+    'backbone': fixed_ssd_config.backbone,
 })
+
+yrm19_config = yrm18_config.copy({
+    'name': 'yrm19',
+    'mask_proto_coeff_gate': True,
+})
+
+yrm20_config = fixed_ssd_config.copy({
+    'name': 'yrm20',
+    'use_prediction_module': True,
+})
+
+# This config will not work anymore (it was a bug)
+# Any configs based off of it will also not work
+yrm21_config = fixed_ssd_config.copy({
+    'name': 'yrm21',
+    # This option doesn't exit anymore
+    'mask_proto_replace_deconv_with_upsample': True,
+})
+
+yrm22_config = fixed_ssd_config.copy({
+    'name': 'yrm22',
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(None, -2, {}), (256, 3, {'padding': 1})] * 2 + [(256, 1, {})],
+})
+
+yrm22_2_config = yrm22_config.copy({
+    'name': 'yrm22_2',
+    'crowd_iou_threshold': 1,
+})
+
+yrm22_crowd_config = yrm22_config.copy({
+    'name': 'yrm22_crowd',
+    'crowd_iou_threshold': 0.7,
+})
+
+yrm16_3_config = yrm21_config.copy({
+    'name': 'yrm16_3',
+    'mask_proto_normalize_mask_loss_by_sqrt_area': True,
+})
+
+yrm23_config = yrm21_config.copy({
+    'name': 'yrm23',
+    'extra_layers': (0, 0, 1),
+})
+
+yrm24_config = yrm21_config.copy({
+    'name': 'yrm24',
+    'train_boxes': False,
+})
+
+
+yrm25_config = yrm22_config.copy({
+    'name': 'yrm25',
+    'mask_proto_reweight_mask_loss': True,
+})
+
+# Continue training config 25 with or without the reweighting
+yrm25_a_config = yrm22_config.copy({
+    'name': 'yrm25_a',
+    'mask_proto_reweight_mask_loss': True,
+    # Start at lr = 1e-4 instead of 1e-3
+    'lr_steps': (0, 280000, 360000, 400000),
+})
+
+yrm25_b_config = yrm22_config.copy({
+    'name': 'yrm25_b',
+    'mask_proto_reweight_mask_loss': False,
+    # Start at lr = 1e-4 instead of 1e-3
+    'lr_steps': (0, 280000, 360000, 400000),
+})
+
+# This is a big boi, tread with caution
+yrm26_config = yrm22_config.copy({
+    'name': 'yrm26',
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(None, -1.8, {}), (256, 3, {'padding': 1})] * 3 + [(256, 1, {})],
+
+    # Because this is such a big boi, we use batch size 6. lr_steps / 6 * 8
+    'lr_steps': (373333, 480000, 533333),
+    'max_iter': 533333,
+})
+
+yrm27_config = yrm22_config.copy({
+    'name': 'yrm27',
+    'extra_layers': (1, 1, 1)
+})
+
+yrm28_config = yrm22_config.copy({
+    'name': 'yrm28',
+    'mask_proto_prototypes_as_features': True,
+})
+
+yrm29_config = yrm22_config.copy({
+    'name': 'yrm29',
+    'mask_proto_remove_empty_masks': True,
+})
+
+yrm28_2_config = yrm28_config.copy({
+    'name': 'yrm28_2',
+    'mask_proto_prototypes_as_features_no_grad': True, 
+})
+
+
 
 yolact_vgg16_config = ssd550_config.copy({
     'name': 'yolact_vgg16',
@@ -521,7 +663,7 @@ yolact_vgg16_config = ssd550_config.copy({
 })
 
 # Default config
-cfg = yrm14_config.copy()
+cfg = yrm22_config.copy()
 
 def set_cfg(config_name):
     """ Sets the active config. Works even if cfg is already imported! """
