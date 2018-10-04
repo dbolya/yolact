@@ -601,6 +601,17 @@ yrm25_config = yrm22_config.copy({
     'mask_proto_reweight_mask_loss': True,
 })
 
+# Continue training config 25 with or without the reweighting
+yrm25_a_config = yrm22_config.copy({
+    'name': 'yrm25_a',
+    'mask_proto_reweight_mask_loss': True,
+})
+
+yrm25_b_config = yrm22_config.copy({
+    'name': 'yrm25_b',
+    'mask_proto_reweight_mask_loss': False,
+})
+
 # This is a big boi, tread with caution
 yrm26_config = yrm22_config.copy({
     'name': 'yrm26',
