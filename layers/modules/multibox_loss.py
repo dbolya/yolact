@@ -123,7 +123,7 @@ class MultiBoxLoss(nn.Module):
 
         pos = conf_t > 0
         num_pos = pos.sum(dim=1, keepdim=True)
-
+        
         # Shape: [batch,num_priors,4]
         pos_idx = pos.unsqueeze(pos.dim()).expand_as(loc_data)
         
@@ -135,6 +135,7 @@ class MultiBoxLoss(nn.Module):
             loss_l = F.smooth_l1_loss(loc_p, loc_t, reduction='sum') * self.bbox_alpha
 
         # Mask Loss
+        loss_m = 0
         loss_p = 0 # Proto loss
         if cfg.train_masks:
             if cfg.mask_type == mask_type.direct:
@@ -155,12 +156,10 @@ class MultiBoxLoss(nn.Module):
                         loss_p = torch.mean(torch.abs(proto_data)) / self.l1_expected_area * self.l1_alpha
                     elif cfg.mask_proto_loss == 'disj':
                         loss_p = -torch.mean(torch.max(F.log_softmax(proto_data, dim=-1), dim=-1)[0])
-                        
-        else:
-            loss_m = 0
 
         # Compute max conf across batch for hard negative mining
         batch_conf = conf_data.view(-1, self.num_classes)
+        # i.e. -softmax(class 0 confidence)
         loss_c = log_sum_exp(batch_conf) - batch_conf[:, 0]
         
         # Hard Negative Mining
@@ -184,8 +183,8 @@ class MultiBoxLoss(nn.Module):
         targets_weighted = conf_t[(pos+neg).gt(0)]
         loss_c = F.cross_entropy(conf_p, targets_weighted, reduction='sum')
 
-        # Sum of losses: L(x,c,l,g) = (Lconf(x, c) + αLloc(x,l,g)) / N
-
+        # Divide all losses by the number of positives.
+        # Don't do it for loss_p because that doesn't depend on the anchors.
         N = num_pos.data.sum().float()
         loss_l /= N
         loss_c /= N

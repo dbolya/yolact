@@ -211,6 +211,12 @@ coco_base_config = Config({
     'mask_proto_prototypes_as_features_no_grad': False,
     'mask_proto_remove_empty_masks': False,
 
+    # Set this to a config object if you want an FPN. The parameters for that object are in yolact.py under the class FPN.
+    'fpn': None,
+
+    # Use the same weights for each network head
+    'share_prediction_module': False,
+
     # Add extra layers between the backbone and the network heads
     # The order is (bbox, conf, mask)
     'extra_layers': (0, 0, 0),
@@ -646,6 +652,33 @@ yrm28_2_config = yrm28_config.copy({
     'mask_proto_prototypes_as_features_no_grad': True, 
 })
 
+yrm30_config = yrm22_config.copy({
+    'name': 'yrm30',
+    
+    'backbone': fixed_ssd_config.backbone.copy({
+        # 0 is conv2
+        'selected_layers': list(range(0, 4)),
+        
+        # These scales and aspect ratios are derived from the FPN paper
+        # https://arxiv.org/pdf/1612.03144.pdf
+        'pred_scales': [ [5.3] ] * 5, # 32 / 800 * 136 ...
+        'pred_aspect_ratios': [ [[1, 1/2, 2]] ]*5,
+    }),
+
+    # Finally, FPN
+    # This replaces each selected layer with the corresponding FPN version
+    'fpn': Config({
+        'num_features': 256,
+        'interpolation_mode': 'bilinear',
+
+        'num_downsample': 1
+    }),
+
+    'mask_proto_src': 0,
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 6 + [(256, 1, {})],
+
+    'share_prediction_module': True,
+})
 
 
 yolact_vgg16_config = ssd550_config.copy({

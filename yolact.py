@@ -37,42 +37,46 @@ class PredictionModule(nn.Module):
                                        boxes with an area of 20x20px. If the scale is
                                        .5 on the other hand, this layer would consider
                                        bounding boxes with area 10x10px, etc.
+        - parent:        If parent is a PredictionModule, this module will use all the layers
+                         from parent instead of from this module.
     """
     
-    def __init__(self, in_channels, out_channels=1024, aspect_ratios=[[1]], scales=[1]):
+    def __init__(self, in_channels, out_channels=1024, aspect_ratios=[[1]], scales=[1], parent=None):
         super().__init__()
 
         self.num_classes = cfg.num_classes
         self.mask_dim    = cfg.mask_dim
         self.num_priors  = sum(len(x) for x in aspect_ratios)
-        
+        self.parent      = parent
+
         if cfg.mask_proto_prototypes_as_features:
             out_channels += self.mask_dim
 
-        if cfg.use_prediction_module:
-            self.block = Bottleneck(in_channels, out_channels // 4)
-            self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=True)
-            self.bn = nn.BatchNorm2d(out_channels)
+        if parent is None:
+            if cfg.use_prediction_module:
+                self.block = Bottleneck(in_channels, out_channels // 4)
+                self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=True)
+                self.bn = nn.BatchNorm2d(out_channels)
 
-        self.bbox_layer = nn.Conv2d(out_channels, self.num_priors * 4,                 kernel_size=3, padding=1)
-        self.conf_layer = nn.Conv2d(out_channels, self.num_priors * self.num_classes,  kernel_size=3, padding=1)
-        self.mask_layer = nn.Conv2d(out_channels, self.num_priors * self.mask_dim,     kernel_size=3, padding=1)
-        
-        # What is this ugly lambda doing in the middle of all this clean prediction module code?
-        def make_extra(num_layers):
-            if num_layers == 0:
-                return lambda x: x
-            else:
-                # Looks more complicated than it is. This just creates an array of num_layers alternating conv-relu
-                return nn.Sequential(*sum([[
-                    nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
-                    nn.ReLU(inplace=True)
-                ] for _ in range(num_layers)], []))
+            self.bbox_layer = nn.Conv2d(out_channels, self.num_priors * 4,                 kernel_size=3, padding=1)
+            self.conf_layer = nn.Conv2d(out_channels, self.num_priors * self.num_classes,  kernel_size=3, padding=1)
+            self.mask_layer = nn.Conv2d(out_channels, self.num_priors * self.mask_dim,     kernel_size=3, padding=1)
+            
+            # What is this ugly lambda doing in the middle of all this clean prediction module code?
+            def make_extra(num_layers):
+                if num_layers == 0:
+                    return lambda x: x
+                else:
+                    # Looks more complicated than it is. This just creates an array of num_layers alternating conv-relu
+                    return nn.Sequential(*sum([[
+                        nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
+                        nn.ReLU(inplace=True)
+                    ] for _ in range(num_layers)], []))
 
-        self.bbox_extra, self.conf_extra, self.mask_extra = [make_extra(x) for x in cfg.extra_layers]
-        
-        if cfg.mask_type == mask_type.lincomb and cfg.mask_proto_coeff_gate:
-            self.gate_layer = nn.Conv2d(out_channels, self.num_priors * self.mask_dim, kernel_size=3, padding=1)
+            self.bbox_extra, self.conf_extra, self.mask_extra = [make_extra(x) for x in cfg.extra_layers]
+            
+            if cfg.mask_type == mask_type.lincomb and cfg.mask_proto_coeff_gate:
+                self.gate_layer = nn.Conv2d(out_channels, self.num_priors * self.mask_dim, kernel_size=3, padding=1)
 
         self.aspect_ratios = aspect_ratios
         self.scales = scales
@@ -92,27 +96,30 @@ class PredictionModule(nn.Module):
             - mask_output: [batch_size, conv_h*conv_w*num_priors, mask_dim]
             - prior_boxes: [conv_h*conv_w*num_priors, 4]
         """
+        # In case we want to use another module's layers
+        src = self if self.parent is None else self.parent
+        
         conv_h = x.size(2)
         conv_w = x.size(3)
         
         if cfg.use_prediction_module:
             # The two branches of PM design (c)
-            a = self.block(x)
+            a = src.block(x)
             
-            b = self.conv(x)
-            b = self.bn(b)
+            b = src.conv(x)
+            b = src.bn(b)
             b = F.relu(b)
             
             # TODO: Possibly switch this out for a product
             x = a + b
 
-        bbox_x = self.bbox_extra(x)
-        conf_x = self.conf_extra(x)
-        mask_x = self.mask_extra(x)
+        bbox_x = src.bbox_extra(x)
+        conf_x = src.conf_extra(x)
+        mask_x = src.mask_extra(x)
 
-        bbox = self.bbox_layer(bbox_x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, 4)
-        conf = self.conf_layer(conf_x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, self.num_classes)
-        mask = self.mask_layer(mask_x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, self.mask_dim)
+        bbox = src.bbox_layer(bbox_x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, 4)
+        conf = src.conf_layer(conf_x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, self.num_classes)
+        mask = src.mask_layer(mask_x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, self.mask_dim)
         
         # See box_utils.decode for an explaination of this
         if cfg.use_yolo_regressors:
@@ -126,7 +133,7 @@ class PredictionModule(nn.Module):
             mask = cfg.mask_proto_coeff_activation(mask)
 
             if cfg.mask_proto_coeff_gate:
-                gate = self.gate_layer(x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, self.mask_dim)
+                gate = src.gate_layer(x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, self.mask_dim)
                 mask = mask * torch.sigmoid(gate)
         
         priors = self.make_priors(conv_h, conv_w)
@@ -159,6 +166,67 @@ class PredictionModule(nn.Module):
         return self.priors
 
 
+class FPN(nn.Module):
+    """
+    Implements a general version of the FPN introduced in
+    https://arxiv.org/pdf/1612.03144.pdf
+
+    Prameters (in cfg.fpn):
+        - num_features (int): The number of output features in the fpn layers.
+        - interpolation_mode (str): The mode to pass to F.interpolate.
+        - num_downsample (int): The number of downsampled layers to add onto the selected layers.
+                                These extra layers are downsampled from the last selected layer.
+
+    Args:
+        - in_channels (list): For each conv layer you supply in the forward pass,
+                              how many features will it have?
+    """
+
+    def __init__(self, in_channels):
+        super().__init__()
+
+        self.lat_layers  = nn.ModuleList([
+            nn.Conv2d(x, cfg.fpn.num_features, kernel_size=1)
+            for x in reversed(in_channels) # Reversed because we loop backward
+        ])
+        self.pred_layers = nn.ModuleList([
+            nn.Conv2d(cfg.fpn.num_features, cfg.fpn.num_features, kernel_size=3)
+            for _ in in_channels
+        ])
+
+    def forward(self, convouts):
+        """
+        Args:
+            - convouts (list): A list of convouts for the corresponding layers in in_channels.
+        Returns:
+            - A list of FPN convouts in the same order as x with extra downsample layers if requested.
+        """
+
+        # Fill this backward, then reverse later
+        out = []
+        x = 0
+
+        # Loop backward through the layers
+        for i, (conv, lat, pred) in enumerate(zip(reversed(convouts), self.lat_layers, self.pred_layers)):
+            if i > 0:
+                _, _, h, w = conv.size()
+                x = F.interpolate(x, size=(h, w), mode=cfg.fpn.interpolation_mode, align_corners=False)
+            
+            x = x + lat(conv)
+            out.append(F.relu(pred(x)))
+        
+        out.reverse()
+
+        # In the original paper, this takes care of P6
+        for _ in range(cfg.fpn.num_downsample):
+            # I decied against putting the stride in the conv layers because the prediction module conv layers
+            # are shared, so it would be hard to add stride to them. I should probably have shared the weights
+            # and not the conv layers themselves, but eh, it was easier that way. I doubt this is that slow either.
+            out.append(out[-1][:, :, ::2, ::2]) # A stride 2 view on out[-1] along both height and width
+
+        return out
+
+
 
 class Yolact(nn.Module):
     """
@@ -182,10 +250,6 @@ class Yolact(nn.Module):
 
     def __init__(self):
         super().__init__()
-
-        selected_layers    = cfg.backbone.selected_layers
-        pred_scales        = cfg.backbone.pred_scales
-        pred_aspect_ratios = cfg.backbone.pred_aspect_ratios
 
         self.backbone = construct_backbone(cfg.backbone)
 
@@ -233,12 +297,29 @@ class Yolact(nn.Module):
             if cfg.mask_proto_bias:
                 cfg.mask_dim += 1
 
-        self.selected_layers = selected_layers
+
+        self.selected_layers = cfg.backbone.selected_layers
         self.prediction_layers = nn.ModuleList()
 
+        src_channels = self.backbone.channels
+
+        if cfg.fpn is not None:
+            # Some hacky rewiring to accomodate the FPN
+            self.fpn = FPN([src_channels[i] for i in self.selected_layers])
+            self.selected_layers = list(range(len(self.selected_layers) + cfg.fpn.num_downsample))
+            src_channels = [cfg.fpn.num_features] * len(self.selected_layers)
+
+
         for idx, layer_idx in enumerate(self.selected_layers):
-            pred = PredictionModule(self.backbone.channels[layer_idx], self.backbone.channels[layer_idx],
-                                    aspect_ratios=pred_aspect_ratios[idx], scales=pred_scales[idx])
+            # If we're sharing prediction module weights, have every module's parent be the first one
+            parent = None
+            if cfg.share_prediction_module and idx > 0:
+                parent = self.prediction_layers[0]
+
+            pred = PredictionModule(src_channels[layer_idx], src_channels[layer_idx],
+                                    aspect_ratios = cfg.backbone.pred_aspect_ratios[idx],
+                                    scales        = cfg.backbone.pred_scales[idx],
+                                    parent        = parent)
             self.prediction_layers.append(pred)
 
         # For use in evaluation
@@ -269,6 +350,12 @@ class Yolact(nn.Module):
         with timer.env('pass1'):
             outs = self.backbone(x)
 
+        if cfg.fpn is not None:
+            with timer.env('fpn'):
+                # Use backbone.selected_layers because we overwrote self.selected_layers
+                outs = [outs[i] for i in cfg.backbone.selected_layers]
+                outs = self.fpn(outs)
+
         if cfg.mask_type == mask_type.lincomb:
             with timer.env('proto'):
                 proto_x = x if self.proto_src is None else outs[self.proto_src]
@@ -281,7 +368,7 @@ class Yolact(nn.Module):
                 proto_out = cfg.mask_proto_prototype_activation(proto_out)
                 
                 if cfg.mask_proto_prototypes_as_features:
-                    # Clone here because we don't want to pemute this, though idk if contiguous makes this unnecessary
+                    # Clone here because we don't want to permute this, though idk if contiguous makes this unnecessary
                     proto_downsampled = proto_out.clone()
 
                     if cfg.mask_proto_prototypes_as_features_no_grad:
@@ -294,6 +381,7 @@ class Yolact(nn.Module):
                     bias_shape = [x for x in proto_out.size()]
                     bias_shape[-1] = 1
                     proto_out = torch.cat([proto_out, torch.ones(*bias_shape)], -1)
+
 
         with timer.env('pass2'):
             pred_outs = ([], [], [], [])
