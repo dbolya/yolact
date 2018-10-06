@@ -590,6 +590,13 @@ yrm22_crowd_config = yrm22_config.copy({
     'crowd_iou_threshold': 0.7,
 })
 
+# Continue training with crowds to see if anything improves
+yrm22_long_config = yrm22_config.copy({
+    'name': 'yrm22_long',
+    'crowd_iou_threshold': 0.7,
+    'lr_steps': (0, 280000, 360000, 400000),
+})
+
 yrm16_3_config = yrm21_config.copy({
     'name': 'yrm16_3',
     'mask_proto_normalize_mask_loss_by_sqrt_area': True,
