@@ -630,7 +630,8 @@ yrm25_b_config = yrm22_config.copy({
     'name': 'yrm25_b',
     'mask_proto_reweight_mask_loss': False,
     # Start at lr = 1e-4 instead of 1e-3
-    'lr_steps': (0, 280000, 360000, 400000),
+    'lr_steps': (0, 280000, 360000, 500000, 650000),
+    'max_iter': 800000,
 })
 
 # This is a big boi, tread with caution
