@@ -159,8 +159,13 @@ class MultiBoxLoss(nn.Module):
 
         # Compute max conf across batch for hard negative mining
         batch_conf = conf_data.view(-1, self.num_classes)
-        # i.e. -softmax(class 0 confidence)
-        loss_c = log_sum_exp(batch_conf) - batch_conf[:, 0]
+        if cfg.ohem_use_most_confident:
+            # i.e. max(softmax) along classes > 0 
+            batch_conf = F.softmax(batch_conf, dim=1)
+            loss_c, _ = batch_conf[:, 1:].max(dim=1)
+        else:
+            # i.e. -softmax(class 0 confidence)
+            loss_c = log_sum_exp(batch_conf) - batch_conf[:, 0]
         
         # Hard Negative Mining
         loss_c = loss_c.view(num, -1)

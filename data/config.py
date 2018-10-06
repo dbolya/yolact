@@ -217,6 +217,10 @@ coco_base_config = Config({
     # Use the same weights for each network head
     'share_prediction_module': False,
 
+    # For hard negative mining, instead of using the negatives that are leastl confidently background,
+    # use negatives that are most confidently not background.
+    'ohem_use_most_confident': False,
+
     # Add extra layers between the backbone and the network heads
     # The order is (bbox, conf, mask)
     'extra_layers': (0, 0, 0),
@@ -678,6 +682,11 @@ yrm30_config = yrm22_config.copy({
     'mask_proto_net': [(256, 3, {'padding': 1})] * 6 + [(256, 1, {})],
 
     'share_prediction_module': True,
+})
+
+yrm31_config = yrm22_config.copy({
+    'name': 'yrm31',
+    'ohem_use_most_confident': True
 })
 
 
