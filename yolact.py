@@ -47,7 +47,7 @@ class PredictionModule(nn.Module):
         self.num_classes = cfg.num_classes
         self.mask_dim    = cfg.mask_dim
         self.num_priors  = sum(len(x) for x in aspect_ratios)
-        self.parent      = parent
+        self.parent      = [parent] # Don't include this in the state dict
 
         if cfg.mask_proto_prototypes_as_features:
             out_channels += self.mask_dim
@@ -97,7 +97,7 @@ class PredictionModule(nn.Module):
             - prior_boxes: [conv_h*conv_w*num_priors, 4]
         """
         # In case we want to use another module's layers
-        src = self if self.parent is None else self.parent
+        src = self if self.parent[0] is None else self.parent[0]
         
         conv_h = x.size(2)
         conv_w = x.size(3)
