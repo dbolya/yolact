@@ -331,7 +331,15 @@ class Yolact(nn.Module):
     
     def load_weights(self, path):
         """ Loads weights from a compressed save file. """
-        self.load_state_dict(torch.load(path))
+        state_dict = torch.load(path)
+
+        # For backward compatability, remove these (the new variable is called layers)
+        keys = list(state_dict.keys())
+        for key in keys:
+            if key.startswith('backbone.layer') and not key.startswith('backbone.layers'):
+                del state_dict[key]
+
+        self.load_state_dict(state_dict)
 
     def init_weights(self, backbone_path):
         """ Initialize weights for training. """

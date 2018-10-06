@@ -17,9 +17,13 @@ class ResNetBackbone(ResNet):
         # Since we can't assign modules before nn.Module.__init__
         self.layers = nn.ModuleList(self.layers)
 
-        # We won't need these where we're going		
+        # We won't need these where we're going
         del self.fc
         del self.avgpool
+        del self.layer1
+        del self.layer2
+        del self.layer3
+        del self.layer4
 
         # These modules will be initialized by init_backbone,
         # so don't overwrite their initialization later.
@@ -52,8 +56,18 @@ class ResNetBackbone(ResNet):
 
     def init_backbone(self, path):
         """ Initializes the backbone weights for training. """
+        state_dict = torch.load(path)
+
+        # Replace layer1 -> layers.0 etc.
+        keys = list(state_dict)
+        for key in keys:
+            if key.startswith('layer'):
+                idx = int(key[5])
+                new_key = 'layers.' + str(idx-1) + key[6:]
+                state_dict[new_key] = state_dict.pop(key)
+
         # Note: Using strict=False is berry scary. Triple check this.
-        self.load_state_dict(torch.load(path), strict=False)
+        self.load_state_dict(state_dict, strict=False)
 
     def add_layer(self, conv_channels=1024, downsample=2, depth=1, block=Bottleneck):
         """ Add a downsample layer to the backbone as per what SSD does. """
