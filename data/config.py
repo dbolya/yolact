@@ -692,7 +692,7 @@ yrm30_config = yrm22_config.copy({
     'share_prediction_module': True,
 })
 
-yrm30_lowlr_config = yrm30_config.copy(}{
+yrm30_lowlr_config = yrm30_config.copy({
     'name': 'yrm30_lowlr',
     'lr_steps': (0, 280000, 360000, 400000),
 })
