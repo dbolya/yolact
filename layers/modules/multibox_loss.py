@@ -277,7 +277,7 @@ class MultiBoxLoss(nn.Module):
                     gt_foreground_norm = bin_gt     / (torch.sum(bin_gt,   dim=(0,1), keepdim=True) + 0.0001)
                     gt_background_norm = (1-bin_gt) / (torch.sum(1-bin_gt, dim=(0,1), keepdim=True) + 0.0001)
 
-                    mask_reweighting   = gt_foreground_norm + gt_background_norm
+                    mask_reweighting   = gt_foreground_norm * cfg.mask_proto_reweight_coeff + gt_background_norm
                     mask_reweighting  *= mask_h * mask_w
 
             cur_pos = pos[idx]

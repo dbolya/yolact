@@ -169,6 +169,7 @@ mask_type = Config({
     #   - mask_proto_prototypes_as_features_no_grad (bool): If the above is set, don't backprop gradients to
     #                                 to the prototypes from the network head.
     #   - mask_proto_remove_empty_masks (bool): Remove masks that are downsampled to 0 during loss calculations.
+    #   - mask_proto_reweight_coeff (float): The coefficient to multiple the forground pixels with if reweighting.
     'lincomb': 1,
 })
 
@@ -210,6 +211,7 @@ coco_base_config = Config({
     'mask_proto_prototypes_as_features': False,
     'mask_proto_prototypes_as_features_no_grad': False,
     'mask_proto_remove_empty_masks': False,
+    'mask_proto_reweight_coeff': 1,
 
     # Set this to a config object if you want an FPN. The parameters for that object are in yolact.py under the class FPN.
     'fpn': None,
@@ -632,6 +634,11 @@ yrm25_b_config = yrm22_config.copy({
     # Start at lr = 1e-4 instead of 1e-3
     'lr_steps': (0, 280000, 360000, 500000, 650000),
     'max_iter': 800000,
+})
+
+yrm25_half_config = yrm25_config.copy({
+    'name': 'yrm25_half',
+    'mask_proto_reweight_coeff': 0.5,
 })
 
 # This is a big boi, tread with caution
