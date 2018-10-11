@@ -199,7 +199,7 @@ class FPN(nn.Module):
 
         self.lat_layers  = nn.ModuleList([
             nn.Conv2d(x, cfg.fpn.num_features, kernel_size=1)
-            for x in in_channels
+            for x in reversed(in_channels)
         ])
         self.pred_layers = nn.ModuleList([
             nn.Conv2d(cfg.fpn.num_features, cfg.fpn.num_features, kernel_size=3)
@@ -217,14 +217,17 @@ class FPN(nn.Module):
         out = [None] * len(convouts)
         x = 0
 
-        # Loop backward
-        for i in range(len(convouts)-1, -1, -1):
-            if i < len(convouts)-1:
-                _, _, h, w = convouts[i].size()
+        # For backward compatability, the conv layers are stored in reverse but the input and output is
+        # given in the correct order. Thus, use j=-i-1 for the input and output and i for the conv layers.
+        for i in range(len(convouts)):
+            j = -i-1
+
+            if i > 0:
+                _, _, h, w = convouts[j].size()
                 x = F.interpolate(x, size=(h, w), mode=cfg.fpn.interpolation_mode, align_corners=False)
             
-            x = x + self.lat_layers[i](convouts[i])
-            out[i] = F.relu(self.pred_layers[i](x))
+            x = x + self.lat_layers[i](convouts[j])
+            out[j] = F.relu(self.pred_layers[i](x))
 
         # In the original paper, this takes care of P6
         for _ in range(cfg.fpn.num_downsample):
