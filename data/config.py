@@ -186,10 +186,21 @@ activation_func = Config({
 coco_base_config = Config({
     'dataset': coco2014_dataset,
     'num_classes': 81,
-    'lr_steps': (280000, 360000, 400000),
+
     'max_iter': 400000,
+
+    # The maximum number of detections for evaluation
     'max_num_detections': 100,
-    
+
+    # dw' = momentum * dw - lr * (grad + decay * w)
+    'lr': 1e-3,
+    'momentum': 0.9,
+    'decay': 5e-4,
+
+    # For each lr step, what to multiply the lr with
+    'gamma': 0.1,
+    'lr_steps': (280000, 360000, 400000),
+
     # See mask_type for details.
     'mask_type': mask_type.direct,
     'mask_size': 16,
@@ -710,7 +721,8 @@ yrm30_lowlr_config = yrm30_config.copy({
 })
 
 yrm30_halflr_config = yrm30_config.copy({
-    'name': 'yrm30_halflr'
+    'name': 'yrm30_halflr',
+    'lr': 5e-4
 })
 
 yrm31_config = yrm22_config.copy({

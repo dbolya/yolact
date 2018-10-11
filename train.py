@@ -42,14 +42,14 @@ parser.add_argument('--num_workers', default=4, type=int,
                     help='Number of workers used in dataloading')
 parser.add_argument('--cuda', default=True, type=str2bool,
                     help='Use CUDA to train model')
-parser.add_argument('--lr', '--learning_rate', default=1e-3, type=float,
-                    help='initial learning rate')
-parser.add_argument('--momentum', default=0.9, type=float,
-                    help='Momentum value for optim')
-parser.add_argument('--weight_decay', default=5e-4, type=float,
-                    help='Weight decay for SGD')
-parser.add_argument('--gamma', default=0.1, type=float,
-                    help='Gamma update for SGD')
+parser.add_argument('--lr', '--learning_rate', default=None, type=float,
+                    help='Initial learning rate. Leave as None to read this from the config.')
+parser.add_argument('--momentum', default=None, type=float,
+                    help='Momentum for SGD. Leave as None to read this from the config.')
+parser.add_argument('--decay', '--weight_decay', default=None, type=float,
+                    help='Weight decay for SGD. Leave as None to read this from the config.')
+parser.add_argument('--gamma', default=None, type=float,
+                    help='For each lr step, what to multiply the lr by. Leave as None to read this from the config.')
 parser.add_argument('--visdom', default=False, type=str2bool,
                     help='Use visdom for loss visualization')
 parser.add_argument('--save_folder', default='weights/',
@@ -66,6 +66,15 @@ args = parser.parse_args()
 
 if args.config is not None:
     set_cfg(args.config)
+
+# Update training parameters from the config if necessary
+def replace(name):
+    if getattr(args, name) == None: setattr(args, name, getattr(cfg, name))
+replace('lr')
+replace('decay')
+replace('gamma')
+replace('momentum')
+
 
 if torch.cuda.is_available():
     if args.cuda:
@@ -118,7 +127,7 @@ def train():
         yolact_net.init_weights(backbone_path=args.save_folder + cfg.backbone.path)
 
     optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=args.momentum,
-                          weight_decay=args.weight_decay)
+                          weight_decay=args.decay)
     criterion = MultiBoxLoss(num_classes=cfg.num_classes,
                              pos_threshold=cfg.positive_iou_threshold,
                              neg_threshold=cfg.negative_iou_threshold,
