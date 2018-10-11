@@ -234,6 +234,13 @@ coco_base_config = Config({
     # use negatives that are most confidently not background.
     'ohem_use_most_confident': False,
 
+    # If this is <= 0, the prediction heads will use the same number of features as is input from the backbone.
+    # If > 0, the prediction heads will have an extra conv layer to accomodate the transition.
+    'num_head_features': -1,
+
+    # What params should the final head layers have (the ones that predict box, confidence, and mask coeffs)
+    'head_layer_params': {'kernel_size': 3, 'padding': 1},
+
     # Add extra layers between the backbone and the network heads
     # The order is (bbox, conf, mask)
     'extra_layers': (0, 0, 0),
@@ -657,6 +664,11 @@ yrm25_smol_config = yrm25_config.copy({
     'mask_proto_reweight_coeff': 1/32,
 })
 
+yrm25_double_config = yrm25_config.copy({
+    'name': 'yrm25_double',
+    'mask_proto_reweight_coeff': 2,
+})
+
 # This is a big boi, tread with caution
 yrm26_config = yrm22_config.copy({
     'name': 'yrm26',
@@ -723,6 +735,16 @@ yrm30_lowlr_config = yrm30_config.copy({
 yrm30_halflr_config = yrm30_config.copy({
     'name': 'yrm30_halflr',
     'lr': 5e-4
+})
+
+yrm30_bighead_config = yrm30_halflr_config.copy({
+    'name': 'yrm30_bighead',
+    'num_head_features': 1024,
+})
+
+yrm30_oldsrc_config = yrm30_halflr_config.copy({
+    'name': 'yrm30_oldsrc',
+    'mask_proto_src': 2
 })
 
 yrm31_config = yrm22_config.copy({

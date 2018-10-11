@@ -49,18 +49,26 @@ class PredictionModule(nn.Module):
         self.num_priors  = sum(len(x) for x in aspect_ratios)
         self.parent      = [parent] # Don't include this in the state dict
 
+        # Things that need to be set up even if you're using another module's layers
+        if cfg.num_head_features > 0:
+            out_channels = cfg.num_head_features
+
         if cfg.mask_proto_prototypes_as_features:
             out_channels += self.mask_dim
 
+        # Things that don't
         if parent is None:
+            if cfg.num_head_features > 0:
+                self.upfeature = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1)
+
             if cfg.use_prediction_module:
-                self.block = Bottleneck(in_channels, out_channels // 4)
-                self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=True)
+                self.block = Bottleneck(out_channels, out_channels // 4)
+                self.conv = nn.Conv2d(out_channels, out_channels, kernel_size=1, bias=True)
                 self.bn = nn.BatchNorm2d(out_channels)
 
-            self.bbox_layer = nn.Conv2d(out_channels, self.num_priors * 4,                 kernel_size=3, padding=1)
-            self.conf_layer = nn.Conv2d(out_channels, self.num_priors * self.num_classes,  kernel_size=3, padding=1)
-            self.mask_layer = nn.Conv2d(out_channels, self.num_priors * self.mask_dim,     kernel_size=3, padding=1)
+            self.bbox_layer = nn.Conv2d(out_channels, self.num_priors * 4,                **cfg.head_layer_params)
+            self.conf_layer = nn.Conv2d(out_channels, self.num_priors * self.num_classes, **cfg.head_layer_params)
+            self.mask_layer = nn.Conv2d(out_channels, self.num_priors * self.mask_dim,    **cfg.head_layer_params)
             
             # What is this ugly lambda doing in the middle of all this clean prediction module code?
             def make_extra(num_layers):
@@ -101,6 +109,10 @@ class PredictionModule(nn.Module):
         
         conv_h = x.size(2)
         conv_w = x.size(3)
+        
+        if cfg.num_head_features > 0:
+            x = src.upfeature(x)
+            x = F.relu(x, inplace=True)
         
         if cfg.use_prediction_module:
             # The two branches of PM design (c)
@@ -261,7 +273,13 @@ class Yolact(nn.Module):
                 self.num_grids = 0
 
             self.proto_src = cfg.mask_proto_src
-            in_channels = 3 if self.proto_src is None else self.backbone.channels[self.proto_src]
+            
+            if self.proto_src is None:
+                in_channels = 3
+            elif cfg.fpn is not None:
+                in_channels = cfg.fpn.num_features
+            else:
+                in_channels = self.backbone.channels[self.proto_src]
             in_channels += self.num_grids
 
             def make_layer(layer_cfg):
@@ -296,8 +314,6 @@ class Yolact(nn.Module):
 
 
         self.selected_layers = cfg.backbone.selected_layers
-        self.prediction_layers = nn.ModuleList()
-
         src_channels = self.backbone.channels
 
         if cfg.fpn is not None:
@@ -306,6 +322,8 @@ class Yolact(nn.Module):
             self.selected_layers = list(range(len(self.selected_layers) + cfg.fpn.num_downsample))
             src_channels = [cfg.fpn.num_features] * len(self.selected_layers)
 
+
+        self.prediction_layers = nn.ModuleList()
 
         for idx, layer_idx in enumerate(self.selected_layers):
             # If we're sharing prediction module weights, have every module's parent be the first one
