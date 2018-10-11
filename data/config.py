@@ -573,7 +573,7 @@ yrm20_config = fixed_ssd_config.copy({
 # Any configs based off of it will also not work
 yrm21_config = fixed_ssd_config.copy({
     'name': 'yrm21',
-    # This option doesn't exit anymore
+    # This option doesn't exist anymore
     'mask_proto_replace_deconv_with_upsample': True,
 })
 
@@ -641,6 +641,11 @@ yrm25_half_config = yrm25_config.copy({
     'mask_proto_reweight_coeff': 0.5,
 })
 
+yrm25_smol_config = yrm25_config.copy({
+    'name': 'yrm25_smol',
+    'mask_proto_reweight_coeff': 1/32,
+})
+
 # This is a big boi, tread with caution
 yrm26_config = yrm22_config.copy({
     'name': 'yrm26',
@@ -702,6 +707,10 @@ yrm30_config = yrm22_config.copy({
 yrm30_lowlr_config = yrm30_config.copy({
     'name': 'yrm30_lowlr',
     'lr_steps': (0, 280000, 360000, 400000),
+})
+
+yrm30_halflr_config = yrm30_config.copy({
+    'name': 'yrm30_halflr'
 })
 
 yrm31_config = yrm22_config.copy({
