@@ -744,7 +744,8 @@ yrm30_bighead_config = yrm30_halflr_config.copy({
 
 yrm30_oldsrc_config = yrm30_halflr_config.copy({
     'name': 'yrm30_oldsrc',
-    'mask_proto_src': 2
+    'mask_proto_src': 2,
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(None, -2, {}), (256, 3, {'padding': 1})] * 2 + [(256, 1, {})],
 })
 
 yrm31_config = yrm22_config.copy({
