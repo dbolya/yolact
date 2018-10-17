@@ -789,7 +789,7 @@ yrm30_halflr_config = yrm30_config.copy({
     'lr': 5e-4
 })
 
-yrm30_bighead_config = yrm30_halflr_config.copy({
+yrm30_bighead_config = yrm30_gn_config.copy({
     'name': 'yrm30_bighead',
     'num_head_features': 512,
 })
