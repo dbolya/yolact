@@ -763,6 +763,7 @@ yrm30_config = yrm22_config.copy({
     'mask_proto_net': [(256, 3, {'padding': 1})] * 6 + [(256, 1, {})],
 
     'share_prediction_module': True,
+    'crowd_iou_threshold': 0.7,
 })
 
 yrm30_gn_config = yrm30_config.copy({
