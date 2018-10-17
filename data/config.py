@@ -64,7 +64,7 @@ coco2017_dataset = Config({
 })
 
 # Backbones
-from backbone import ResNetBackbone, VGGBackbone
+from backbone import ResNetBackbone, VGGBackbone, ResNetBackboneGN
 from torchvision.models.vgg import cfg as vggcfg
 from math import sqrt
 import torch
@@ -88,6 +88,18 @@ resnet101_backbone = Config({
     'name': 'ResNet101',
     'path': 'resnet101_reducedfc.pth',
     'type': ResNetBackbone,
+    'args': ([3, 4, 23, 3],),
+    'transform': resnet_transform,
+
+    'selected_layers': list(range(2, 8)),
+    'pred_scales': [[1]]*6,
+    'pred_aspect_ratios': [ [[0.66685089, 1.7073535, 0.87508774, 1.16524493, 0.49059086]] ] * 6,
+})
+
+resnet101_gn_backbone = Config({
+    'name': 'ResNet101_GN',
+    'path': 'R-101-GN.pkl',
+    'type': ResNetBackboneGN,
     'args': ([3, 4, 23, 3],),
     'transform': resnet_transform,
 
@@ -571,6 +583,16 @@ fixed_ssd_config = yrm13_config.copy({
 
 })
 
+fixed_ssd_gn_config = fixed_ssd_config.copy({
+    'name': 'fixed_ssd_gn',
+    
+    'backbone': resnet101_gn_backbone.copy({
+        'selected_layers': list(range(2, 8)),
+        'pred_scales': [[3.5, 4.95], [3.6, 4.90], [3.3, 4.02], [2.7, 3.10], [2.1, 2.37], [1.8, 1.92]],
+        'pred_aspect_ratios': [ [[1, sqrt(2), 1/sqrt(2), sqrt(3), 1/sqrt(3)][:n], [1]] for n in [3, 5, 5, 5, 3, 3] ],
+    })
+})
+
 yrm18_config = yrm13_config.copy({
     'name': 'yrm18',
     'mask_proto_coeff_activation': activation_func.none,
@@ -598,6 +620,17 @@ yrm21_config = fixed_ssd_config.copy({
 yrm22_config = fixed_ssd_config.copy({
     'name': 'yrm22',
     'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(None, -2, {}), (256, 3, {'padding': 1})] * 2 + [(256, 1, {})],
+})
+
+yrm22_gn_config = fixed_ssd_gn_config.copy({
+    'name': 'yrm22_gn',
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(None, -2, {}), (256, 3, {'padding': 1})] * 2 + [(256, 1, {})],
+    'crowd_iou_threshold': 0.7,
+})
+
+yrm22_gn_highlr_config = yrm22_gn_config.copy({
+    'name': 'yrm22_gn_highlr',
+    'lr': 2e-3
 })
 
 yrm22_2_config = yrm22_config.copy({
@@ -732,6 +765,19 @@ yrm30_config = yrm22_config.copy({
     'share_prediction_module': True,
 })
 
+yrm30_gn_config = yrm30_config.copy({
+    'name': 'yrm30_gn',
+    'backbone': fixed_ssd_gn_config.backbone.copy({
+        # 0 is conv2
+        'selected_layers': list(range(0, 4)),
+        
+        # These scales and aspect ratios are derived from the FPN paper
+        # https://arxiv.org/pdf/1612.03144.pdf
+        'pred_scales': [ [5.3] ] * 5, # 32 / 800 * 136 ...
+        'pred_aspect_ratios': [ [[1, 1/2, 2]] ]*5,
+    }),
+})
+
 yrm30_lowlr_config = yrm30_config.copy({
     'name': 'yrm30_lowlr',
     'lr_steps': (0, 280000, 360000, 400000),
@@ -744,7 +790,7 @@ yrm30_halflr_config = yrm30_config.copy({
 
 yrm30_bighead_config = yrm30_halflr_config.copy({
     'name': 'yrm30_bighead',
-    'num_head_features': 1024,
+    'num_head_features': 512,
 })
 
 yrm30_oldsrc_config = yrm30_halflr_config.copy({

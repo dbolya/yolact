@@ -46,6 +46,7 @@ These changes really worked, didn't they? :/
  - To train, grab a pretrained VGG16 or Resnet101 model and put it in `./weights`.
    * For VGG16, download `vgg16_reducedfc.pth` from [here](https://github.com/amdegroot/ssd.pytorch).
    * For Resnet101, download `resnet101_reducedfc.pth` from [here](http://vision5.idav.ucdavis.edu:6337/resnet101_reducedfc.pth).
+   * For Resnet101 with Group Norm, download `R-101-GN.pkl` from [here](https://s3-us-west-2.amazonaws.com/detectron/ImageNetPretrained/47592356/R-101-GN.pkl).
  - Run one of the training commands below.
    * Note that you can press ctrl+c while training and it will save an `*_interrupt.pth` file at the current iteration.
    * All weights are saved in the `./weights` directory by default with the file name `<config>_<epoch>_<iter>.pth`.
