@@ -400,7 +400,7 @@ class Yolact(nn.Module):
                     if cfg.mask_proto_prototypes_as_features_no_grad:
                         proto_downsampled = proto_out.detach()
                 
-                # Move the features last so the multipliaction is easy
+                # Move the features last so the multiplication is easy
                 proto_out = proto_out.permute(0, 2, 3, 1).contiguous()
 
                 if cfg.mask_proto_bias:

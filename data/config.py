@@ -737,6 +737,11 @@ yrm28_2_config = yrm28_config.copy({
     'mask_proto_prototypes_as_features_no_grad': True, 
 })
 
+yrm28_reset_config = yrm28_2_config.copy({
+    'name': 'yrm28_reset',
+    'crowd_iou_threshold': 0.7,
+})
+
 yrm30_config = yrm22_config.copy({
     'name': 'yrm30',
     
