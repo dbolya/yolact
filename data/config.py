@@ -626,6 +626,8 @@ yrm22_gn_config = fixed_ssd_gn_config.copy({
     'name': 'yrm22_gn',
     'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(None, -2, {}), (256, 3, {'padding': 1})] * 2 + [(256, 1, {})],
     'crowd_iou_threshold': 0.7,
+    'lr_steps': (280000, 410000, 458000),
+    'max_iter': 458000,
 })
 
 yrm22_gn_highlr_config = yrm22_gn_config.copy({
