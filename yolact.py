@@ -132,8 +132,8 @@ class PredictionModule(nn.Module):
         bbox = src.bbox_layer(bbox_x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, 4)
         conf = src.conf_layer(conf_x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, self.num_classes)
         mask = src.mask_layer(mask_x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, self.mask_dim)
-        
-        # See box_utils.decode for an explaination of this
+
+        # See box_utils.decode for an explanation of this
         if cfg.use_yolo_regressors:
             bbox[:, :, :2] = torch.sigmoid(bbox[:, :, :2]) - 0.5
             bbox[:, :, 0] /= conv_w
@@ -183,7 +183,7 @@ class FPN(nn.Module):
     Implements a general version of the FPN introduced in
     https://arxiv.org/pdf/1612.03144.pdf
 
-    Prameters (in cfg.fpn):
+    Parameters (in cfg.fpn):
         - num_features (int): The number of output features in the fpn layers.
         - interpolation_mode (str): The mode to pass to F.interpolate.
         - num_downsample (int): The number of downsampled layers to add onto the selected layers.
@@ -392,7 +392,7 @@ class Yolact(nn.Module):
 
                 proto_out = self.proto_net(proto_x)
                 proto_out = cfg.mask_proto_prototype_activation(proto_out)
-                
+
                 if cfg.mask_proto_prototypes_as_features:
                     # Clone here because we don't want to permute this, though idk if contiguous makes this unnecessary
                     proto_downsampled = proto_out.clone()
