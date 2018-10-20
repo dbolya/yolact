@@ -671,6 +671,11 @@ yrm22_freezebn_config = yrm22_crowd_config.copy({
     'freeze_bn': True,
 })
 
+yrm22_fewerproto_config = yrm22_crowd_config.copy({
+    'name': 'yrm22_fewerproto',
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(None, -2, {}), (256, 3, {'padding': 1})] * 2 + [(128, 1, {})],
+})
+
 yrm16_3_config = yrm21_config.copy({
     'name': 'yrm16_3',
     'mask_proto_normalize_mask_loss_by_sqrt_area': True,
