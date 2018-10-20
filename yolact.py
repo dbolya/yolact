@@ -265,6 +265,9 @@ class Yolact(nn.Module):
 
         self.backbone = construct_backbone(cfg.backbone)
 
+        if cfg.freeze_bn:
+            self.freeze_bn()
+
         # Compute mask_dim here and add it back to the config. Make sure Yolact's constructor is called early!
         if cfg.mask_type == mask_type.direct:
             cfg.mask_dim = cfg.mask_size**2
@@ -370,6 +373,12 @@ class Yolact(nn.Module):
                 nn.init.xavier_uniform_(module.weight.data)
                 if module.bias is not None:
                     module.bias.data.zero_()
+
+    def freeze_bn(self):
+        """ Adapted from https://discuss.pytorch.org/t/how-to-train-with-frozen-batchnorm/12106/8 """
+        for module in self.modules():
+            if isinstance(module, nn.BatchNorm2d):
+                module.eval()
 
     def forward(self, x):
         """ The input should be of size [batch_size, 3, img_h, img_w] """

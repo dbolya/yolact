@@ -236,6 +236,10 @@ coco_base_config = Config({
     'mask_proto_remove_empty_masks': False,
     'mask_proto_reweight_coeff': 1,
 
+    # If using batchnorm anywhere inthe backbone, freeze the batchnorm layer during training.
+    # Note: any additional batch norm layers after the backbone will not be froze.
+    'freeze_bn': False,
+
     # Set this to a config object if you want an FPN. The parameters for that object are in yolact.py under the class FPN.
     'fpn': None,
 
@@ -655,6 +659,16 @@ yrm22_long_config = yrm22_config.copy({
 yrm22_nopad_config = yrm22_crowd_config.copy({
     'name': 'yrm22_nopad',
     'mask_proto_net': [(256, 3, {'padding': 0})] * 4 + [(None, -2, {}), (256, 3, {'padding': 0})] * 2 + [(256, 1, {})],
+})
+
+yrm22_nodecay_config = yrm22_crowd_config.copy({
+    'name': 'yrm22_nodecay',
+    'decay': 0,
+})
+
+yrm22_freezebn_config = yrm22_crowd_config.copy({
+    'name': 'yrm22_freezebn',
+    'freeze_bn': True,
 })
 
 yrm16_3_config = yrm21_config.copy({
