@@ -25,6 +25,8 @@ for line in inp.split('\n'):
 					pass
 				datum[k] = v
 			
+			if key == 'val':
+				datum = (datum, data['train'][-1])
 			data[key].append(datum)
 			break
 
@@ -53,12 +55,12 @@ def plot_train(data):
 
 def plot_val(data):
 	plt.title(os.path.basename(sys.argv[1]) + ' Validation mAP')
-	plt.xlabel('Idx')
+	plt.xlabel('Epoch')
 	plt.ylabel('mAP')
 
-	x = range(len(data) // 2)
-	plt.plot(x, [x['all'] for x in data if x['type'] == 'box'])
-	plt.plot(x, [x['all'] for x in data if x['type'] == 'mask'])
+	x = [x[1]['epoch'] for x in data if x[0]['type'] == 'box']
+	plt.plot(x, [x[0]['all'] for x in data if x[0]['type'] == 'box'])
+	plt.plot(x, [x[0]['all'] for x in data if x[0]['type'] == 'mask'])
 
 	plt.legend(['BBox mAP', 'Mask mAP'])
 	plt.show()
