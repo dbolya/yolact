@@ -143,3 +143,4 @@ scripts/proto.npy
 scripts/info.txt
 test.pkl
 testeval.py
+scripts/aws2/
