@@ -250,9 +250,9 @@ coco_base_config = Config({
     # use negatives that are most confidently not background.
     'ohem_use_most_confident': False,
 
-    # If this is <= 0, the prediction heads will use the same number of features as is input from the backbone.
-    # If > 0, the prediction heads will have an extra conv layer to accomodate the transition.
-    'num_head_features': -1,
+    # Uses the same network format as mask_proto_net, except this time it's for adding extra head layers before the final
+    # prediction in prediction modules. If this is none, no extra layers will be added.
+    'extra_head_net': None,
 
     # What params should the final head layers have (the ones that predict box, confidence, and mask coeffs)
     'head_layer_params': {'kernel_size': 3, 'padding': 1},
@@ -695,6 +695,21 @@ yrm23_config = yrm21_config.copy({
 yrm24_config = yrm21_config.copy({
     'name': 'yrm24',
     'train_boxes': False,
+})
+
+yrm32_config = yrm22_newreg_config.copy({
+    'name': 'yrm32',
+    'freeze_bn': True,
+    'decay': 1e-4,
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(None, -2, {}), (256, 3, {'padding': 1})] * 2 + [(128, 1, {})],
+    'extra_head_net': [(512, 3, {'padding': 1})] + [(256, 3, {'padding': 1})] * 2 + [(512, 3, {'padding': 1}), (1024, 3, {'padding': 1})],
+    'head_layer_params': {'kernel_size': 1, 'padding': 0},
+})
+
+yrm32_protofeat_config = yrm32_config.copy({
+    'name': 'yrm32_protoin',
+    'mask_proto_prototypes_as_features': True,
+    'mask_proto_prototypes_as_features_no_grad': True,
 })
 
 

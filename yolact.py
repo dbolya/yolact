@@ -15,6 +15,43 @@ import torch.backends.cudnn as cudnn
 from utils import timer
 from utils.functions import MovingAverage
 
+
+def make_net(in_channels, conf, include_last_relu=True):
+    """
+    A helper function to take a config setting and turn it into a network.
+    Used by protonet and extrahead. Returns (network, out_channels)
+    """
+    def make_layer(layer_cfg):
+        nonlocal in_channels
+        num_channels = layer_cfg[0]
+        kernel_size = layer_cfg[1]
+        
+        # Possible patterns:
+        # ( 256, 3, {}) -> conv
+        # ( 256,-2, {}) -> deconv
+        # (None,-2, {}) -> bilinear interpolate
+        #
+        # You know it would have probably been simpler just to adopt a 'c' 'd' 'u' naming scheme.
+        # Whatever, it's too late now.
+        if kernel_size > 0:
+            layer = nn.Conv2d(in_channels, num_channels, kernel_size, **layer_cfg[2])
+        else:
+            if num_channels is None:
+                layer = InterpolateModule(scale_factor=-kernel_size, mode='bilinear', align_corners=False, **layer_cfg[2])
+            else:
+                layer = nn.ConvTranspose2d(in_channels, num_channels, -kernel_size, **layer_cfg[2])
+        
+        in_channels = num_channels if num_channels is not None else in_channels
+        return [layer, nn.ReLU(inplace=True)]
+
+    # Use sum to concat together all the component layer lists
+    net = sum([make_layer(x) for x in conf], [])
+    if not include_last_relu:
+        net = net[:-1]
+
+    return nn.Sequential(*(net)), in_channels
+
+
 class PredictionModule(nn.Module):
     """
     The (c) prediction module adapted from DSSD:
@@ -49,17 +86,14 @@ class PredictionModule(nn.Module):
         self.num_priors  = sum(len(x) for x in aspect_ratios)
         self.parent      = [parent] # Don't include this in the state dict
 
-        # Things that need to be set up even if you're using another module's layers
-        if cfg.num_head_features > 0:
-            out_channels = cfg.num_head_features
-
         if cfg.mask_proto_prototypes_as_features:
-            out_channels += self.mask_dim
+            in_channels += self.mask_dim
 
-        # Things that don't
         if parent is None:
-            if cfg.num_head_features > 0:
-                self.upfeature = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1)
+            if cfg.extra_head_net is None:
+                out_channels = in_channels
+            else:
+                self.upfeature, out_channels = make_net(in_channels, cfg.extra_head_net)
 
             if cfg.use_prediction_module:
                 self.block = Bottleneck(out_channels, out_channels // 4)
@@ -110,9 +144,8 @@ class PredictionModule(nn.Module):
         conv_h = x.size(2)
         conv_w = x.size(3)
         
-        if cfg.num_head_features > 0:
+        if cfg.extra_head_net is not None:
             x = src.upfeature(x)
-            x = F.relu(x, inplace=True)
         
         if cfg.use_prediction_module:
             # The two branches of PM design (c)
@@ -280,40 +313,13 @@ class Yolact(nn.Module):
 
             self.proto_src = cfg.mask_proto_src
             
-            if self.proto_src is None:
-                in_channels = 3
-            elif cfg.fpn is not None:
-                in_channels = cfg.fpn.num_features
-            else:
-                in_channels = self.backbone.channels[self.proto_src]
+            if self.proto_src is None: in_channels = 3
+            elif cfg.fpn is not None: in_channels = cfg.fpn.num_features
+            else: in_channels = self.backbone.channels[self.proto_src]
             in_channels += self.num_grids
 
-            def make_layer(layer_cfg):
-                nonlocal in_channels
-                num_channels = layer_cfg[0]
-                kernel_size = layer_cfg[1]
-                
-                # Possible patterns:
-                # ( 256, 3, {}) -> conv
-                # ( 256,-2, {}) -> deconv
-                # (None,-2, {}) -> bilinear interpolate
-                #
-                # You know it would have probably been simpler just to adopt a 'c' 'd' 'u' naming scheme.
-                # Whatever, it's too late now.
-                if kernel_size > 0:
-                    layer = nn.Conv2d(in_channels, num_channels, kernel_size, **layer_cfg[2])
-                else:
-                    if num_channels is None:
-                        layer = InterpolateModule(scale_factor=-kernel_size, mode='bilinear', align_corners=False, **layer_cfg[2])
-                    else:
-                        layer = nn.ConvTranspose2d(in_channels, num_channels, -kernel_size, **layer_cfg[2])
-                
-                in_channels = num_channels if num_channels is not None else in_channels
-                return [layer, nn.ReLU(inplace=True)]
-
-            # The -1 here is to remove the last relu because we might want to change it to another function
-            self.proto_net = nn.Sequential(*(sum([make_layer(x) for x in cfg.mask_proto_net], [])[:-1]))
-            cfg.mask_dim = in_channels
+            # The include_last_relu=false here is because we might want to change it to another function
+            self.proto_net, cfg.mask_dim = make_net(in_channels, cfg.mask_proto_net, include_last_relu=False)
 
             if cfg.mask_proto_bias:
                 cfg.mask_dim += 1
