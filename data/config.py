@@ -676,6 +676,11 @@ yrm22_fewerproto_config = yrm22_crowd_config.copy({
     'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(None, -2, {}), (256, 3, {'padding': 1})] * 2 + [(128, 1, {})],
 })
 
+yrm22_muchfewerproto_config = yrm22_crowd_config.copy({
+    'name': 'yrm22_muchfewerproto',
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(None, -2, {}), (256, 3, {'padding': 1})] * 2 + [(64, 1, {})],
+})
+
 yrm22_newreg_config = yrm22_crowd_config.copy({
     'name': 'yrm22_newreg',
     'gamma': 0.3, # approx sqrt(0.1)
