@@ -717,6 +717,16 @@ yrm32_protofeat_config = yrm32_config.copy({
     'mask_proto_prototypes_as_features_no_grad': True,
 })
 
+yrm32_massivelad_config = yrm32_config.copy({
+    'name': 'yrm32_massivelad',
+    'extra_head_net': [(512, 3, {'padding': 1})],
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 3 + 
+        [(None, -2, {}), (256, 3, {'padding': 1})] +
+        [(None, -2, {}), (128, 3, {'padding': 1})] +
+        [(None, -2, {}), ( 64, 3, {'padding': 1})] +
+        [(64, 1, {})],
+})
+
 
 yrm25_config = yrm22_config.copy({
     'name': 'yrm25',
