@@ -719,7 +719,8 @@ yrm32_protofeat_config = yrm32_config.copy({
 
 yrm32_massivelad_config = yrm32_config.copy({
     'name': 'yrm32_massivelad',
-    'extra_head_net': [(512, 3, {'padding': 1})],
+    'extra_head_net': None,
+    'head_layer_params': {'kernel_size': 3, 'padding': 1},
     'mask_proto_net': [(256, 3, {'padding': 1})] * 3 + 
         [(None, -2, {}), (256, 3, {'padding': 1})] +
         [(None, -2, {}), (128, 3, {'padding': 1})] +
