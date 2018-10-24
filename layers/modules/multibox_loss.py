@@ -40,7 +40,7 @@ class MultiBoxLoss(nn.Module):
         self.negpos_ratio = negpos_ratio
         
         # Extra loss coefficients to get all the losses to be in a similar range
-        self.mask_alpha = 0.2 / cfg.mask_dim
+        self.mask_alpha = 0.5 / 256 * 140 * 140 # We'll divide this by mask_h and mask_w later
         self.bbox_alpha = 5 if cfg.use_yolo_regressors else 1
 
         if cfg.mask_proto_normalize_mask_loss_by_sqrt_area:
@@ -334,4 +334,4 @@ class MultiBoxLoss(nn.Module):
 
             loss_m += torch.sum(pre_loss)
 
-        return loss_m * self.mask_alpha
+        return loss_m * self.mask_alpha / mask_h / mask_w
