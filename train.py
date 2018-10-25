@@ -101,12 +101,16 @@ class ScatterWrapper:
         else: return out
     
     def get_args(self, mask):
+        device = mask.device
         mask = [int(x) for x in mask]
         out_args = [[] for _ in self.args]
 
         for out, arg in zip(out_args, self.args):
             for idx in mask:
-                out.append(arg[idx])
+                x = arg[idx]
+                if isinstance(x, torch.Tensor):
+                    x = x.to(device)
+                out.append(x)
         
         return out_args
 
