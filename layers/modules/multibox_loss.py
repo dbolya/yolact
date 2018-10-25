@@ -53,7 +53,7 @@ class MultiBoxLoss(nn.Module):
         self.l1_expected_area = 20*20/70/70
         self.l1_alpha = 0.1
 
-    def forward(self, predictions, targets, masks, num_crowds):
+    def forward(self, predictions, wrapper, wrapper_mask):
         """Multibox Loss
         Args:
             predictions (tuple): A tuple containing loc preds, conf preds,
@@ -80,6 +80,8 @@ class MultiBoxLoss(nn.Module):
         else:
             loc_data, conf_data, mask_data, priors = predictions
         
+        targets, masks, num_crowds = wrapper.get_args(wrapper_mask)
+
         num = loc_data.size(0)
         # This is necessary for training on multiple GPUs because
         # DataParallel will cat the priors from each GPU together

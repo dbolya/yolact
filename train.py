@@ -86,6 +86,32 @@ if torch.cuda.is_available():
 else:
     torch.set_default_tensor_type('torch.FloatTensor')
 
+class ScatterWrapper:
+    """ Input is any number of lists. This will preserve them through a dataparallel scatter. """
+    def __init__(self, *args):
+        for arg in args:
+            if not isinstance(arg, list):
+                print('Warning: ScatterWrapper got input of non-list type.')
+        self.args = args
+        self.batch_size = len(args[0])
+    
+    def make_mask(self):
+        out = torch.Tensor(list(range(self.batch_size)))
+        if args.cuda: return out.cuda()
+        else: return out
+    
+    def get_args(self, mask):
+        mask = [int(x) for x in mask]
+        out_args = [[] for _ in self.args]
+
+        for out, arg in zip(out_args, self.args):
+            for idx in mask:
+                out.append(arg[idx])
+        
+        return out_args
+
+        
+
 def train():
     if not os.path.exists(args.save_folder):
         os.mkdir(args.save_folder)
@@ -201,6 +227,7 @@ def train():
                     cfg.use_prediction_matching = True
 
                 # Load training data
+                # Note, for training on multiple gpus this will use the custom replicate and gather I wrote up there
                 images, targets, masks, num_crowds = prepare_data(datum)
                 
                 # Forward Pass
@@ -208,7 +235,10 @@ def train():
                 
                 # Compute Loss
                 optimizer.zero_grad()
-                losses = criterion(out, targets, masks, num_crowds)
+                
+                wrapper = ScatterWrapper(targets, masks, num_crowds)
+                losses = criterion(out, wrapper, wrapper.make_mask())
+                
                 loss_l, loss_c, loss_m = [x.sum() for x in losses] # Sum here because Dataparallel
                 loss = loss_l + loss_c + loss_m
                 
