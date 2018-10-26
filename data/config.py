@@ -728,6 +728,10 @@ yrm32_massivelad_config = yrm32_config.copy({
         [(64, 1, {})],
 })
 
+yrm32_re_massivelad_config = yrm32_massivelad_config.copy({
+    'name': 'yrm32_re_massivelad'
+})
+
 yrm32_absoluteunit_config = yrm32_massivelad_config.copy({
     'name': 'yrm32_absoluteunit',
     'mask_proto_net': [(256, 3, {'padding': 1})] * 2 + 
