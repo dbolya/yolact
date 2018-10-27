@@ -380,6 +380,12 @@ class Yolact(nn.Module):
                 if module.bias is not None:
                     module.bias.data.zero_()
 
+    def train(self, mode=True):
+        super().train(mode)
+
+        if cfg.freeze_bn:
+            self.freeze_bn()
+
     def freeze_bn(self):
         """ Adapted from https://discuss.pytorch.org/t/how-to-train-with-frozen-batchnorm/12106/8 """
         for module in self.modules():
