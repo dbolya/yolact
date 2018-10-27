@@ -728,8 +728,13 @@ yrm32_massivelad_config = yrm32_config.copy({
         [(64, 1, {})],
 })
 
-yrm32_re_massivelad_config = yrm32_massivelad_config.copy({
-    'name': 'yrm32_re_massivelad'
+yrm32_othermassivelad_config = yrm32_config.copy({
+    'name': 'yrm32_othermassivelad',
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 3 + 
+        [(None, -2, {}), (256, 3, {'padding': 1})] +
+        [(None, -2, {}), (128, 3, {'padding': 1})] +
+        [(None, -2, {}), ( 64, 3, {'padding': 1})] +
+        [(64, 1, {})],
 })
 
 yrm32_absoluteunit_config = yrm32_massivelad_config.copy({
@@ -742,6 +747,12 @@ yrm32_absoluteunit_config = yrm32_massivelad_config.copy({
         [(64, 1, {})],
 })
 
+yrm22_test_onegpu_config = yrm22_freezebn_config.copy({
+    'name': 'yrm22_test_onegpu'
+})
+yrm22_test_twogpu_config = yrm22_freezebn_config.copy({
+    'name': 'yrm22_test_twogpu'
+})
 
 yrm25_config = yrm22_config.copy({
     'name': 'yrm25',
