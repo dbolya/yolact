@@ -96,7 +96,7 @@ class ScatterWrapper:
         self.batch_size = len(args[0])
     
     def make_mask(self):
-        out = torch.Tensor(list(range(self.batch_size)))
+        out = torch.Tensor(list(range(self.batch_size))).long()
         if args.cuda: return out.cuda()
         else: return out
     
@@ -243,7 +243,7 @@ def train():
                 wrapper = ScatterWrapper(targets, masks, num_crowds)
                 losses = criterion(out, wrapper, wrapper.make_mask())
                 
-                loss_l, loss_c, loss_m = [x.sum() for x in losses] # Sum here because Dataparallel
+                loss_l, loss_c, loss_m = [x.mean() for x in losses] # Mean here because Dataparallel
                 loss = loss_l + loss_c + loss_m
                 
                 # Backprop
