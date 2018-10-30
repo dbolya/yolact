@@ -893,6 +893,17 @@ yrm30_oldsrc_config = yrm30_halflr_config.copy({
     'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(None, -2, {}), (256, 3, {'padding': 1})] * 2 + [(256, 1, {})],
 })
 
+yrm33_config = yrm30_config.copy({
+    'name': 'yrm33',
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(128, 1, {})],
+    'extra_head_net': [(256, 3, {'padding': 1}), (512, 3, {'padding': 1}), (1024, 3, {'padding': 1})],
+    'head_layer_params': {'kernel_size': 1, 'padding': 0},
+    # 'freeze_bn': True,
+    'gamma': 0.3, # approx sqrt(0.1)
+    'lr_steps': (140000, 260000, 310000, 360000, 380000, 400000),
+    'lr': 1e-3,
+})
+
 yrm31_config = yrm22_config.copy({
     'name': 'yrm31',
     'ohem_use_most_confident': True
