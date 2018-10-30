@@ -441,6 +441,10 @@ class Yolact(nn.Module):
                     proto_downsampled = F.interpolate(proto_downsampled, size=outs[idx].size()[2:], mode='bilinear', align_corners=False)
                     pred_x = torch.cat([pred_x, proto_downsampled], dim=1)
 
+                # A hack for the way dataparallel works
+                if cfg.share_prediction_module and pred_layer is not self.prediction_layers[0]:
+                    pred_layer.parent = [self.prediction_layers[0]]
+
                 p = pred_layer(pred_x)
                 
                 for out, pred in zip(pred_outs, p):
