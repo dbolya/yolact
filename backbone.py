@@ -9,14 +9,14 @@ class Bottleneck(nn.Module):
     """ Adapted from torchvision.models.resnet """
     expansion = 4
 
-    def __init__(self, inplanes, planes, stride=1, downsample=None, norm_layer=nn.BatchNorm2d):
+    def __init__(self, inplanes, planes, stride=1, downsample=None, norm_layer=nn.BatchNorm2d, dilation=1):
         super(Bottleneck, self).__init__()
-        self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, bias=False)
+        self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, bias=False, dilation=dilation)
         self.bn1 = norm_layer(planes)
         self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=stride,
-                               padding=1, bias=False)
+                               padding=dilation, bias=False, dilation=dilation)
         self.bn2 = norm_layer(planes)
-        self.conv3 = nn.Conv2d(planes, planes * 4, kernel_size=1, bias=False)
+        self.conv3 = nn.Conv2d(planes, planes * 4, kernel_size=1, bias=False, dilation=dilation)
         self.bn3 = norm_layer(planes * 4)
         self.relu = nn.ReLU(inplace=True)
         self.downsample = downsample
@@ -48,7 +48,7 @@ class Bottleneck(nn.Module):
 class ResNetBackbone(nn.Module):
     """ Adapted from torchvision.models.resnet """
 
-    def __init__(self, layers, block=Bottleneck, norm_layer=nn.BatchNorm2d):
+    def __init__(self, layers, atrous_layers=[], block=Bottleneck, norm_layer=nn.BatchNorm2d):
         super().__init__()
 
         # These will be populated by _make_layer
@@ -56,6 +56,8 @@ class ResNetBackbone(nn.Module):
         self.layers = nn.ModuleList()
         self.channels = []
         self.norm_layer = norm_layer
+        self.dilation = 1
+        self.atrous_layers = atrous_layers
 
         # From torchvision.models.resnet.Resnet
         self.inplanes = 64
@@ -81,14 +83,19 @@ class ResNetBackbone(nn.Module):
         """ Here one layer means a string of n Bottleneck blocks. """
         downsample = None
         if stride != 1 or self.inplanes != planes * block.expansion:
+            if len(self.layers) in self.atrous_layers:
+                self.dilation += 1
+                stride = 1
+            
             downsample = nn.Sequential(
                 nn.Conv2d(self.inplanes, planes * block.expansion,
-                          kernel_size=1, stride=stride, bias=False),
+                          kernel_size=1, stride=stride, bias=False,
+                          dilation=self.dilation),
                 self.norm_layer(planes * block.expansion),
             )
 
         layers = []
-        layers.append(block(self.inplanes, planes, stride, downsample, self.norm_layer))
+        layers.append(block(self.inplanes, planes, stride, downsample, self.norm_layer, self.dilation))
         self.inplanes = planes * block.expansion
         for i in range(1, blocks):
             layers.append(block(self.inplanes, planes, norm_layer=self.norm_layer))
