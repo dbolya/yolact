@@ -16,7 +16,7 @@ dump_file = 'weights/bboxes.pkl'
 
 
 def to_relative(bboxes):
-	return bboxes[:, 2:] / bboxes[:, :2]
+	return bboxes[:, 2:4] / bboxes[:, :2]
 
 if __name__ == '__main__':
 		

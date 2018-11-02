@@ -1,20 +1,20 @@
 """
-Instead of clustering bbox widths and heights, this script
-directly optimizes average IoU across the training set given
-the specified number of anchor boxes.
+This script compiles all the bounding boxes in the training data and
+clusters them for each convout resolution on which they're used.
 
 Run this script from the Yolact root directory.
 """
 
-import pickle
+import os.path as osp
+import json, pickle
+import sys
+from math import sqrt
 from itertools import product
+import torch
 
 import numpy as np
-import torch
-from scipy.optimize import minimize
 
 dump_file = 'weights/bboxes.pkl'
-
 
 def intersect(box_a, box_b):
     """ We resize both tensors to [A,B,2] without new malloc:
@@ -85,97 +85,78 @@ def make_priors(conv_size, scales, aspect_ratios):
 				# Point form
 				prior_data += [x, y, x + w, y + h]
 	
-	return torch.Tensor(prior_data).view(-1, 4).cuda()
+	return np.array(prior_data).reshape(-1, 4)
 
+# fixed_ssd_config
+# scales = [[3.5, 4.95], [3.6, 4.90], [3.3, 4.02], [2.7, 3.10], [2.1, 2.37], [2.1, 2.37], [1.8, 1.92]]
+# aspect_ratios = [ [[1, sqrt(2), 1/sqrt(2), sqrt(3), 1/sqrt(3)][:n], [1]] for n in [3, 5, 5, 5, 3, 3, 3] ]
+# conv_sizes = [(35, 35), (18, 18), (9, 9), (5, 5), (3, 3), (2, 2)]
 
-
-scales = [[3.78], [3.72], [3.51], [3.06], [2.70], [2.29]]
+scales = [[3.76], [3.72], [3.58], [3.14], [2.75], [2.12]]
 aspect_ratios = [[[0.86, 1.51, 0.55]], [[0.84, 1.45, 0.49]], [[0.88, 1.43, 0.52]], [[0.96, 1.61, 0.60]], [[0.91, 1.32, 0.66]], [[0.74, 1.22, 0.90]]]
 conv_sizes = [(69, 69), (35, 35), (18, 18), (9, 9), (5, 5), (3, 3)]
 
-batch_idx = 0
+# yrm33_config
+# scales = [ [5.3] ] * 5
+# aspect_ratios = [ [[1, 1/2, 2]] ]*5
+# conv_sizes = [(136, 136), (67, 67), (33, 33), (16, 16), (8, 8)]
 
 
-def compute_hits(bboxes, anchors, iou_threshold=0.5):
-	ious = jaccard(bboxes, anchors)
-	perGTAnchorMax, _ = torch.max(ious, dim=1)
-	
-	return (perGTAnchorMax > iou_threshold)
-
-def compute_recall(hits, base_hits):
-	hits = (hits | base_hits).float()
-	return torch.sum(hits) / hits.size(0)
-
-
-def step(x, x_func, bboxes, base_hits, optim_idx):
-	# This should set the scale and aspect ratio
-	x_func(x, scales[optim_idx], aspect_ratios[optim_idx])
-
-	anchors = make_priors(conv_sizes[optim_idx], scales[optim_idx], aspect_ratios[optim_idx])
-
-	return -float(compute_recall(compute_hits(bboxes, anchors), base_hits).cpu())
-
-
-def optimize(full_bboxes, optim_idx, batch_size=10000):
-	global batch_idx, scales, aspect_ratios, conv_sizes
-
-	start = batch_idx * batch_size
-	end   = min((batch_idx + 1) * batch_size, full_bboxes.size(0))
-
-	if batch_idx > (full_bboxes.size(0) // batch_size):
-		batch_idx = 0
-
-	bboxes = full_bboxes[start:end, :]
-
-	anchor_base = [
-		make_priors(conv_sizes[idx], scales[idx], aspect_ratios[idx])
-			for idx in range(len(conv_sizes)) if idx != optim_idx]
-	base_hits = compute_hits(bboxes, torch.cat(anchor_base, dim=0))
-	
-	# def set_x(x, scales, aspect_ratios):
-	# 	aspect_ratios[0] = x
-		
-	def set_x(x, scales, aspect_ratios):
-		scales[0] = max(x[0], 0)
-
-	res = minimize(step, x0=scales[optim_idx], method='Powell',
-		args = (set_x, bboxes, base_hits, optim_idx),)
-
-
-def pretty_str(x:list):
-	if isinstance(x, list):
-		return '[' + ', '.join([pretty_str(y) for y in x]) + ']'
-	elif isinstance(x, np.ndarray):
-		return pretty_str(list(x))
-	else:
-		return '%.2f' % x
+SMALL = 0
+MEDIUM = 1
+LARGE = 2
 
 if __name__ == '__main__':
-	
-	# Load widths and heights from a dump file. Obtain this with
-	# python3 scripts/save_bboxes.py
+		
 	with open(dump_file, 'rb') as f:
 		bboxes = pickle.load(f)
 
 	# Each box is in the form [im_w, im_h, pos_x, pos_y, size_x, size_y]
 	bboxes = np.array(bboxes)
-	bboxes = to_relative(bboxes)
+	bboxes_rel = to_relative(bboxes)
+
+	sizes = []
+	smalls = []
+	for i in range(bboxes.shape[0]):
+		area = bboxes[i, 4] * bboxes[i, 5]
+		if area < 32 ** 2:
+			sizes.append(SMALL)
+			smalls.append(area)
+		elif area < 96 ** 2:
+			sizes.append(MEDIUM)
+		else:
+			sizes.append(LARGE)
 
 	with torch.no_grad():
-		bboxes = torch.Tensor(bboxes).cuda()
-		
-		def print_out():
-			print(pretty_str(scales))
+		sizes = torch.Tensor(sizes)
 
-		for p in range(10):
-			for i in range(len(conv_sizes)):
-				print('Sub Iteration %d' % i)
-				optimize(bboxes, i)
+		anchors = [make_priors(cs, s, ar) for cs, s, ar in zip(conv_sizes, scales, aspect_ratios)]
+		anchors = np.concatenate(anchors, axis=0)
+		anchors = torch.Tensor(anchors).cuda()
+
+		bboxes_rel = torch.Tensor(bboxes_rel).cuda()
+		perGTAnchorMax = torch.zeros(bboxes_rel.shape[0]).cuda()
+
+		chunk_size = 1000
+		for i in range((bboxes_rel.size(0) // chunk_size) + 1):
+			start = i * chunk_size
+			end   = min((i + 1) * chunk_size, bboxes_rel.size(0))
 			
-			print('Iteration %d: ' % p, end='')
-			print_out()
-			print()
+			ious = jaccard(bboxes_rel[start:end, :], anchors)
+			maxes, maxidx = torch.max(ious, dim=1)
 
-			batch_idx += 1
+			perGTAnchorMax[start:end] = maxes
+	
+
+		hits = (perGTAnchorMax > 0.5).float()
+
+		print('Total recall: %.2f' % (torch.sum(hits) / hits.size(0) * 100))
+		print()
+
+		for i, metric in zip(range(3), ('small', 'medium', 'large')):
+			_hits = hits[sizes == i]
+			_size = (1 if _hits.size(0) == 0 else _hits.size(0))
+			print(metric + ' recall: %.2f' % ((torch.sum(_hits) / _size) * 100))
+
 
 
