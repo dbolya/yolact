@@ -763,7 +763,8 @@ yrm34_config = yrm32_config.copy({
         'pred_aspect_ratios': [[[0.86, 1.51, 0.55]], [[0.84, 1.45, 0.49]], [[0.88, 1.43, 0.52]], [[0.96, 1.61, 0.60]], [[0.91, 1.32, 0.66]], [[0.74, 1.22, 0.90]]],
     }),
     'extra_head_net': [(512, 3, {'padding': 1})] + [(512, 3, {'padding': 1}), (1024, 3, {'padding': 1})],
-    'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(None, -2, {}), (256, 3, {'padding': 1})] * 1 + [(128, 1, {})],
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(None, -2, {}), (256, 3, {'padding': 1})] * 2 + [(128, 1, {})],
+    'freeze_bn': True,
 })
 
 yrm22_test_onegpu_config = yrm22_freezebn_config.copy({
