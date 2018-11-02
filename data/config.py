@@ -704,7 +704,7 @@ yrm24_config = yrm21_config.copy({
 
 yrm32_config = yrm22_newreg_config.copy({
     'name': 'yrm32',
-    'freeze_bn': True,
+    'freeze_bn': False,
     'decay': 1e-4,
     'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(None, -2, {}), (256, 3, {'padding': 1})] * 2 + [(128, 1, {})],
     'extra_head_net': [(512, 3, {'padding': 1})] + [(256, 3, {'padding': 1})] * 2 + [(512, 3, {'padding': 1}), (1024, 3, {'padding': 1})],
@@ -750,6 +750,20 @@ yrm32_absoluteunit_config = yrm32_massivelad_config.copy({
         [(None, -2, {}), ( 64, 3, {'padding': 1})] +
         [(None, -2, {}), ( 64, 3, {'padding': 1})] +
         [(64, 1, {})],
+})
+
+# Atrous!
+yrm34_config = yrm32_config.copy({
+    'name': 'yrm34',
+    'backbone': yrm32_config.backbone.copy({
+        'args': (yrm32_config.backbone.args[0], [2]),
+
+        'selected_layers': list(range(2, 8)),
+        'pred_scales': [[3.76], [3.72], [3.58], [3.14], [2.75], [2.12]],
+        'pred_aspect_ratios': [[[0.86, 1.51, 0.55]], [[0.84, 1.45, 0.49]], [[0.88, 1.43, 0.52]], [[0.96, 1.61, 0.60]], [[0.91, 1.32, 0.66]], [[0.74, 1.22, 0.90]]],
+    }),
+    'extra_head_net': [(512, 3, {'padding': 1})] + [(512, 3, {'padding': 1}), (1024, 3, {'padding': 1})],
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(None, -2, {}), (256, 3, {'padding': 1})] * 1 + [(128, 1, {})],
 })
 
 yrm22_test_onegpu_config = yrm22_freezebn_config.copy({
@@ -898,7 +912,7 @@ yrm33_config = yrm30_config.copy({
     'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(128, 1, {})],
     'extra_head_net': [(256, 3, {'padding': 1}), (512, 3, {'padding': 1}), (1024, 3, {'padding': 1})],
     'head_layer_params': {'kernel_size': 1, 'padding': 0},
-    # 'freeze_bn': True,
+    'freeze_bn': True,
     'gamma': 0.3, # approx sqrt(0.1)
     'lr_steps': (140000, 260000, 310000, 360000, 380000, 400000),
     'lr': 1e-3,
@@ -925,7 +939,7 @@ yolact_vgg16_config = ssd550_config.copy({
 })
 
 # Default config
-cfg = yrm22_config.copy()
+cfg = yrm34_config.copy()
 
 def set_cfg(config_name:str):
     """ Sets the active config. Works even if cfg is already imported! """
