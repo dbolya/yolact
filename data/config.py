@@ -767,6 +767,15 @@ yrm34_config = yrm32_config.copy({
     'freeze_bn': True,
 })
 
+yrm34b_config = yrm34_config.copy({
+    'name': 'yrm34b',
+    'backbone': yrm34_config.backbone.copy({
+        'scales': [[3.91, 2.31], [3.39, 1.86], [3.20, 2.93], [2.69, 2.62], [2.63, 2.05], [2.13]],
+        'aspect_ratios': [[[0.66], [0.82]], [[0.61, 1.20], [1.30]], [[0.62, 1.02], [0.48, 1.60]], [[0.92, 1.66,
+0.63], [0.43]], [[1.68, 0.98, 0.63], [0.59, 1.89, 1.36]], [[1.20, 0.86]]]
+    })
+})
+
 yrm22_test_onegpu_config = yrm22_freezebn_config.copy({
     'name': 'yrm22_test_onegpu'
 })
