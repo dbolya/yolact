@@ -7,6 +7,7 @@ Run this script from the Yolact root directory.
 """
 
 import pickle
+import random
 from itertools import product
 
 import numpy as np
@@ -89,9 +90,12 @@ def make_priors(conv_size, scales, aspect_ratios):
 
 
 
-scales = [[3.78], [3.72], [3.51], [3.06], [2.70], [2.29]]
-aspect_ratios = [[[0.86, 1.51, 0.55]], [[0.84, 1.45, 0.49]], [[0.88, 1.43, 0.52]], [[0.96, 1.61, 0.60]], [[0.91, 1.32, 0.66]], [[0.74, 1.22, 0.90]]]
+scales = [[3.91, 2.31], [3.39, 1.86], [3.20, 2.93], [2.69, 2.62, 1], [2.63, 2.05], [2.13]]
+aspect_ratios = [[[0.66], [0.82]], [[0.61, 1.20], [1.30]], [[0.62, 1.02], [0.48, 1.60], [1, 2]], [[0.92, 1.66,
+0.63], [0.43]], [[1.68, 0.98, 0.63], [0.59, 1.89, 1.36]], [[1.20, 0.86]]]
 conv_sizes = [(69, 69), (35, 35), (18, 18), (9, 9), (5, 5), (3, 3)]
+
+optimize_scales = False
 
 batch_idx = 0
 
@@ -132,13 +136,20 @@ def optimize(full_bboxes, optim_idx, batch_size=10000):
 			for idx in range(len(conv_sizes)) if idx != optim_idx]
 	base_hits = compute_hits(bboxes, torch.cat(anchor_base, dim=0))
 	
-	# def set_x(x, scales, aspect_ratios):
-	# 	aspect_ratios[0] = x
-		
+	
 	def set_x(x, scales, aspect_ratios):
-		scales[0] = max(x[0], 0)
+		if optimize_scales:
+			for i in range(len(scales)):
+				scales[i] = max(x[i], 0)
+		else:
+			k = 0
+			for i in range(len(aspect_ratios)):
+				for j in range(len(aspect_ratios[i])):
+					aspect_ratios[i][j] = x[k]
+					k += 1
+			
 
-	res = minimize(step, x0=scales[optim_idx], method='Powell',
+	res = minimize(step, x0=scales[optim_idx] if optimize_scales else sum(aspect_ratios[optim_idx], []), method='Powell',
 		args = (set_x, bboxes, base_hits, optim_idx),)
 
 
@@ -158,6 +169,7 @@ if __name__ == '__main__':
 		bboxes = pickle.load(f)
 
 	# Each box is in the form [im_w, im_h, pos_x, pos_y, size_x, size_y]
+	random.shuffle(bboxes)
 	bboxes = np.array(bboxes)
 	bboxes = to_relative(bboxes)
 
@@ -165,17 +177,23 @@ if __name__ == '__main__':
 		bboxes = torch.Tensor(bboxes).cuda()
 		
 		def print_out():
-			print(pretty_str(scales))
+			if optimize_scales:
+				print('Scales: ' + pretty_str(scales))
+			else:
+				print('Aspect Ratios: ' + pretty_str(aspect_ratios))
 
 		for p in range(10):
+			print('(Sub Iteration) ', end='')
 			for i in range(len(conv_sizes)):
-				print('Sub Iteration %d' % i)
+				print('%d ' % i, end='', flush=True)
 				optimize(bboxes, i)
+			print('Done', end='\r')
 			
-			print('Iteration %d: ' % p, end='')
+			print('(Iteration %d) ' % p, end='')
 			print_out()
 			print()
 
-			batch_idx += 1
+			optimize_scales = not optimize_scales
+			# batch_idx += 1
 
 
