@@ -90,10 +90,9 @@ def make_priors(conv_size, scales, aspect_ratios):
 
 
 
-scales = [[3.91, 2.31], [3.39, 1.86], [3.20, 2.93], [2.69, 2.62, 1], [2.63, 2.05], [2.13]]
-aspect_ratios = [[[0.66], [0.82]], [[0.61, 1.20], [1.30]], [[0.62, 1.02], [0.48, 1.60], [1, 2]], [[0.92, 1.66,
-0.63], [0.43]], [[1.68, 0.98, 0.63], [0.59, 1.89, 1.36]], [[1.20, 0.86]]]
-conv_sizes = [(69, 69), (35, 35), (18, 18), (9, 9), (5, 5), (3, 3)]
+scales = [[x+0.5 for x in range(j)] for j in [4, 6, 12, 12, 4, 2]]
+aspect_ratios = [[[1] for _ in range(len(scales[i]))] for i in range(len(scales))]
+conv_sizes = [(35, 35), (18, 18), (9, 9), (5, 5), (3, 3), (2, 2)]
 
 optimize_scales = False
 
@@ -194,6 +193,8 @@ if __name__ == '__main__':
 			print()
 
 			optimize_scales = not optimize_scales
-			# batch_idx += 1
+		
+		print('scales = ' + pretty_str(scales))
+		print('aspect_ratios = ' + pretty_str(aspect_ratios))
 
 

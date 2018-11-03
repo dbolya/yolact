@@ -690,6 +690,15 @@ yrm22_newreg_config = yrm22_crowd_config.copy({
     'lr_steps': (140000, 260000, 310000, 360000, 380000, 400000),
 })
 
+yrm22_optimanchor_config = yrm22_newreg_config.copy({
+    'name': 'yrm22_optimanchor',
+    'backbone': yrm22_newreg_config.backbone.copy({
+        'pred_scales': [[1.73, 2.96], [3.12, 2.44, 1.01], [2.09, 2.25, 3.32], [0.90, 2.17, 3.00], [1.03, 2.16], [0.75]],
+        'pred_aspect_ratios': [[[0.59, 0.95], [0.62, 1.18]], [[0.49, 0.75], [0.68, 1.26], [0.64, 1.57]], [[1.94, 1.28], [0.56, 0.84], [0.62, 1.13]], [[1.66, 2.63], [0.51, 1.82], [1.28, 0.76]], [[0.45, 2.43], [0.97]], [[1.88]]]
+    }),
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(None, -2, {}), (256, 3, {'padding': 1})] * 2 + [(128, 1, {})]
+})
+
 yrm16_3_config = yrm21_config.copy({
     'name': 'yrm16_3',
     'mask_proto_normalize_mask_loss_by_sqrt_area': True,
@@ -759,12 +768,11 @@ yrm32_absoluteunit_config = yrm32_massivelad_config.copy({
 yrm34_config = yrm32_config.copy({
     'name': 'yrm34',
     'backbone': yrm32_config.backbone.copy({
-        'args': (yrm32_config.backbone.args[0], [2]),
+        'args': (yrm32_config.backbone.args[0],),
 
         'selected_layers': list(range(2, 8)),
-        'pred_scales': [[3.76], [3.72], [3.58], [3.14], [2.75], [2.12]],
-        'pred_aspect_ratios': [[[0.86, 1.51, 0.55]], [[0.84, 1.45, 0.49]], [[0.88, 1.43, 0.52]], [[0.96, 1.61, 0.60]], [[0.91, 1.32, 0.66]], [[0.74, 1.22, 0.90]]],
-    }),
+        'pred_scales': [[1.72, 2.93], [3.09, 2.30], [1.85, 2.43, 3.20], [0.97, 1.98, 3.00], [0.91, 2.16], [0.83]],
+        'pred_aspect_ratios': [[[0.68, 1.05], [0.62, 1.16]], [[0.48, 0.76], [0.67, 1.40]], [[1.68, 1.29], [0.61, 0.92], [0.56, 1.22]], [[0.37, 2.06], [0.68, 1.70], [1.25, 0.71]], [[0.36, 1.98], [1.01]], [[1.81]]]}),
     'extra_head_net': [(512, 3, {'padding': 1})] + [(512, 3, {'padding': 1}), (1024, 3, {'padding': 1})],
     'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(None, -2, {}), (256, 3, {'padding': 1})] * 2 + [(128, 1, {})],
     'freeze_bn': True,
@@ -952,7 +960,7 @@ yolact_vgg16_config = ssd550_config.copy({
 })
 
 # Default config
-cfg = yrm34_config.copy()
+cfg = yrm22_optimanchor_config.copy()
 
 def set_cfg(config_name:str):
     """ Sets the active config. Works even if cfg is already imported! """
