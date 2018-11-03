@@ -282,6 +282,9 @@ coco_base_config = Config({
     # Whether or not to do post processing on the cpu at test time
     'force_cpu_nms': True,
 
+    # Whether to use mask coefficient cosine similarity nms instead of bbox iou nms
+    'use_coeff_nms': False,
+
     # Whether or not to tie the mask loss / box loss to 0
     'train_masks': True,
     'train_boxes': True,

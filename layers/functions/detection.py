@@ -1,5 +1,6 @@
 import torch
-from ..box_utils import decode, nms
+import torch.nn.functional as F
+from ..box_utils import decode, nms, jaccard
 from utils import timer
 
 from data import cfg, mask_type
@@ -79,9 +80,15 @@ class Detect(object):
         boxes = decoded_boxes[l_mask].view(-1, 4)
         masks = mask_data[batch_idx, l_mask[:, 0], :]
         
-        # idx of highest scoring and non-overlapping boxes per class
-        ids, count = nms(boxes, scores, self.nms_thresh, self.top_k, force_cpu=cfg.force_cpu_nms)
-        ids = ids[:count]
+        # idx of highest scoring and non-overlapping boxes per classif cfg.use_coeff_nms:
+        if cfg.use_coeff_nms:
+            ids, count = self.coefficient_nms(masks, scores, top_k=self.top_k)
+        else:
+            # Use this function instead for not 100% correct nms but 4ms faster
+            # ids, count = self.box_nms(boxes, scores, self.nms_thresh, self.top_k)
+            
+            ids, count = nms(boxes, scores, self.nms_thresh, self.top_k, force_cpu=cfg.force_cpu_nms)
+            ids = ids[:count]
         
         output[batch_idx, :count] = \
             torch.cat((classes[ids].unsqueeze(1).float(), scores[ids].unsqueeze(1), boxes[ids], masks[ids]), 1)
@@ -100,8 +107,12 @@ class Detect(object):
             boxes = decoded_boxes[l_mask].view(-1, 4)
             masks = mask_data[batch_idx, l_mask[:, 0], :]
             # idx of highest scoring and non-overlapping boxes per class
-            ids, count = nms(boxes, scores, self.nms_thresh, self.top_k, force_cpu=cfg.force_cpu_nms)
-            ids = ids[:count]
+            
+            if cfg.use_coeff_nms:
+                ids, count = self.coefficient_nms(masks, scores, top_k=self.top_k)
+            else:
+                ids, count = self.box_nms(boxes, scores, self.nms_thresh, self.top_k)
+            
             classes = torch.ones(count, 1).float()*(cl-1)
             if cfg.force_cpu_detect:
                 classes = classes.cpu()
@@ -112,6 +123,45 @@ class Detect(object):
         tmp_output = tmp_output.view(-1, output.size(2))
         _, idx = tmp_output[:, 1].sort(0, descending=True)
         output[batch_idx, :, :] = tmp_output[idx[:self.top_k], :]
+    
+
+    def coefficient_nms(self, masks, scores, cos_threshold=0.9, top_k=400):
+        _, idx = scores.sort(0, descending=True)
+        idx = idx[:top_k]
+        masks_norm = F.normalize(masks[idx], dim=1)
+
+        # Compute the pairwise cosine similarity between the coefficients
+        cos_similarity = masks_norm @ masks_norm.t()
+        
+        # Zero out the lower triangle of the cosine similarity matrix and diagonal
+        cos_similarity.triu_(diagonal=1)
+
+        # Now that everything in the diagonal and below is zeroed out, if we take the max
+        # of the cos similarity matrix along the columns, each column will represent the
+        # maximum cosine similarity between this element and every element with a higher
+        # score than this element.
+        cos_max, _ = torch.max(cos_similarity, dim=0)
+
+        # Now just filter out the ones higher than the threshold
+        idx_out = idx[cos_max <= cos_threshold]
+
+        print(masks_norm[:5] @ masks_norm[:5].t())
+        
+        return idx_out, idx_out.size(0)
+    
+    def box_nms(self, boxes, scores, iou_threshold=0.5, top_k=400):
+        _, idx = scores.sort(0, descending=True)
+        idx = idx[:top_k]
+        boxes = boxes[idx]
+
+        iou = jaccard(boxes, boxes)
+        iou.triu_(diagonal=1)
+        iou_max, _ = torch.max(iou, dim=0)
+
+        # Now just filter out the ones higher than the threshold
+        idx_out = idx[iou_max <= iou_threshold]
+        
+        return idx_out, idx_out.size(0)
 
         
                 
