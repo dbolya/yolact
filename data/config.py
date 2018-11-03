@@ -775,7 +775,7 @@ yrm32_absoluteunit_config = yrm32_massivelad_config.copy({
 yrm34_config = yrm32_config.copy({
     'name': 'yrm34',
     'backbone': yrm32_config.backbone.copy({
-        'args': (yrm32_config.backbone.args[0],),
+        'args': (yrm32_config.backbone.args[0], [2]),
 
         'selected_layers': list(range(2, 8)),
         'pred_scales': [[1.72, 2.93], [3.09, 2.30], [1.85, 2.43, 3.20], [0.97, 1.98, 3.00], [0.91, 2.16], [0.83]],
