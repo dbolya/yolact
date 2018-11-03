@@ -235,6 +235,7 @@ coco_base_config = Config({
     'mask_proto_prototypes_as_features_no_grad': False,
     'mask_proto_remove_empty_masks': False,
     'mask_proto_reweight_coeff': 1,
+    'mask_proto_coeff_diversity_loss': False,
 
     # If using batchnorm anywhere inthe backbone, freeze the batchnorm layer during training.
     # Note: any additional batch norm layers after the backbone will not be froze.
@@ -699,6 +700,12 @@ yrm22_optimanchor_config = yrm22_newreg_config.copy({
     'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(None, -2, {}), (256, 3, {'padding': 1})] * 2 + [(128, 1, {})]
 })
 
+yrm22_coeffdiv_config = yrm22_newreg_config.copy({
+    'name': 'yrm22_coeffdiv',
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(None, -2, {}), (256, 3, {'padding': 1})] * 2 + [(128, 1, {})],
+    'mask_proto_coeff_diversity_loss': True,
+})
+
 yrm16_3_config = yrm21_config.copy({
     'name': 'yrm16_3',
     'mask_proto_normalize_mask_loss_by_sqrt_area': True,
@@ -813,6 +820,7 @@ yrm25_b_config = yrm22_config.copy({
     # Start at lr = 1e-4 instead of 1e-3
     'lr_steps': (0, 280000, 360000, 500000, 650000),
     'max_iter': 800000,
+    # 'use_coeff_nms': True
 })
 
 yrm25_half_config = yrm25_config.copy({

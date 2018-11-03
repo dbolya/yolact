@@ -252,6 +252,7 @@ class MultiBoxLoss(nn.Module):
             pos = pos.clone()
 
         loss_m = 0
+        loss_c = 0 # Coefficient loss
 
         for idx in range(mask_data.size(0)):
             with torch.no_grad():
@@ -293,6 +294,22 @@ class MultiBoxLoss(nn.Module):
 
             proto_masks = proto_data[idx]
             proto_coef  = mask_data[idx, cur_pos, :]
+
+            if cfg.mask_proto_coeff_diversity_loss:
+                norm_coeff = F.normalize(proto_coef, dim=1)
+                select = torch.randperm(norm_coeff.size(0))
+
+                # Note that I don't account for fixed points
+                perm_idx_t = pos_idx_t[select]
+                perm_coeff = norm_coeff[select, :]
+
+                cos_sim = (torch.sum(norm_coeff * perm_coeff, dim=1) + 1) / 2
+
+                # If they're the same instance, use coefficient distance, else use coefficient similarity
+                same_instance = (pos_idx_t == perm_idx_t).float()
+                loss = (1 - cos_sim) * same_instance + cos_sim * (1 - same_instance)
+
+                loss_c += torch.sum(loss) * 2
             
             # If we have over the allowed number of masks, select a random sample
             if proto_coef.size(0) > cfg.masks_to_train:
@@ -336,4 +353,4 @@ class MultiBoxLoss(nn.Module):
 
             loss_m += torch.sum(pre_loss)
 
-        return loss_m * self.mask_alpha / mask_h / mask_w
+        return loss_m * self.mask_alpha / mask_h / mask_w + loss_c
