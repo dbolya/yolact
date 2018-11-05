@@ -48,6 +48,10 @@ class Config(object):
 
         for key, val in new_config_dict.items():
             self.__setattr__(key, val)
+    
+    def print(self):
+        for k, v in vars(self).items():
+            print(k, ' = ', v)
 
 
 # Datasets
@@ -967,8 +971,38 @@ yolact_vgg16_config = ssd550_config.copy({
     'mask_proto_layer': 0,
 })
 
+
+yrm300vgg_config = coco_base_config.copy({
+    'name': 'yrm300vgg',
+
+    'backbone': vgg16_backbone.copy({
+        'selected_layers': [3] + list(range(5, 10)),
+        'pred_scales': [[3.5, 4.95], [3.6, 4.90], [3.3, 4.02], [2.7, 3.10], [2.1, 2.37], [1.8, 1.92]],
+        'pred_aspect_ratios': [ [[1, sqrt(2), 1/sqrt(2), sqrt(3), 1/sqrt(3)][:n], [1]] for n in [3, 5, 5, 5, 3, 3] ],
+    }),
+
+    'max_size': 300,
+
+    'train_masks': True,
+    'preserve_aspect_ratio': False,
+    'use_prediction_module': False,
+    'use_yolo_regressors': False,
+
+    'mask_type': mask_type.lincomb,
+    'masks_to_train': 100,
+    'mask_proto_src': 3,
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(None, -2, {}), (256, 3, {'padding': 1})] * 2 + [(128, 1, {})],
+    'mask_proto_crop': False,
+    
+    'crowd_iou_threshold': 0.7,
+    
+    'gamma': 0.3, # approx sqrt(0.1)
+    'lr_steps': (140000, 260000, 310000, 360000, 380000, 400000),
+})
+
+
 # Default config
-cfg = yrm22_optimanchor_config.copy()
+cfg = yrm300vgg_config.copy()
 
 def set_cfg(config_name:str):
     """ Sets the active config. Works even if cfg is already imported! """

@@ -231,7 +231,7 @@ class VGGBackbone(nn.Module):
         for idx, layer_cfg in enumerate(cfg):
             self._make_layer(layer_cfg)
 
-        self.norms = nn.ModuleList([L2Norm(self.channels[l], scale=20) for l in norm_layers])
+        self.norms = nn.ModuleList([nn.BatchNorm2d(self.channels[l]) for l in norm_layers])
         self.norm_lookup = {l: idx for idx, l in enumerate(norm_layers)}
 
         # These modules will be initialized by init_backbone,
@@ -287,10 +287,10 @@ class VGGBackbone(nn.Module):
             x = layer(x)
             
             # Apply an l2norm module to the selected layers
+            # Note that this differs from the original implemenetation
             if idx in self.norm_lookup:
-                outs.append(self.norms[self.norm_lookup[idx]](x))
-            else:
-                outs.append(x)
+                x = self.norms[self.norm_lookup[idx]](x)
+            outs.append(x)
         
         return outs
 
