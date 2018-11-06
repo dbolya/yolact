@@ -798,6 +798,20 @@ yrm34b_config = yrm34_config.copy({
     })
 })
 
+yrm34c_config = yrm22_config.copy({
+    'name': 'yrm34c',
+
+    'backbone': yrm22_config.backbone.copy({
+        'selected_layers': list(range(1, 7)),
+
+        'scales': [[3.91, 2.31], [3.39, 1.86], [3.20, 2.93], [2.69, 2.62], [2.63, 2.05], [2.13]],
+        'aspect_ratios': [[[0.66], [0.82]], [[0.61, 1.20], [1.30]], [[0.62, 1.02], [0.48, 1.60]], [[0.92, 1.66,
+0.63], [0.43]], [[1.68, 0.98, 0.63], [0.59, 1.89, 1.36]], [[1.20, 0.86]]]
+    }),
+    
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(None, -2, {}), (256, 3, {'padding': 1})] * 2 + [(128, 1, {})],
+})
+
 yrm22_test_onegpu_config = yrm22_freezebn_config.copy({
     'name': 'yrm22_test_onegpu'
 })
@@ -1002,7 +1016,7 @@ yrm300vgg_config = coco_base_config.copy({
 
 
 # Default config
-cfg = yrm300vgg_config.copy()
+cfg = yrm34c_config.copy()
 
 def set_cfg(config_name:str):
     """ Sets the active config. Works even if cfg is already imported! """
