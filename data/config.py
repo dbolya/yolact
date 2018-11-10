@@ -68,7 +68,7 @@ coco2017_dataset = Config({
 })
 
 # Backbones
-from backbone import ResNetBackbone, VGGBackbone, ResNetBackboneGN
+from backbone import ResNetBackbone, VGGBackbone, ResNetBackboneGN, DarkNetBackbone
 from torchvision.models.vgg import cfg as vggcfg
 from math import sqrt
 import torch
@@ -77,7 +77,8 @@ import torch
 resnet_transform = Config({
     'channel_order': 'RGB',
     'normalize': True,
-    'subtract_means': False
+    'subtract_means': False,
+    'to_float': False,
 })
 
 vgg_transform = Config({
@@ -85,7 +86,15 @@ vgg_transform = Config({
     # the channel order of vgg_reducedfc.pth is RGB.
     'channel_order': 'RGB',
     'normalize': False,
-    'subtract_means': True
+    'subtract_means': True,
+    'to_float': False,
+})
+
+darknet_transform = Config({
+    'channel_order': 'RGB',
+    'normalize': False,
+    'subtract_means': False,
+    'to_float': True,
 })
 
 resnet101_backbone = Config({
@@ -118,6 +127,18 @@ resnet50_backbone = resnet101_backbone.copy({
     'type': ResNetBackbone,
     'args': ([3, 4, 6, 3],),
     'transform': resnet_transform,
+})
+
+darknet53_backbone = Config({
+    'name': 'DarkNet53',
+    'path': 'darknet53.pth',
+    'type': DarkNetBackbone,
+    'args': ([1, 2, 8, 8, 4],),
+    'transform': darknet_transform,
+
+    'selected_layers': list(range(3, 9)),
+    'pred_scales': [[3.5, 4.95], [3.6, 4.90], [3.3, 4.02], [2.7, 3.10], [2.1, 2.37], [1.8, 1.92]],
+    'pred_aspect_ratios': [ [[1, sqrt(2), 1/sqrt(2), sqrt(3), 1/sqrt(3)][:n], [1]] for n in [3, 5, 5, 5, 3, 3] ],
 })
 
 vgg16_arch = [[64, 64],
@@ -708,6 +729,16 @@ yrm22_coeffdiv_config = yrm22_newreg_config.copy({
     'name': 'yrm22_coeffdiv',
     'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(None, -2, {}), (256, 3, {'padding': 1})] * 2 + [(128, 1, {})],
     'mask_proto_coeff_diversity_loss': True,
+
+    'use_coeff_nms': True,
+})
+
+yrm22_darknet_config = yrm22_newreg_config.copy({
+    'name': 'yrm22_darknet',
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(None, -2, {}), (256, 3, {'padding': 1})] * 2 + [(128, 1, {})],
+
+    'backbone': darknet53_backbone,
+    'mask_proto_src': 3,
 })
 
 yrm16_3_config = yrm21_config.copy({
@@ -1016,7 +1047,7 @@ yrm300vgg_config = coco_base_config.copy({
 
 
 # Default config
-cfg = yrm34c_config.copy()
+cfg = yrm22_fewerproto_config.copy()
 
 def set_cfg(config_name:str):
     """ Sets the active config. Works even if cfg is already imported! """

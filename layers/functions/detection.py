@@ -145,7 +145,9 @@ class Detect(object):
         # Now just filter out the ones higher than the threshold
         idx_out = idx[cos_max <= cos_threshold]
 
-        print(masks_norm[:5] @ masks_norm[:5].t())
+
+        new_mask_norm = F.normalize(masks[idx_out], dim=1)
+        print(new_mask_norm[:5] @ new_mask_norm[:5].t())
         
         return idx_out, idx_out.size(0)
     

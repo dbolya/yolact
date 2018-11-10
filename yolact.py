@@ -392,6 +392,9 @@ class Yolact(nn.Module):
             if isinstance(module, nn.BatchNorm2d):
                 module.eval()
 
+                module.weight.requires_grad = False
+                module.bias.requires_grad = False
+
     def forward(self, x):
         """ The input should be of size [batch_size, 3, img_h, img_w] """
         with timer.env('pass1'):

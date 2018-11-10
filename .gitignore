@@ -144,3 +144,5 @@ scripts/info.txt
 test.pkl
 testeval.py
 scripts/aws2/
+status.sh
+train.sh

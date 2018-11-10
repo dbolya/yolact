@@ -566,6 +566,8 @@ class BackboneTransform(object):
             img = (img - self.mean) / self.std
         elif self.transform.subtract_means:
             img = (img - self.mean)
+        elif self.transform.to_float:
+            img = img / 255
 
         img = img[:, :, self.channel_permutation]
 
