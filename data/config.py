@@ -311,6 +311,12 @@ coco_base_config = Config({
     # Whether to use mask coefficient cosine similarity nms instead of bbox iou nms
     'use_coeff_nms': False,
 
+    # Whether or not to have a separate branch whose sole purpose is to act as the coefficients for coeff_diversity_loss
+    # Remember to turn on coeff_diversity_loss, or these extra coefficients won't do anything!
+    # To see their effect, also remember to turn on use_coeff_nms.
+    'use_instance_coeff': False,
+    'num_instance_coeffs': 64,
+
     # Whether or not to tie the mask loss / box loss to 0
     'train_masks': True,
     'train_boxes': True,
@@ -835,8 +841,8 @@ yrm34c_config = yrm22_config.copy({
     'backbone': yrm22_config.backbone.copy({
         'selected_layers': list(range(1, 7)),
 
-        'scales': [[3.91, 2.31], [3.39, 1.86], [3.20, 2.93], [2.69, 2.62], [2.63, 2.05], [2.13]],
-        'aspect_ratios': [[[0.66], [0.82]], [[0.61, 1.20], [1.30]], [[0.62, 1.02], [0.48, 1.60]], [[0.92, 1.66,
+        'pred_scales': [[3.91, 2.31], [3.39, 1.86], [3.20, 2.93], [2.69, 2.62], [2.63, 2.05], [2.13]],
+        'pred_aspect_ratios': [[[0.66], [0.82]], [[0.61, 1.20], [1.30]], [[0.62, 1.02], [0.48, 1.60]], [[0.92, 1.66,
 0.63], [0.43]], [[1.68, 0.98, 0.63], [0.59, 1.89, 1.36]], [[1.20, 0.86]]]
     }),
     
@@ -1046,8 +1052,56 @@ yrm300vgg_config = coco_base_config.copy({
 })
 
 
+cvpr_resnet101_config = coco_base_config.copy({
+    'name': 'cvpr_resnet101',
+
+    'backbone': resnet101_backbone.copy({
+        'selected_layers': list(range(2, 8)),
+
+        'pred_scales': [[1.68, 2.91],
+                        [2.95, 2.22, 0.84],
+                        [2.23, 2.17, 3.12],
+                        [0.76, 1.94, 2.72],
+                        [2.10, 2.65],
+                        [1.80, 1.92]],
+
+        'pred_aspect_ratios': [[[0.72, 0.96], [0.68, 1.17]],
+                               [[1.28, 0.66], [0.63, 1.23], [0.89, 1.40]],
+                               [[2.05, 1.24], [0.57, 0.83], [0.61, 1.15]],
+                               [[1.00, 2.21], [0.47, 1.60], [1.44, 0.79]],
+                               [[1.00, 1.41, 0.71, 1.73, 0.58], [1.08]],
+                               [[1.00, 1.41, 0.71, 1.73, 0.58], [1.00]]]
+    }),
+
+    'max_size': 550,
+
+    'train_masks': True,
+    'preserve_aspect_ratio': False,
+    'use_prediction_module': False,
+    'use_yolo_regressors': False,
+
+    'mask_type': mask_type.lincomb,
+    'masks_to_train': 100,
+    'mask_proto_src': 2,
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 3 + [(None, -2, {}), (256, 3, {'padding': 1})] * 2 + [(128, 1, {})],
+    'mask_proto_crop': False,
+    'mask_proto_coeff_diversity_loss': True,
+
+    'use_coeff_nms': False,
+
+    'use_instance_coeff': True,
+    'num_instance_coeffs': 64,
+
+    'crowd_iou_threshold': 0.7,
+    
+    'decay': 1e-4,
+    'gamma': 0.3, # approx sqrt(0.1)
+    'max_iter': 800000,
+    'lr_steps': (100000, 200000, 300000, 400000, 500000, 600000, 700000, 800000),
+})
+
 # Default config
-cfg = yrm22_fewerproto_config.copy()
+cfg = cvpr_resnet101_config.copy()
 
 def set_cfg(config_name:str):
     """ Sets the active config. Works even if cfg is already imported! """

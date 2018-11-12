@@ -58,8 +58,8 @@ class MultiBoxLoss(nn.Module):
         Args:
             predictions (tuple): A tuple containing loc preds, conf preds,
             mask preds, and prior boxes from SSD net.
-                conf shape: torch.size(batch_size,num_priors,num_classes)
                 loc shape: torch.size(batch_size,num_priors,4)
+                conf shape: torch.size(batch_size,num_priors,num_classes)
                 masks shape: torch.size(batch_size,num_priors,mask_dim)
                 priors shape: torch.size(num_priors,4)
                 proto* shape: torch.size(batch_size,mask_h,mask_w,mask_dim)
@@ -75,10 +75,19 @@ class MultiBoxLoss(nn.Module):
             
             * Only if mask_type == lincomb
         """
+
+        loc_data  = predictions['loc']
+        conf_data = predictions['conf']
+        mask_data = predictions['mask']
+        priors    = predictions['priors']
+
         if cfg.mask_type == mask_type.lincomb:
-            loc_data, conf_data, mask_data, priors, proto_data = predictions
+            proto_data = predictions['proto']
+        
+        if cfg.use_instance_coeff:
+            inst_data = predictions['inst']
         else:
-            loc_data, conf_data, mask_data, priors = predictions
+            inst_data = None
         
         targets, masks, num_crowds = wrapper.get_args(wrapper_mask)
 
@@ -151,7 +160,7 @@ class MultiBoxLoss(nn.Module):
                 else:
                     loss_m = self.direct_mask_loss(pos_idx, idx_t, loc_data, mask_data, priors, masks)
             elif cfg.mask_type == mask_type.lincomb:
-                loss_m = self.lincomb_mask_loss(pos, idx_t, loc_data, mask_data, priors, proto_data, masks)
+                loss_m = self.lincomb_mask_loss(pos, idx_t, loc_data, mask_data, priors, proto_data, masks, inst_data)
                 
                 if cfg.mask_proto_loss is not None:
                     if cfg.mask_proto_loss == 'l1':
@@ -243,7 +252,7 @@ class MultiBoxLoss(nn.Module):
         return loss_m
     
 
-    def lincomb_mask_loss(self, pos, idx_t, loc_data, mask_data, priors, proto_data, masks, interpolation_mode='bilinear'):
+    def lincomb_mask_loss(self, pos, idx_t, loc_data, mask_data, priors, proto_data, masks, inst_data, interpolation_mode='bilinear'):
         mask_h = proto_data.size(1)
         mask_w = proto_data.size(2)
 
@@ -296,7 +305,12 @@ class MultiBoxLoss(nn.Module):
             proto_coef  = mask_data[idx, cur_pos, :]
 
             if cfg.mask_proto_coeff_diversity_loss:
-                norm_coeff = F.normalize(proto_coef, dim=1)
+                if inst_data is not None:
+                    div_coeffs = inst_data[idx, cur_pos, :]
+                else:
+                    div_coeffs = proto_coef
+
+                norm_coeff = F.normalize(div_coeffs, dim=1)
                 select = torch.randperm(norm_coeff.size(0))
 
                 # Note that I don't account for fixed points

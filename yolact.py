@@ -103,6 +103,9 @@ class PredictionModule(nn.Module):
             self.bbox_layer = nn.Conv2d(out_channels, self.num_priors * 4,                **cfg.head_layer_params)
             self.conf_layer = nn.Conv2d(out_channels, self.num_priors * self.num_classes, **cfg.head_layer_params)
             self.mask_layer = nn.Conv2d(out_channels, self.num_priors * self.mask_dim,    **cfg.head_layer_params)
+
+            if cfg.use_instance_coeff:
+                self.inst_layer = nn.Conv2d(out_channels, self.num_priors * cfg.num_instance_coeffs, **cfg.head_layer_params)
             
             # What is this ugly lambda doing in the middle of all this clean prediction module code?
             def make_extra(num_layers):
@@ -166,6 +169,9 @@ class PredictionModule(nn.Module):
         conf = src.conf_layer(conf_x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, self.num_classes)
         mask = src.mask_layer(mask_x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, self.mask_dim)
 
+        if cfg.use_instance_coeff:
+            inst = src.inst_layer(x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, cfg.num_instance_coeffs)
+
         # See box_utils.decode for an explanation of this
         if cfg.use_yolo_regressors:
             bbox[:, :, :2] = torch.sigmoid(bbox[:, :, :2]) - 0.5
@@ -183,7 +189,12 @@ class PredictionModule(nn.Module):
         
         priors = self.make_priors(conv_h, conv_w)
 
-        return (bbox, conf, mask, priors)
+        preds = { 'loc': bbox, 'conf': conf, 'mask': mask, 'priors': priors }
+
+        if cfg.use_instance_coeff:
+            preds['inst'] = inst
+        
+        return preds
     
     def make_priors(self, conv_h, conv_w):
         """ Note that priors are [x,y,width,height] where (x,y) is the center of the box. """
@@ -434,7 +445,10 @@ class Yolact(nn.Module):
 
 
         with timer.env('pass2'):
-            pred_outs = ([], [], [], [])
+            pred_outs = { 'loc': [], 'conf': [], 'mask': [], 'priors': [] }
+
+            if cfg.use_instance_coeff:
+                pred_outs['inst'] = []
             
             for idx, pred_layer in zip(self.selected_layers, self.prediction_layers):
                 pred_x = outs[idx]
@@ -450,19 +464,20 @@ class Yolact(nn.Module):
 
                 p = pred_layer(pred_x)
                 
-                for out, pred in zip(pred_outs, p):
-                    out.append(pred)
+                for k, v in p.items():
+                    pred_outs[k].append(v)
 
-        pred_outs = [torch.cat(x, -2) for x in pred_outs]
+        for k, v in pred_outs.items():
+            pred_outs[k] = torch.cat(v, -2)
 
         if cfg.mask_type == mask_type.lincomb:
-            pred_outs.append(proto_out)
+            pred_outs['proto'] = proto_out
 
         if self.training:
             return pred_outs
         else:
-            pred_outs[1] = F.softmax(pred_outs[1], -1) # Softmax the conf output
-            return self.detect(*pred_outs)
+            pred_outs['conf'] = F.softmax(pred_outs['conf'], -1)
+            return self.detect(pred_outs)
 
 
 

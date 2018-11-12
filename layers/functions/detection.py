@@ -25,7 +25,7 @@ class Detect(object):
         self.cross_class_nms = False
         self.fast_nms = False
 
-    def __call__(self, loc_data, conf_data, mask_data, prior_data, proto_data=None):
+    def __call__(self, predictions):
         """
         Args:
              loc_data: (tensor) Loc preds from loc layers
@@ -46,6 +46,14 @@ class Detect(object):
             Note that the outputs are sorted only if cross_class_nms is False
         """
 
+        loc_data   = predictions['loc']
+        conf_data  = predictions['conf']
+        mask_data  = predictions['mask']
+        prior_data = predictions['priors']
+
+        proto_data = predictions['proto'] if 'proto' in predictions else None
+        inst_data  = predictions['inst']  if 'inst'  in predictions else None
+
         with timer.env('Detect'):
             num = loc_data.size(0)  # batch size
             output = torch.zeros(num, self.top_k, 1 + 1 + 4 + mask_data.size(2))
@@ -59,14 +67,14 @@ class Detect(object):
                 decoded_boxes = decode(loc_data[i], prior_data)
                 
                 if self.cross_class_nms:
-                    self.detect_cross_class(i, conf_preds, decoded_boxes, mask_data, output)
+                    self.detect_cross_class(i, conf_preds, decoded_boxes, mask_data, inst_data, output)
                 else:
-                    self.detect_per_class(i, conf_preds, decoded_boxes, mask_data, output)
+                    self.detect_per_class(i, conf_preds, decoded_boxes, mask_data, inst_data, output)
         
         return {'output': output, 'proto_data': proto_data}
 
 
-    def detect_cross_class(self, batch_idx, conf_preds, decoded_boxes, mask_data, output):
+    def detect_cross_class(self, batch_idx, conf_preds, decoded_boxes, mask_data, inst_data, output):
         """ Perform nms for only the max scoring class that isn't background (class 0) """
         conf_scores, class_labels = torch.max(conf_preds[batch_idx, 1:], dim=0)
 
@@ -80,10 +88,15 @@ class Detect(object):
         l_mask = c_mask.unsqueeze(1).expand_as(decoded_boxes)
         boxes = decoded_boxes[l_mask].view(-1, 4)
         masks = mask_data[batch_idx, l_mask[:, 0], :]
+        if inst_data is not None:
+            inst = inst_data[batch_idx, l_mask[:, 0], :]
         
         # idx of highest scoring and non-overlapping boxes per classif cfg.use_coeff_nms:
         if cfg.use_coeff_nms:
-            ids, count = self.coefficient_nms(masks, scores, top_k=self.top_k)
+            if inst_data is not None:
+                ids, count = self.coefficient_nms(inst, scores, top_k=self.top_k)
+            else:
+                ids, count = self.coefficient_nms(masks, scores, top_k=self.top_k)
         else:
             # Use this function instead for not 100% correct nms but 4ms faster
             if self.fast_nms:
@@ -95,7 +108,7 @@ class Detect(object):
         output[batch_idx, :count] = \
             torch.cat((classes[ids].unsqueeze(1).float(), scores[ids].unsqueeze(1), boxes[ids], masks[ids]), 1)
 
-    def detect_per_class(self, batch_idx, conf_preds, decoded_boxes, mask_data, output):
+    def detect_per_class(self, batch_idx, conf_preds, decoded_boxes, mask_data, inst_data, output):
         """ Perform nms for each non-background class predicted. """
         conf_scores = conf_preds[batch_idx].clone()
         tmp_output = torch.zeros(self.num_classes-1, self.top_k, output.size(2))
@@ -108,10 +121,14 @@ class Detect(object):
             l_mask = c_mask.unsqueeze(1).expand_as(decoded_boxes)
             boxes = decoded_boxes[l_mask].view(-1, 4)
             masks = mask_data[batch_idx, l_mask[:, 0], :]
-            # idx of highest scoring and non-overlapping boxes per class
+            if inst_data is not None:
+                inst = inst_data[batch_idx, l_mask[:, 0], :]
             
             if cfg.use_coeff_nms:
-                ids, count = self.coefficient_nms(masks, scores, top_k=self.top_k)
+                if inst_data is not None:
+                    ids, count = self.coefficient_nms(inst, scores, top_k=self.top_k)
+                else:
+                    ids, count = self.coefficient_nms(masks, scores, top_k=self.top_k)
             else:
                 # Use this function instead for not 100% correct nms but 4ms faster
                 if self.fast_nms:
@@ -130,13 +147,13 @@ class Detect(object):
         output[batch_idx, :, :] = tmp_output[idx[:self.top_k], :]
     
 
-    def coefficient_nms(self, masks, scores, cos_threshold=0.9, top_k=400):
+    def coefficient_nms(self, coeffs, scores, cos_threshold=0.9, top_k=400):
         _, idx = scores.sort(0, descending=True)
         idx = idx[:top_k]
-        masks_norm = F.normalize(masks[idx], dim=1)
+        coeffs_norm = F.normalize(coeffs[idx], dim=1)
 
         # Compute the pairwise cosine similarity between the coefficients
-        cos_similarity = masks_norm @ masks_norm.t()
+        cos_similarity = coeffs_norm @ coeffs_norm.t()
         
         # Zero out the lower triangle of the cosine similarity matrix and diagonal
         cos_similarity.triu_(diagonal=1)
@@ -151,8 +168,8 @@ class Detect(object):
         idx_out = idx[cos_max <= cos_threshold]
 
 
-        new_mask_norm = F.normalize(masks[idx_out], dim=1)
-        print(new_mask_norm[:5] @ new_mask_norm[:5].t())
+        # new_mask_norm = F.normalize(masks[idx_out], dim=1)
+        # print(new_mask_norm[:5] @ new_mask_norm[:5].t())
         
         return idx_out, idx_out.size(0)
     
