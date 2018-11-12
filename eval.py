@@ -50,6 +50,8 @@ def parse_args(argv=None):
                         help='Location of VOC root directory')
     parser.add_argument('--cross_class_nms', default=True, type=str2bool,
                         help='Whether to use cross-class nms (faster) or do nms per class')
+    parser.add_argument('--fast_nms', default=False, type=str2bool,
+                        help='Whether to use a faster, but not entirely correct version of NMS.')
     parser.add_argument('--display_masks', default=True, type=str2bool,
                         help='Whether or not to display masks over bounding boxes')
     parser.add_argument('--display_bboxes', default=True, type=str2bool,
@@ -479,6 +481,7 @@ def badhash(x):
 
 def evaluate(net:Yolact, dataset, train_mode=False):
     net.detect.cross_class_nms = args.cross_class_nms
+    net.detect.fast_nms = args.fast_nms
     cfg.mask_proto_debug = args.mask_proto_debug
 
     frame_times = MovingAverage()

@@ -23,6 +23,7 @@ class Detect(object):
         self.conf_thresh = conf_thresh
         
         self.cross_class_nms = False
+        self.fast_nms = False
 
     def __call__(self, loc_data, conf_data, mask_data, prior_data, proto_data=None):
         """
@@ -85,10 +86,11 @@ class Detect(object):
             ids, count = self.coefficient_nms(masks, scores, top_k=self.top_k)
         else:
             # Use this function instead for not 100% correct nms but 4ms faster
-            # ids, count = self.box_nms(boxes, scores, self.nms_thresh, self.top_k)
-            
-            ids, count = nms(boxes, scores, self.nms_thresh, self.top_k, force_cpu=cfg.force_cpu_nms)
-            ids = ids[:count]
+            if self.fast_nms:
+                ids, count = self.box_nms(boxes, scores, self.nms_thresh, self.top_k)
+            else:
+                ids, count = nms(boxes, scores, self.nms_thresh, self.top_k, force_cpu=cfg.force_cpu_nms)
+                ids = ids[:count]
         
         output[batch_idx, :count] = \
             torch.cat((classes[ids].unsqueeze(1).float(), scores[ids].unsqueeze(1), boxes[ids], masks[ids]), 1)
@@ -112,10 +114,11 @@ class Detect(object):
                 ids, count = self.coefficient_nms(masks, scores, top_k=self.top_k)
             else:
                 # Use this function instead for not 100% correct nms but 4ms faster
-                # ids, count = self.box_nms(boxes, scores, self.nms_thresh, self.top_k)
-                
-                ids, count = nms(boxes, scores, self.nms_thresh, self.top_k, force_cpu=cfg.force_cpu_nms)
-                ids = ids[:count]
+                if self.fast_nms:
+                    ids, count = self.box_nms(boxes, scores, self.nms_thresh, self.top_k)
+                else:
+                    ids, count = nms(boxes, scores, self.nms_thresh, self.top_k, force_cpu=cfg.force_cpu_nms)
+                    ids = ids[:count]
             
             classes = torch.ones(count, 1).float()*(cl-1)
             tmp_output[cl-1, :count] = \
