@@ -9,12 +9,16 @@ Run this script from the Yolact root directory.
 import pickle
 import random
 from itertools import product
+from math import sqrt
 
 import numpy as np
 import torch
 from scipy.optimize import minimize
 
 dump_file = 'weights/bboxes.pkl'
+aug_file  = 'weights/bboxes_aug.pkl'
+
+use_augmented_boxes = True
 
 
 def intersect(box_a, box_b):
@@ -74,9 +78,8 @@ def make_priors(conv_size, scales, aspect_ratios):
 
 	# Iteration order is important (it has to sync up with the convout)
 	for j, i in product(range(conv_h), range(conv_w)):
-		# +0.5 because priors are in center-size notation
-		x = (i + 0.5) / conv_w
-		y = (j + 0.5) / conv_h
+		x = (i) / conv_w
+		y = (j) / conv_h
 		
 		for scale, ars in zip(scales, aspect_ratios):
 			for ar in ars:
@@ -90,8 +93,8 @@ def make_priors(conv_size, scales, aspect_ratios):
 
 
 
-scales = [[x+0.5 for x in range(j)] for j in [4, 6, 12, 12, 4, 2]]
-aspect_ratios = [[[1] for _ in range(len(scales[i]))] for i in range(len(scales))]
+scales = [[1.68, 2.91], [2.95, 2.22, 0.84], [2.17, 2.22, 3.22], [0.76, 2.06, 2.81], [5.33, 2.79], [13.69]]
+aspect_ratios = [[[0.72, 0.96], [0.68, 1.17]], [[1.30, 0.66], [0.63, 1.23], [0.87, 1.41]], [[1.96, 1.23], [0.58, 0.84], [0.61, 1.15]], [[19.79, 2.21], [0.47, 1.76], [1.38, 0.79]], [[4.79, 17.96], [1.04]], [[14.82]]]
 conv_sizes = [(35, 35), (18, 18), (9, 9), (5, 5), (3, 3), (2, 2)]
 
 optimize_scales = False
@@ -162,15 +165,17 @@ def pretty_str(x:list):
 
 if __name__ == '__main__':
 	
-	# Load widths and heights from a dump file. Obtain this with
-	# python3 scripts/save_bboxes.py
-	with open(dump_file, 'rb') as f:
-		bboxes = pickle.load(f)
+	if use_augmented_boxes:
+		with open(aug_file, 'rb') as f:
+			bboxes = pickle.load(f)
+	else:
+		# Load widths and heights from a dump file. Obtain this with
+		# python3 scripts/save_bboxes.py
+		with open(dump_file, 'rb') as f:
+			bboxes = pickle.load(f)
 
-	# Each box is in the form [im_w, im_h, pos_x, pos_y, size_x, size_y]
-	random.shuffle(bboxes)
-	bboxes = np.array(bboxes)
-	bboxes = to_relative(bboxes)
+			bboxes = np.array(bboxes)
+			bboxes = to_relative(bboxes)
 
 	with torch.no_grad():
 		bboxes = torch.Tensor(bboxes).cuda()

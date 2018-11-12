@@ -11,10 +11,15 @@ import sys
 from math import sqrt
 from itertools import product
 import torch
+import random
 
 import numpy as np
 
 dump_file = 'weights/bboxes.pkl'
+aug_file  = 'weights/bboxes_aug.pkl'
+
+use_augmented_boxes = True
+
 
 def intersect(box_a, box_b):
     """ We resize both tensors to [A,B,2] without new malloc:
@@ -63,38 +68,47 @@ def jaccard(box_a, box_b, iscrowd=False):
 
 # Also convert to point form
 def to_relative(bboxes):
-	return np.concatenate((bboxes[:, 2:4] / bboxes[:, :2], (bboxes[:, 2:4] + bboxes[:, 4:]) / bboxes[:, :2]), axis=1)
+    return np.concatenate((bboxes[:, 2:4] / bboxes[:, :2], (bboxes[:, 2:4] + bboxes[:, 4:]) / bboxes[:, :2]), axis=1)
 
 
 def make_priors(conv_size, scales, aspect_ratios):
-	prior_data = []
-	conv_h = conv_size[0]
-	conv_w = conv_size[1]
+    prior_data = []
+    conv_h = conv_size[0]
+    conv_w = conv_size[1]
 
-	# Iteration order is important (it has to sync up with the convout)
-	for j, i in product(range(conv_h), range(conv_w)):
-		# +0.5 because priors are in center-size notation
-		x = (i + 0.5) / conv_w
-		y = (j + 0.5) / conv_h
-		
-		for scale, ars in zip(scales, aspect_ratios):
-			for ar in ars:
-				w = scale * ar / conv_w
-				h = scale / ar / conv_h
+    # Iteration order is important (it has to sync up with the convout)
+    for j, i in product(range(conv_h), range(conv_w)):
+        x = (i) / conv_w
+        y = (j) / conv_h
+        
+        for scale, ars in zip(scales, aspect_ratios):
+            for ar in ars:
+                w = scale * ar / conv_w
+                h = scale / ar / conv_h
 
-				# Point form
-				prior_data += [x, y, x + w, y + h]
-	
-	return np.array(prior_data).reshape(-1, 4)
+                # Point form
+                prior_data += [x, y, x + w, y + h]
+    
+    return np.array(prior_data).reshape(-1, 4)
 
 # fixed_ssd_config
 # scales = [[3.5, 4.95], [3.6, 4.90], [3.3, 4.02], [2.7, 3.10], [2.1, 2.37], [2.1, 2.37], [1.8, 1.92]]
 # aspect_ratios = [ [[1, sqrt(2), 1/sqrt(2), sqrt(3), 1/sqrt(3)][:n], [1]] for n in [3, 5, 5, 5, 3, 3, 3] ]
 # conv_sizes = [(35, 35), (18, 18), (9, 9), (5, 5), (3, 3), (2, 2)]
 
-scales = [[1.73, 2.96], [3.12, 2.44, 1.01], [2.09, 2.25, 3.32], [0.90, 2.17, 3.00], [1.03, 2.16], [0.75]]
-aspect_ratios = [[[0.59, 0.95], [0.62, 1.18]], [[0.49, 0.75], [0.68, 1.26], [0.64, 1.57]], [[1.94, 1.28], [0.56, 0.84], [0.62, 1.13]], [[1.66, 2.63], [0.51, 1.82], [1.28, 0.76]], [[0.45, 2.43], [0.97]], [[1.88]]]
-conv_sizes = [(35, 35), (18, 18), (9, 9), (5, 5), (3, 3), (2,2)]
+scales = [[1.68, 2.91],
+          [2.95, 2.22, 0.84],
+          [2.23, 2.17, 3.12],
+          [0.76, 1.94, 2.72],
+          [2.10, 2.65],
+          [1.80, 1.92]]
+aspect_ratios = [[[0.72, 0.96], [0.68, 1.17]],
+                 [[1.28, 0.66], [0.63, 1.23], [0.89, 1.40]],
+                 [[2.05, 1.24], [0.57, 0.83], [0.61, 1.15]],
+                 [[1.00, 2.21], [0.47, 1.60], [1.44, 0.79]],
+                 [[1.00, 1.41, 0.71, 1.73, 0.58], [1.08]],
+                 [[1.00, 1.41, 0.71, 1.73, 0.58], [1.00]]]
+conv_sizes = [(35, 35), (18, 18), (9, 9), (5, 5), (3, 3), (2, 2)]
 
 # yrm33_config
 # scales = [ [5.3] ] * 5
@@ -107,56 +121,61 @@ MEDIUM = 1
 LARGE = 2
 
 if __name__ == '__main__':
-		
-	with open(dump_file, 'rb') as f:
-		bboxes = pickle.load(f)
+        
+    with open(dump_file, 'rb') as f:
+        bboxes = pickle.load(f)
 
-	# Each box is in the form [im_w, im_h, pos_x, pos_y, size_x, size_y]
-	bboxes = np.array(bboxes)
-	bboxes_rel = to_relative(bboxes)
+    sizes = []
+    smalls = []
+    for i in range(len(bboxes)):
+        area = bboxes[i][4] * bboxes[i][5]
+        if area < 32 ** 2:
+            sizes.append(SMALL)
+            smalls.append(area)
+        elif area < 96 ** 2:
+            sizes.append(MEDIUM)
+        else:
+            sizes.append(LARGE)
 
-	sizes = []
-	smalls = []
-	for i in range(bboxes.shape[0]):
-		area = bboxes[i, 4] * bboxes[i, 5]
-		if area < 32 ** 2:
-			sizes.append(SMALL)
-			smalls.append(area)
-		elif area < 96 ** 2:
-			sizes.append(MEDIUM)
-		else:
-			sizes.append(LARGE)
+    # Each box is in the form [im_w, im_h, pos_x, pos_y, size_x, size_y]
+    
+    if use_augmented_boxes:
+        with open(aug_file, 'rb') as f:
+            bboxes_rel = pickle.load(f)
+    else:
+        bboxes_rel = to_relative(np.array(bboxes))
+        
 
-	with torch.no_grad():
-		sizes = torch.Tensor(sizes)
+    with torch.no_grad():
+        sizes = torch.Tensor(sizes)
 
-		anchors = [make_priors(cs, s, ar) for cs, s, ar in zip(conv_sizes, scales, aspect_ratios)]
-		anchors = np.concatenate(anchors, axis=0)
-		anchors = torch.Tensor(anchors).cuda()
+        anchors = [make_priors(cs, s, ar) for cs, s, ar in zip(conv_sizes, scales, aspect_ratios)]
+        anchors = np.concatenate(anchors, axis=0)
+        anchors = torch.Tensor(anchors).cuda()
 
-		bboxes_rel = torch.Tensor(bboxes_rel).cuda()
-		perGTAnchorMax = torch.zeros(bboxes_rel.shape[0]).cuda()
+        bboxes_rel = torch.Tensor(bboxes_rel).cuda()
+        perGTAnchorMax = torch.zeros(bboxes_rel.shape[0]).cuda()
 
-		chunk_size = 1000
-		for i in range((bboxes_rel.size(0) // chunk_size) + 1):
-			start = i * chunk_size
-			end   = min((i + 1) * chunk_size, bboxes_rel.size(0))
-			
-			ious = jaccard(bboxes_rel[start:end, :], anchors)
-			maxes, maxidx = torch.max(ious, dim=1)
+        chunk_size = 1000
+        for i in range((bboxes_rel.size(0) // chunk_size) + 1):
+            start = i * chunk_size
+            end   = min((i + 1) * chunk_size, bboxes_rel.size(0))
+            
+            ious = jaccard(bboxes_rel[start:end, :], anchors)
+            maxes, maxidx = torch.max(ious, dim=1)
 
-			perGTAnchorMax[start:end] = maxes
-	
+            perGTAnchorMax[start:end] = maxes
+    
 
-		hits = (perGTAnchorMax > 0.5).float()
+        hits = (perGTAnchorMax > 0.5).float()
 
-		print('Total recall: %.2f' % (torch.sum(hits) / hits.size(0) * 100))
-		print()
+        print('Total recall: %.2f' % (torch.sum(hits) / hits.size(0) * 100))
+        print()
 
-		for i, metric in zip(range(3), ('small', 'medium', 'large')):
-			_hits = hits[sizes == i]
-			_size = (1 if _hits.size(0) == 0 else _hits.size(0))
-			print(metric + ' recall: %.2f' % ((torch.sum(_hits) / _size) * 100))
+        for i, metric in zip(range(3), ('small', 'medium', 'large')):
+            _hits = hits[sizes == i]
+            _size = (1 if _hits.size(0) == 0 else _hits.size(0))
+            print(metric + ' recall: %.2f' % ((torch.sum(_hits) / _size) * 100))
 
 
 
