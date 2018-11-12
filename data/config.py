@@ -1054,6 +1054,8 @@ yrm300vgg_config = coco_base_config.copy({
 
 cvpr_resnet101_config = coco_base_config.copy({
     'name': 'cvpr_resnet101',
+    
+    'dataset': coco2017_dataset,
 
     'backbone': resnet101_backbone.copy({
         'selected_layers': list(range(2, 8)),
