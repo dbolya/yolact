@@ -503,8 +503,8 @@ if __name__ == '__main__':
         print(p.last_conv_size)
 
     print()
-    for a in y:
-        print(a.size(), torch.sum(a))
+    for k, a in y.items():
+        print(k + ': ', a.size(), torch.sum(a))
     exit()
     
     net(x)
