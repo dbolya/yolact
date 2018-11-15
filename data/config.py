@@ -1196,8 +1196,83 @@ cvpr300_darknet53_config = cvpr_darknet53_config.copy({
 })
 
 
+
+
+cvpr2_resnet101_config = coco_base_config.copy({
+    'name': 'cvpr2_resnet101',
+    
+    'dataset': coco2017_dataset,
+
+    'backbone': resnet101_backbone.copy({
+        'selected_layers': list(range(2, 8)),
+        'pred_scales': [[2.62, 3.71], [2.70, 3.68], [2.47, 3.01], [2.03, 2.33], [1.58, 1.78], [1.8, 1.92]],
+        'pred_aspect_ratios': [ [[1, sqrt(2), 1/sqrt(2), sqrt(3), 1/sqrt(3)][:n], [1]] for n in [3, 5, 5, 5, 3, 3] ],
+    }),
+
+    'max_size': 600,
+
+    'train_masks': True,
+    'preserve_aspect_ratio': False,
+    'use_prediction_module': False,
+    'use_yolo_regressors': False,
+
+    'mask_type': mask_type.lincomb,
+    'masks_to_train': 100,
+    'mask_proto_src': 2,
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(None, -2, {}), (256, 3, {'padding': 1})] * 2 + [(128, 1, {})],
+    'mask_proto_crop': False,
+    'mask_proto_coeff_diversity_loss': True,
+
+    'use_coeff_nms': False,
+
+    'use_instance_coeff': True,
+    'num_instance_coeffs': 64,
+
+    'crowd_iou_threshold': 0.7,
+    
+    'decay': 1e-4,
+    'gamma': 0.3, # approx sqrt(0.1)
+    'max_iter': 800000,
+    'lr_steps': (120000, 240000, 360000, 480000, 600000, 700000, 800000),
+})
+
+cvpr2_300_resnet101_config = cvpr2_resnet101_config.copy({
+    'name': 'cvpr2_300_resnet101',
+    'backbone': cvpr2_resnet101_config.backbone.copy({ 'selected_layers': list(range(1, 7)), }),
+    'max_size': 300,
+    'mask_proto_src': 2,
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 3 + [(None, -2, {}), (256, 3, {'padding': 1})] * 3 + [(128, 1, {})],
+})
+
+cvpr2_300_resnet50_config = cvpr2_300_resnet101_config.copy({
+    'name': 'cvpr2_300_resnet50',
+    'backbone': resnet50_backbone.copy({
+        'selected_layers': list(range(1, 7)),
+        'pred_scales': [[2.62, 3.71], [2.70, 3.68], [2.47, 3.01], [2.03, 2.33], [1.58, 1.78], [1.8, 1.92]],
+        'pred_aspect_ratios': [ [[1, sqrt(2), 1/sqrt(2), sqrt(3), 1/sqrt(3)][:n], [1]] for n in [3, 5, 5, 5, 3, 3] ],
+    }),
+})
+
+cvpr2_darknet53_config = cvpr2_resnet101_config.copy({
+    'name': 'cvpr2_darknet53',
+    'backbone': darknet53_backbone.copy({
+        'selected_layers': list(range(3, 9)),
+        'pred_scales': [[2.62, 3.71], [2.70, 3.68], [2.47, 3.01], [2.03, 2.33], [1.58, 1.78], [1.8, 1.92]],
+        'pred_aspect_ratios': [ [[1, sqrt(2), 1/sqrt(2), sqrt(3), 1/sqrt(3)][:n], [1]] for n in [3, 5, 5, 5, 3, 3] ],
+    }),
+    'mask_proto_src': 3,
+})
+
+cvpr2_300_darknet53_config = cvpr2_darknet53_config.copy({
+    'name': 'cvpr2_300_darknet53',
+    'backbone': cvpr2_darknet53_config.backbone.copy({ 'selected_layers': list(range(2, 8)) }),
+    'max_size': 300,
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 3 + [(None, -2, {}), (256, 3, {'padding': 1})] * 3 + [(128, 1, {})],
+})
+
+
 # Default config
-cfg = cvpr_resnet50_config.copy()
+cfg = cvpr2_300_darknet53_config.copy()
 
 def set_cfg(config_name:str):
     """ Sets the active config. Works even if cfg is already imported! """
