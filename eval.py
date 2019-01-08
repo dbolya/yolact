@@ -22,6 +22,7 @@ import pickle
 import json
 import os
 from collections import OrderedDict
+from PIL import Image
 
 import matplotlib.pyplot as plt
 import cv2
@@ -40,8 +41,6 @@ def parse_args(argv=None):
     parser.add_argument('--trained_model',
                         default='weights/ssd300_mAP_77.43_v2.pth', type=str,
                         help='Trained state_dict file path to open. If "interrupt", this will open the interrupt file.')
-    parser.add_argument('--confidence_threshold', default=0.01, type=float,
-                        help='Detection confidence threshold')
     parser.add_argument('--top_k', default=5, type=int,
                         help='Further restrict the number of predictions to parse')
     parser.add_argument('--cuda', default=True, type=str2bool,
@@ -94,6 +93,10 @@ def parse_args(argv=None):
                         help='Outputs stuff for scripts/compute_mask.py.')
     parser.add_argument('--no_crop', default=False, dest='crop', action='store_false',
                         help='Do not crop output masks with the predicted bounding box.')
+    parser.add_argument('--image', default=None, type=str,
+                        help='A path to an image to use for display.')
+    parser.add_argument('--score_threshold', default=0, type=float ,
+                        help='Detections with a score under this threshold will not be considered. This currently only works in display mode.')
 
     parser.set_defaults(no_bar=False, display=False, resume=False, output_coco_json=False, output_web_json=False, shuffle=False,
                         benchmark=False, no_sort=False, no_hash=False, mask_proto_debug=False, crop=True)
@@ -129,6 +132,9 @@ def prep_display(dets_out, img, gt, gt_masks, h, w):
         color = COLORS[j % len(COLORS)]
         _class = COCO_CLASSES[classes[j]]
         score = scores[j]
+
+        if score < args.score_threshold:
+            continue
         
         if args.display_bboxes:
             cv2.rectangle(img_numpy, (x1, y1), (x2, y2), color, 2)
@@ -478,16 +484,38 @@ def badhash(x):
     x = ((x >> 16) ^ x) & 0xFFFFFFFF
     return x
 
+def evalimage(path:str):
+    img = np.array(Image.open(path).convert('RGB')).transpose(1, 0, 2)[:, :, (2,1,0)]
+    w, h, _ = img.shape
+    img = torch.Tensor(BaseTransform()(img)[0]).cuda()
+    img = img.permute(2, 1, 0).contiguous()
+
+    batch = Variable(img.unsqueeze(0))
+    if args.cuda:
+        batch = batch.cuda()
+
+    # Meat of the operation here
+    preds = net(batch)
+    img_numpy = prep_display(preds, img, None, None, h, w)
+    
+    plt.imshow(np.clip(img_numpy, 0, 1))
+    plt.title(path)
+    plt.show()
+
 
 def evaluate(net:Yolact, dataset, train_mode=False):
     net.detect.cross_class_nms = args.cross_class_nms
     net.detect.fast_nms = args.fast_nms
     cfg.mask_proto_debug = args.mask_proto_debug
 
+    if args.image is not None:
+        evalimage(args.image)
+        return
+
     frame_times = MovingAverage()
     dataset_size = len(dataset) if args.max_images < 0 else min(args.max_images, len(dataset))
     progress_bar = ProgressBar(30, dataset_size)
-    
+
     print()
 
     if not args.display and not args.benchmark:
@@ -651,7 +679,7 @@ if __name__ == '__main__':
         model_path = SavePath.from_str(args.trained_model)
         # TODO: Bad practice? Probably want to do a name lookup instead.
         args.config = model_path.model_name + '_config'
-        print('Config not specified. Loading config %s instead.\n' % args.config)
+        print('Config not specified. Parsed %s from the file name.\n' % args.config)
         set_cfg(args.config)
 
 
@@ -672,9 +700,11 @@ if __name__ == '__main__':
             calc_map(ap_data)
             exit()
 
-        dataset = COCODetection(args.coco_root, cfg.dataset.valid, BaseTransform())
-        
-        prep_coco_cats(dataset.coco.cats)
+        if args.image is None:
+            dataset = COCODetection(args.coco_root, cfg.dataset.valid, BaseTransform())
+            prep_coco_cats(dataset.coco.cats)
+        else:
+            dataset = None        
 
         print('Loading model...', end='')
         net = Yolact()
