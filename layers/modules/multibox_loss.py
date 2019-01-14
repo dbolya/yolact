@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
-from ..box_utils import match, log_sum_exp, decode
+from ..box_utils import match, log_sum_exp, decode, center_size
 from utils.functions import sanitize_coordinates
 
 from data import cfg, mask_type, activation_func
@@ -101,6 +101,7 @@ class MultiBoxLoss(nn.Module):
         # Match priors (default boxes) and ground truth boxes
         # These tensors will be created with the same device as loc_data
         loc_t = loc_data.new(num, num_priors, 4)
+        gt_box_t = loc_data.new(num, num_priors, 4)
         conf_t = loc_data.new(num, num_priors).long()
         idx_t = loc_data.new(num, num_priors).long()
 
@@ -126,6 +127,8 @@ class MultiBoxLoss(nn.Module):
             match(self.pos_threshold, self.neg_threshold,
                   truths, defaults, labels, crowd_boxes,
                   loc_t, conf_t, idx_t, idx, loc_data[idx])
+                  
+            gt_box_t[idx, :, :] = truths[idx_t[idx]]
 
         # wrap targets
         loc_t = Variable(loc_t, requires_grad=False)
@@ -145,9 +148,8 @@ class MultiBoxLoss(nn.Module):
             loc_t = loc_t[pos_idx].view(-1, 4)
             loss_l = F.smooth_l1_loss(loc_p, loc_t, reduction='sum') * self.bbox_alpha
 
-        # Mask Loss
-        loss_m = 0
-        loss_p = 0 # Proto loss
+        loss_m = 0 # Mask Loss
+        loss_p = 0 # Prototype Loss
         if cfg.train_masks:
             if cfg.mask_type == mask_type.direct:
                 if cfg.use_gt_bboxes:
@@ -160,7 +162,7 @@ class MultiBoxLoss(nn.Module):
                 else:
                     loss_m = self.direct_mask_loss(pos_idx, idx_t, loc_data, mask_data, priors, masks)
             elif cfg.mask_type == mask_type.lincomb:
-                loss_m = self.lincomb_mask_loss(pos, idx_t, loc_data, mask_data, priors, proto_data, masks, inst_data)
+                loss_m = self.lincomb_mask_loss(pos, idx_t, loc_data, mask_data, priors, proto_data, masks, gt_box_t, inst_data)
                 
                 if cfg.mask_proto_loss is not None:
                     if cfg.mask_proto_loss == 'l1':
@@ -252,7 +254,7 @@ class MultiBoxLoss(nn.Module):
         return loss_m
     
 
-    def lincomb_mask_loss(self, pos, idx_t, loc_data, mask_data, priors, proto_data, masks, inst_data, interpolation_mode='bilinear'):
+    def lincomb_mask_loss(self, pos, idx_t, loc_data, mask_data, priors, proto_data, masks, gt_box_t, inst_data, interpolation_mode='bilinear'):
         mask_h = proto_data.size(1)
         mask_w = proto_data.size(2)
 
@@ -294,12 +296,18 @@ class MultiBoxLoss(nn.Module):
 
             cur_pos = pos[idx]
             pos_idx_t = idx_t[idx, cur_pos]
+            
+            if cfg.mask_proto_normalize_emulate_roi_pooling:
+                # Note: this is in point-form
+                pos_gt_box_t = gt_box_t[idx, cur_pos]
 
             if pos_idx_t.size(0) == 0:
                 continue
             
-            pos_bboxes = decode(loc_data[idx, :, :], priors.data)
-            pos_bboxes = pos_bboxes[cur_pos, :]
+            # Only use predicted bounding boxes if we're using them to crop the final masks
+            if cfg.mask_proto_crop:
+                pos_bboxes = decode(loc_data[idx, :, :], priors.data)
+                pos_bboxes = pos_bboxes[cur_pos, :]
 
             proto_masks = proto_data[idx]
             proto_coef  = mask_data[idx, cur_pos, :]
@@ -331,8 +339,13 @@ class MultiBoxLoss(nn.Module):
                 select = perm[:cfg.masks_to_train]
 
                 proto_coef = proto_coef[select, :]
-                pos_bboxes = pos_bboxes[select, :]
                 pos_idx_t  = pos_idx_t[select]
+                
+                if cfg.mask_proto_crop:
+                    pos_bboxes = pos_bboxes[select, :]
+                
+                if cfg.mask_proto_normalize_emulate_roi_pooling:
+                    pos_gt_box_t = pos_gt_box_t[select, :]
 
             num_pos = proto_coef.size(0)
             mask_t = downsampled_masks[:, :, pos_idx_t]          
@@ -359,11 +372,19 @@ class MultiBoxLoss(nn.Module):
                 pre_loss = F.smooth_l1_loss(pred_masks, mask_t, reduction='none')
 
             if cfg.mask_proto_normalize_mask_loss_by_sqrt_area:
-                gt_area  = torch.sum(mask_t,   dim=(0, 1), keepdim=True)
+                gt_area  = torch.sum(mask_t, dim=(0, 1), keepdim=True)
                 pre_loss = pre_loss / (torch.sqrt(gt_area) + 0.0001)
             
             if cfg.mask_proto_reweight_mask_loss:
                 pre_loss = pre_loss * mask_reweighting[:, :, pos_idx_t]
+                
+            if cfg.mask_proto_normalize_emulate_roi_pooling:
+                roi_size      = 21 # This is what FCIS uses. I think Mask RCNN uses 28, \shrug
+                pos_gt_box_t  = center_size(pos_gt_box_t)
+                gt_box_width  = pos_gt_box_t[:, 2] * 300 # I'm emulating an x size image here just
+                gt_box_height = pos_gt_box_t[:, 3] * 300 # to not have to change the alpha value
+                pre_loss = pre_loss.sum(dim=(0, 1)) * roi_size * roi_size / gt_box_width / gt_box_height
+
 
             loss_m += torch.sum(pre_loss)
 

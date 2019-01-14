@@ -146,3 +146,4 @@ testeval.py
 scripts/aws2/
 status.sh
 train.sh
+img/

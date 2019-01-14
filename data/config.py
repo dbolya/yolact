@@ -261,6 +261,7 @@ coco_base_config = Config({
     'mask_proto_remove_empty_masks': False,
     'mask_proto_reweight_coeff': 1,
     'mask_proto_coeff_diversity_loss': False,
+    'mask_proto_normalize_emulate_roi_pooling': False,
 
     # If using batchnorm anywhere inthe backbone, freeze the batchnorm layer during training.
     # Note: any additional batch norm layers after the backbone will not be froze.
@@ -854,6 +855,11 @@ yrm22_test_onegpu_config = yrm22_freezebn_config.copy({
 })
 yrm22_test_twogpu_config = yrm22_freezebn_config.copy({
     'name': 'yrm22_test_twogpu'
+})
+
+yrm35_config = yrm22_config.copy({
+    'name': 'yrm35',
+    'mask_proto_normalize_emulate_roi_pooling': True,
 })
 
 yrm25_config = yrm22_config.copy({
