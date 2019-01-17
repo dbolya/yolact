@@ -81,6 +81,9 @@ class ResNetBackbone(nn.Module):
     def _make_layer(self, block, planes, blocks, stride=1):
         """ Here one layer means a string of n Bottleneck blocks. """
         downsample = None
+
+        # This is actually just to create the connection between layers, and not necessarily to
+        # downsample. Even if the second condition is met, it only downsamples when stride != 1
         if stride != 1 or self.inplanes != planes * block.expansion:
             if len(self.layers) in self.atrous_layers:
                 self.dilation += 1

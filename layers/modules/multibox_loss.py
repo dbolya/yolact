@@ -381,8 +381,8 @@ class MultiBoxLoss(nn.Module):
             if cfg.mask_proto_normalize_emulate_roi_pooling:
                 roi_size      = 21 # This is what FCIS uses. I think Mask RCNN uses 28, \shrug
                 pos_gt_box_t  = center_size(pos_gt_box_t)
-                gt_box_width  = pos_gt_box_t[:, 2] * 300 # I'm emulating an x size image here just
-                gt_box_height = pos_gt_box_t[:, 3] * 300 # to not have to change the alpha value
+                gt_box_width  = pos_gt_box_t[:, 2] * 100 # I'm emulating an x size image here just
+                gt_box_height = pos_gt_box_t[:, 3] * 100 # to not have to change the alpha value
                 pre_loss = pre_loss.sum(dim=(0, 1)) * roi_size * roi_size / gt_box_width / gt_box_height
 
 
