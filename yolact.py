@@ -42,7 +42,13 @@ def make_net(in_channels, conf, include_last_relu=True):
                 layer = nn.ConvTranspose2d(in_channels, num_channels, -kernel_size, **layer_cfg[2])
         
         in_channels = num_channels if num_channels is not None else in_channels
-        return [layer, nn.ReLU(inplace=True)]
+
+        # Don't return a ReLU layer if we're doing an upsample. This probably doesn't affect anything
+        # output-wise, but there's no need to go through a ReLU here.
+        if num_channels is None:
+            return [layer]
+        else:
+            return [layer, nn.ReLU(inplace=True)]
 
     # Use sum to concat together all the component layer lists
     net = sum([make_layer(x) for x in conf], [])
@@ -88,7 +94,7 @@ class PredictionModule(nn.Module):
 
         if cfg.mask_proto_prototypes_as_features:
             in_channels += self.mask_dim
-
+        
         if parent is None:
             if cfg.extra_head_net is None:
                 out_channels = in_channels
