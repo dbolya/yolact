@@ -860,6 +860,7 @@ yrm22_test_twogpu_config = yrm22_freezebn_config.copy({
 yrm35_config = yrm22_config.copy({
     'name': 'yrm35',
     'mask_proto_normalize_emulate_roi_pooling': True,
+    'crowd_iou_threshold': 0.7,
 })
 
 yrm25_config = yrm22_config.copy({
@@ -1277,8 +1278,30 @@ cvpr2_300_darknet53_config = cvpr2_darknet53_config.copy({
 })
 
 
+yrm22_fcis_config = yrm22_config.copy({
+    'name': 'yrm22_fcis',
+
+    'backbone': yrm22_config.backbone.copy({
+        # Second argument here is a trous on conv 5
+        'args': (yrm22_config.backbone.args[0], [3]),
+
+        'selected_layers': [3],
+        'pred_scales': [[4, 8, 16, 32]],
+        'pred_aspect_ratios': [[[sqrt(0.5), 1, sqrt(2)]] * 4],
+    }),
+    
+    'crowd_iou_threshold': 0.7,
+    'max_size': 600,
+
+    'mask_proto_src': 3,
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(None, -2, {}), (256, 3, {'padding': 1})] * 2 + [(128, 1, {})],
+
+    'extra_head_net': [(1024, 1, {})],
+})
+
+
 # Default config
-cfg = cvpr2_300_darknet53_config.copy()
+cfg = yrm22_fcis_config.copy()
 
 def set_cfg(config_name:str):
     """ Sets the active config. Works even if cfg is already imported! """
