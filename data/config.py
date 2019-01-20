@@ -863,6 +863,11 @@ yrm35_config = yrm22_config.copy({
     'crowd_iou_threshold': 0.7,
 })
 
+yrm35_crop_config = yrm35_config.copy({
+    'name': 'yrm35_crop',
+    'mask_proto_crop': True,
+})
+
 yrm25_config = yrm22_config.copy({
     'name': 'yrm25',
     'mask_proto_reweight_mask_loss': True,

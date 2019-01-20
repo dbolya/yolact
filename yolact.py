@@ -45,6 +45,7 @@ def make_net(in_channels, conf, include_last_relu=True):
 
         # Don't return a ReLU layer if we're doing an upsample. This probably doesn't affect anything
         # output-wise, but there's no need to go through a ReLU here.
+        # Commented out for backwards compatibility with previous models
         # if num_channels is None:
         #     return [layer]
         # else:

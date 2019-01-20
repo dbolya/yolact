@@ -47,6 +47,8 @@ class MultiBoxLoss(nn.Module):
             self.mask_alpha *= 30
         if cfg.mask_proto_reweight_mask_loss:
             self.mask_alpha /= 4
+        if cfg.mask_proto_crop and cfg.mask_proto_normalize_emulate_roi_pooling:
+            self.mask_alpha *= 0.2
 
         # If you output a proto mask with this area, your l1 loss will be l1_alpha
         # Note that the area is relative (so 1 would be the entire image)
@@ -258,6 +260,8 @@ class MultiBoxLoss(nn.Module):
         mask_h = proto_data.size(1)
         mask_w = proto_data.size(2)
 
+        process_gt_bboxes = cfg.mask_proto_normalize_emulate_roi_pooling or cfg.mask_proto_crop
+
         if cfg.mask_proto_remove_empty_masks:
             # Make sure to store a copy of this because we edit it to get rid of all-zero masks
             pos = pos.clone()
@@ -297,17 +301,12 @@ class MultiBoxLoss(nn.Module):
             cur_pos = pos[idx]
             pos_idx_t = idx_t[idx, cur_pos]
             
-            if cfg.mask_proto_normalize_emulate_roi_pooling:
+            if process_gt_bboxes:
                 # Note: this is in point-form
                 pos_gt_box_t = gt_box_t[idx, cur_pos]
 
             if pos_idx_t.size(0) == 0:
                 continue
-            
-            # Only use predicted bounding boxes if we're using them to crop the final masks
-            if cfg.mask_proto_crop:
-                pos_bboxes = decode(loc_data[idx, :, :], priors.data)
-                pos_bboxes = pos_bboxes[cur_pos, :]
 
             proto_masks = proto_data[idx]
             proto_coef  = mask_data[idx, cur_pos, :]
@@ -341,23 +340,20 @@ class MultiBoxLoss(nn.Module):
                 proto_coef = proto_coef[select, :]
                 pos_idx_t  = pos_idx_t[select]
                 
-                if cfg.mask_proto_crop:
-                    pos_bboxes = pos_bboxes[select, :]
-                
-                if cfg.mask_proto_normalize_emulate_roi_pooling:
+                if process_gt_bboxes:
                     pos_gt_box_t = pos_gt_box_t[select, :]
 
             num_pos = proto_coef.size(0)
             mask_t = downsampled_masks[:, :, pos_idx_t]          
 
             # Size: [mask_h, mask_w, num_pos]
-            pred_masks = torch.matmul(proto_masks, proto_coef.t())
+            pred_masks = proto_masks @ proto_coef.t()
             pred_masks = cfg.mask_proto_mask_activation(pred_masks)
 
             if cfg.mask_proto_crop:
                 # Take care of all the bad behavior that can be caused by out of bounds coordinates
-                x1, x2 = sanitize_coordinates(pos_bboxes[:, 0], pos_bboxes[:, 2], mask_w)
-                y1, y2 = sanitize_coordinates(pos_bboxes[:, 1], pos_bboxes[:, 3], mask_h)
+                x1, x2 = sanitize_coordinates(pos_gt_box_t[:, 0], pos_gt_box_t[:, 2], mask_w)
+                y1, y2 = sanitize_coordinates(pos_gt_box_t[:, 1], pos_gt_box_t[:, 3], mask_h)
 
                 # "Crop" predicted masks by zeroing out everything not in the predicted bbox
                 # TODO: Write a cuda implementation of this to get rid of the loop
@@ -379,11 +375,11 @@ class MultiBoxLoss(nn.Module):
                 pre_loss = pre_loss * mask_reweighting[:, :, pos_idx_t]
                 
             if cfg.mask_proto_normalize_emulate_roi_pooling:
-                roi_size      = 21 # This is what FCIS uses. I think Mask RCNN uses 28, \shrug
-                pos_gt_box_t  = center_size(pos_gt_box_t)
-                gt_box_width  = pos_gt_box_t[:, 2] * 100 # I'm emulating an x size image here just
-                gt_box_height = pos_gt_box_t[:, 3] * 100 # to not have to change the alpha value
-                pre_loss = pre_loss.sum(dim=(0, 1)) * roi_size * roi_size / gt_box_width / gt_box_height
+                weight = mask_h * mask_w if cfg.mask_proto_crop else 1
+                pos_get_csize = center_size(pos_gt_box_t)
+                gt_box_width  = pos_get_csize[:, 2]
+                gt_box_height = pos_get_csize[:, 3]
+                pre_loss = pre_loss.sum(dim=(0, 1)) / gt_box_width / gt_box_height * weight
 
 
             loss_m += torch.sum(pre_loss)
