@@ -45,10 +45,10 @@ def make_net(in_channels, conf, include_last_relu=True):
 
         # Don't return a ReLU layer if we're doing an upsample. This probably doesn't affect anything
         # output-wise, but there's no need to go through a ReLU here.
-        if num_channels is None:
-            return [layer]
-        else:
-            return [layer, nn.ReLU(inplace=True)]
+        # if num_channels is None:
+        #     return [layer]
+        # else:
+        return [layer, nn.ReLU(inplace=True)]
 
     # Use sum to concat together all the component layer lists
     net = sum([make_layer(x) for x in conf], [])
