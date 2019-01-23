@@ -868,6 +868,44 @@ yrm35_crop_config = yrm35_config.copy({
     'mask_proto_crop': True,
 })
 
+yrm35_fpn_config = yrm22_config.copy({
+    'name': 'yrm35_fpn',
+    
+    'backbone': fixed_ssd_config.backbone.copy({
+        # 0 is conv2
+        'selected_layers': list(range(0, 4)),
+        
+        # These scales and aspect ratios are derived from the FPN paper
+        # https://arxiv.org/pdf/1612.03144.pdf
+        'pred_scales': [ [4] ] * 5, # 32 / 800 * 136 ...
+        'pred_aspect_ratios': [ [[1, 1/sqrt(2), sqrt(2)]] ]*5,
+    }),
+
+    # Finally, FPN
+    # This replaces each selected layer with the corresponding FPN version
+    'fpn': Config({
+        'num_features': 256,
+        'interpolation_mode': 'bilinear',
+
+        'num_downsample': 1
+    }),
+
+    'mask_proto_src': 0,
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(128, 1, {})],
+    
+    'extra_head_net': [(256, 3, {'padding': 1})],
+    # 'head_layer_params': {'kernel_size': 1, 'padding': 0},
+    
+    'share_prediction_module': True,
+    'crowd_iou_threshold': 0.7,
+
+    'freeze_bn': True,
+
+    # By their forces combined, they are... RoI Pooling!
+    'mask_proto_normalize_emulate_roi_pooling': True,
+    'mask_proto_crop': True,
+})
+
 yrm25_config = yrm22_config.copy({
     'name': 'yrm25',
     'mask_proto_reweight_mask_loss': True,
