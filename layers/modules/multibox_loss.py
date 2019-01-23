@@ -351,7 +351,11 @@ class MultiBoxLoss(nn.Module):
             pred_masks = cfg.mask_proto_mask_activation(pred_masks)
 
             if cfg.mask_proto_crop:
+                # Shortening the variable name here
+                expnd = cfg.mask_proto_crop_expand
+
                 # Take care of all the bad behavior that can be caused by out of bounds coordinates
+                # Note I tried to put expand here but the loss exploded for some reason
                 x1, x2 = sanitize_coordinates(pos_gt_box_t[:, 0], pos_gt_box_t[:, 2], mask_w)
                 y1, y2 = sanitize_coordinates(pos_gt_box_t[:, 1], pos_gt_box_t[:, 3], mask_h)
 
@@ -359,7 +363,7 @@ class MultiBoxLoss(nn.Module):
                 # TODO: Write a cuda implementation of this to get rid of the loop
                 crop_mask = torch.zeros(mask_h, mask_w, num_pos)
                 for jdx in range(num_pos):
-                    crop_mask[y1[jdx]:y2[jdx], x1[jdx]:x2[jdx], jdx] = 1
+                    crop_mask[y1[jdx]*(1-expnd):y2[jdx]*(1+expnd), x1[jdx]*(1-expnd):x2[jdx]*(1+expnd), jdx] = 1
                 pred_masks = pred_masks * crop_mask
             
             if cfg.mask_proto_mask_activation == activation_func.sigmoid:

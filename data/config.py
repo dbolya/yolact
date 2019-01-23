@@ -188,6 +188,9 @@ mask_type = Config({
     #                                        coeffs, what activation to apply to the final mask.
     #   - mask_proto_coeff_activation (func): The activation to apply to the mask coefficients.
     #   - mask_proto_crop (bool): If True, crop the mask with the predicted bbox during training.
+    #   - mask_proto_crop_expand (float): If cropping, the percent to expand the cropping bbox by
+    #                                     in each direction. This is to make the model less reliant
+    #                                     on perfect bbox predictions.
     #   - mask_proto_loss (str [l1|disj]): If not None, apply an l1 or disjunctive regularization
     #                                      loss directly to the prototype masks.
     #   - mask_proto_binarize_downsampled_gt (bool): Binarize GT after dowsnampling during training?
@@ -249,6 +252,7 @@ coco_base_config = Config({
     'mask_proto_mask_activation': activation_func.sigmoid,
     'mask_proto_coeff_activation': activation_func.tanh,
     'mask_proto_crop': True,
+    'mask_proto_crop_expand': 0,
     'mask_proto_loss': None,
     'mask_proto_binarize_downsampled_gt': True,
     'mask_proto_normalize_mask_loss_by_sqrt_area': False,
@@ -868,6 +872,11 @@ yrm35_crop_config = yrm35_config.copy({
     'mask_proto_crop': True,
     'lr_steps': (0, 280000, 360000, 500000, 650000),
     'max_iter': 800000,
+})
+
+yrm35_expand_config = yrm35_crop_config.copy({
+    'name': 'yrm35_expand',
+    'mask_proto_crop_expand': 0.1,
 })
 
 yrm35_fpn_config = yrm22_config.copy({
