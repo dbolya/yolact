@@ -304,7 +304,6 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, num_crowd, image_id, de
                 crowd_boxes  , gt_boxes   = split(gt_boxes)
                 crowd_masks  , gt_masks   = split(gt_masks)
                 crowd_classes, gt_classes = split(gt_classes)
-            num_crowd = 0
 
     with timer.env('Postprocess'):
         classes, scores, boxes, masks = postprocess(dets, w, h, crop_masks=args.crop)
