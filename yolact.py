@@ -278,7 +278,7 @@ class FPN(nn.Module):
                 x = F.interpolate(x, size=(h, w), mode=cfg.fpn.interpolation_mode, align_corners=False)
             
             x = x + self.lat_layers[i](convouts[j])
-            out[j] = F.relu(self.pred_layers[i](x))
+            out[j] = self.pred_layers[i](x)
 
         # In the original paper, this takes care of P6
         for _ in range(cfg.fpn.num_downsample):

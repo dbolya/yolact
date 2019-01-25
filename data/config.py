@@ -910,8 +910,6 @@ yrm35_fpn_config = yrm22_config.copy({
     'share_prediction_module': True,
     'crowd_iou_threshold': 0.7,
 
-    'freeze_bn': True,
-
     # By their forces combined, they are... RoI Pooling!
     'mask_proto_normalize_emulate_roi_pooling': True,
     'mask_proto_crop': True,
