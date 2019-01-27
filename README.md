@@ -21,7 +21,7 @@ Because the acronym YOLACT doesn't fit our method anymore, the current name for 
 
 # Installation
  - Set up a Python3 environment.
- - Install [Pytorch](http://pytorch.org/) 0.4.1 and TorchVision.
+ - Install [Pytorch](http://pytorch.org/) 1.0.0 and TorchVision.
  - Install some other packages:
    ```Shell
    # Cython needs to be installed before pycocotools
