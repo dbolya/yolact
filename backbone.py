@@ -122,7 +122,7 @@ class ResNetBackbone(nn.Module):
             x = layer(x)
             outs.append(x)
 
-        return outs
+        return tuple(outs)
 
     def init_backbone(self, path):
         """ Initializes the backbone weights for training. """
@@ -292,7 +292,7 @@ class DarkNetBackbone(nn.Module):
             x = layer(x)
             outs.append(x)
 
-        return outs
+        return tuple(outs)
 
     def add_layer(self, conv_channels=1024, stride=2, depth=1, block=DarkNetBlock):
         """ Add a downsample layer to the backbone as per what SSD does. """
@@ -396,7 +396,7 @@ class VGGBackbone(nn.Module):
                 x = self.norms[self.norm_lookup[idx]](x)
             outs.append(x)
         
-        return outs
+        return tuple(outs)
 
     def transform_key(self, k):
         """ Transform e.g. features.24.bias to layers.4.1.bias """

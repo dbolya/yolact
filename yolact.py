@@ -59,6 +59,26 @@ def make_net(in_channels, conf, include_last_relu=True):
     return nn.Sequential(*(net)), in_channels
 
 
+class JITModule(nn.Module):
+    """ Wraps the given module in a traced version. """
+
+    def __init__(self, net):
+        super().__init__()
+
+        self.last_size = None
+        self.traced = None
+
+        # Store this as a list so our pytorch overlords don't put extra copies of weights in the state dict
+        self.net = [net]
+    
+    def forward(self, x):
+        if x.size() != self.last_size:
+            self.last_size = x.size()
+            self.traced = torch.jit.trace(self.net[0], x)
+        
+        return self.traced(x)
+
+
 class PredictionModule(nn.Module):
     """
     The (c) prediction module adapted from DSSD:
@@ -369,6 +389,10 @@ class Yolact(nn.Module):
 
         # For use in evaluation
         self.detect = Detect(cfg.num_classes, bkg_label=0, top_k=200, conf_thresh=0.01, nms_thresh=0.45)
+        
+        # Stuff for jit
+        # No JIT for Protonet or pass2 because it's fast enough already (actually slows down using JIT)
+        self.backbone_jit = JITModule(self.backbone)
 
     def save_weights(self, path):
         """ Saves the model's weights using compression because the file sizes were getting too big. """
@@ -416,7 +440,7 @@ class Yolact(nn.Module):
     def forward(self, x):
         """ The input should be of size [batch_size, 3, img_h, img_w] """
         with timer.env('pass1'):
-            outs = self.backbone(x)
+            outs = self.backbone_jit(x)
 
         if cfg.fpn is not None:
             with timer.env('fpn'):
