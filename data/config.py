@@ -877,6 +877,7 @@ yrm35_crop_config = yrm35_config.copy({
 yrm35_expand_config = yrm35_crop_config.copy({
     'name': 'yrm35_expand',
     'mask_proto_crop_expand': 0.1,
+    'lr_steps': (140000, 260000, 310000, 360000, 380000, 400000),
 })
 
 yrm35_fpn_config = yrm22_config.copy({
