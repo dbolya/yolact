@@ -100,7 +100,7 @@ class Detect(object):
         else:
             # Use this function instead for not 100% correct nms but 4ms faster
             if self.fast_nms:
-                ids, count = self.box_nms(boxes, scores, self.nms_thresh, self.top_k)
+                ids, count = self.box_nms(boxes, classes, scores, self.nms_thresh, self.top_k)
             else:
                 ids, count = nms(boxes, scores, self.nms_thresh, self.top_k, force_cpu=cfg.force_cpu_nms)
                 ids = ids[:count]
@@ -173,12 +173,17 @@ class Detect(object):
         
         return idx_out, idx_out.size(0)
     
-    def box_nms(self, boxes, scores, iou_threshold=0.5, top_k=400):
+    def box_nms(self, boxes, classes, scores, iou_threshold=0.5, top_k=400):
+        # TODO: separate this class-aware fast box nms into two functions (one class aware, one not)
         _, idx = scores.sort(0, descending=True)
         idx = idx[:top_k]
         boxes = boxes[idx]
+        classes = classes[idx]
 
         iou = jaccard(boxes, boxes)
+        class_eq = (classes.unsqueeze(1).expand_as(iou) == classes.unsqueeze(0).expand_as(iou)).float()
+        iou *= class_eq # Mmm class-awareness
+        
         iou.triu_(diagonal=1)
         iou_max, _ = torch.max(iou, dim=0)
 
