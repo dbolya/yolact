@@ -66,17 +66,19 @@ class JITModule(nn.Module):
         super().__init__()
 
         self.last_size = None
-        self.traced = None
+        self.last_training = self.training
 
         # Store this as a list so our pytorch overlords don't put extra copies of weights in the state dict
+        self.traced = None
         self.net = [net]
     
     def forward(self, x):
-        if x.size() != self.last_size:
+        if x.size() != self.last_size or self.training != self.last_training:
             self.last_size = x.size()
-            self.traced = torch.jit.trace(self.net[0], x)
+            self.last_training = self.training
+            self.traced = [torch.jit.trace(self.net[0], x)]
         
-        return self.traced(x)
+        return self.traced[0](x)
 
 
 class PredictionModule(nn.Module):
