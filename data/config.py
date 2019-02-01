@@ -226,6 +226,25 @@ activation_func = Config({
     'none':    lambda x: x,
 })
 
+
+fpn_base = Config({
+    # The number of features to have in each FPN layer
+    'num_features': 256,
+
+    # The upsampling mode used
+    'interpolation_mode': 'bilinear',
+
+    # The number of extra layers to be produced by downsampling starting at P5
+    'num_downsample': 1,
+
+    # Whether to down sample with a 3x3 stride 2 conv layer instead of just a stride 2 selection
+    'use_conv_downsample': False,
+
+    # Whether to pad the pred layers with 1 on each side (I forgot to add this at the start)
+    # This is just here for backwards compatibility
+    'pad': True,
+})
+
 # Configs
 coco_base_config = Config({
     'dataset': coco2014_dataset,
@@ -275,7 +294,7 @@ coco_base_config = Config({
     # Note: any additional batch norm layers after the backbone will not be froze.
     'freeze_bn': False,
 
-    # Set this to a config object if you want an FPN. The parameters for that object are in yolact.py under the class FPN.
+    # Set this to a config object if you want an FPN (inherit from fpn_base). See fpn_base for details.
     'fpn': None,
 
     # Use the same weights for each network head
@@ -901,12 +920,7 @@ yrm35_fpn_config = yrm22_config.copy({
 
     # Finally, FPN
     # This replaces each selected layer with the corresponding FPN version
-    'fpn': Config({
-        'num_features': 256,
-        'interpolation_mode': 'bilinear',
-
-        'num_downsample': 1
-    }),
+    'fpn': fpn_base.copy({ 'pad': False, }),
 
     'mask_proto_src': 0,
     'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(128, 1, {})],
@@ -1009,12 +1023,7 @@ yrm30_config = yrm22_config.copy({
 
     # Finally, FPN
     # This replaces each selected layer with the corresponding FPN version
-    'fpn': Config({
-        'num_features': 256,
-        'interpolation_mode': 'bilinear',
-
-        'num_downsample': 1
-    }),
+    'fpn': fpn_base.copy({ 'pad': False, }),
 
     'mask_proto_src': 0,
     'mask_proto_net': [(256, 3, {'padding': 1})] * 6 + [(256, 1, {})],

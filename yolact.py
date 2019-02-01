@@ -278,8 +278,11 @@ class FPN(nn.Module):
             nn.Conv2d(x, cfg.fpn.num_features, kernel_size=1)
             for x in reversed(in_channels)
         ])
+
+        # This is here for backwards compatability
+        padding = 1 if cfg.fpn.pad else 0
         self.pred_layers = nn.ModuleList([
-            nn.Conv2d(cfg.fpn.num_features, cfg.fpn.num_features, kernel_size=3)
+            nn.Conv2d(cfg.fpn.num_features, cfg.fpn.num_features, kernel_size=3, padding=padding)
             for _ in in_channels
         ])
 
