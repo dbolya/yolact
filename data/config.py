@@ -941,6 +941,16 @@ yrm35_fpn_config = yrm22_config.copy({
     'mask_proto_crop': True,
 })
 
+yrm36_base_config = yrm35_fpn_config.copy({
+    'name': 'yrm36_base',
+
+    # This delay is in place instead of the modified initialization in the original paper
+    'delayed_settings': [(300, { 'use_focal_loss': True })],
+
+    'focal_loss_alpha': 0.25,
+    'focal_loss_gamma': 2,
+})
+
 yrm25_config = yrm22_config.copy({
     'name': 'yrm25',
     'mask_proto_reweight_mask_loss': True,
