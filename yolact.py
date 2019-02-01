@@ -240,8 +240,12 @@ class PredictionModule(nn.Module):
                     
                     for scale, ars in zip(self.scales, self.aspect_ratios):
                         for ar in ars:
-                            w = scale * ar / conv_w
-                            h = scale / ar / conv_h
+                            if cfg.backbone.use_pixel_scales:
+                                w = scale * ar / cfg.max_size
+                                h = scale * ar / cfg.max_size
+                            else:
+                                w = scale * ar / conv_w
+                                h = scale / ar / conv_h
 
                             prior_data += [x, y, w, h]
                 

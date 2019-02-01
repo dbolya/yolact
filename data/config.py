@@ -107,6 +107,7 @@ resnet101_backbone = Config({
     'selected_layers': list(range(2, 8)),
     'pred_scales': [[1]]*6,
     'pred_aspect_ratios': [ [[0.66685089, 1.7073535, 0.87508774, 1.16524493, 0.49059086]] ] * 6,
+    'use_pixel_scales': False,
 })
 
 resnet101_gn_backbone = Config({
@@ -119,6 +120,7 @@ resnet101_gn_backbone = Config({
     'selected_layers': list(range(2, 8)),
     'pred_scales': [[1]]*6,
     'pred_aspect_ratios': [ [[0.66685089, 1.7073535, 0.87508774, 1.16524493, 0.49059086]] ] * 6,
+    'use_pixel_scales': False,
 })
 
 resnet50_backbone = resnet101_backbone.copy({
@@ -139,6 +141,7 @@ darknet53_backbone = Config({
     'selected_layers': list(range(3, 9)),
     'pred_scales': [[3.5, 4.95], [3.6, 4.90], [3.3, 4.02], [2.7, 3.10], [2.1, 2.37], [1.8, 1.92]],
     'pred_aspect_ratios': [ [[1, sqrt(2), 1/sqrt(2), sqrt(3), 1/sqrt(3)][:n], [1]] for n in [3, 5, 5, 5, 3, 3] ],
+    'use_pixel_scales': False,
 })
 
 vgg16_arch = [[64, 64],
@@ -160,6 +163,7 @@ vgg16_backbone = Config({
     'selected_layers': [3] + list(range(5, 10)),
     'pred_scales': [[5, 4]]*6,
     'pred_aspect_ratios': [ [[1], [1, sqrt(2), 1/sqrt(2), sqrt(3), 1/sqrt(3)][:n]] for n in [3, 5, 5, 5, 3, 3] ],
+    'use_pixel_scales': False,
 })
 
 mask_type = Config({
