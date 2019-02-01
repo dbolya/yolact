@@ -78,8 +78,8 @@ def make_priors(conv_size, scales, aspect_ratios):
 
     # Iteration order is important (it has to sync up with the convout)
     for j, i in product(range(conv_h), range(conv_w)):
-        x = (i) / conv_w
-        y = (j) / conv_h
+        x = (i + 0.5) / conv_w
+        y = (j + 0.5) / conv_h
         
         for scale, ars in zip(scales, aspect_ratios):
             for ar in ars:
@@ -87,7 +87,7 @@ def make_priors(conv_size, scales, aspect_ratios):
                 h = scale / ar / conv_h
 
                 # Point form
-                prior_data += [x, y, x + w, y + h]
+                prior_data += [x - w/2, y - h/2, x + w/2, y + h/2]
     
     return np.array(prior_data).reshape(-1, 4)
 
@@ -112,7 +112,7 @@ conv_sizes = [(35, 35), (18, 18), (9, 9), (5, 5), (3, 3), (2, 2)]
 
 # yrm33_config
 # scales = [ [5.3] ] * 5
-# aspect_ratios = [ [[1, 1/2, 2]] ]*5
+# aspect_ratios = [ [[1, 1/sqrt(2), sqrt(2)]] ]*5
 # conv_sizes = [(136, 136), (67, 67), (33, 33), (16, 16), (8, 8)]
 
 

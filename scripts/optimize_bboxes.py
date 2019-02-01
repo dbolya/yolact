@@ -68,28 +68,27 @@ def jaccard(box_a, box_b, iscrowd=False):
 
 # Also convert to point form
 def to_relative(bboxes):
-	return np.concatenate((bboxes[:, 2:4] / bboxes[:, :2], (bboxes[:, 2:4] + bboxes[:, 4:]) / bboxes[:, :2]), axis=1)
+    return np.concatenate((bboxes[:, 2:4] / bboxes[:, :2], (bboxes[:, 2:4] + bboxes[:, 4:]) / bboxes[:, :2]), axis=1)
 
 
 def make_priors(conv_size, scales, aspect_ratios):
-	prior_data = []
-	conv_h = conv_size[0]
-	conv_w = conv_size[1]
+    prior_data = []
+    conv_h = conv_size[0]
+    conv_w = conv_size[1]
 
-	# Iteration order is important (it has to sync up with the convout)
-	for j, i in product(range(conv_h), range(conv_w)):
-		x = (i) / conv_w
-		y = (j) / conv_h
-		
-		for scale, ars in zip(scales, aspect_ratios):
-			for ar in ars:
-				w = scale * ar / conv_w
-				h = scale / ar / conv_h
+    # Iteration order is important (it has to sync up with the convout)
+    for j, i in product(range(conv_h), range(conv_w)):
+        x = (i + 0.5) / conv_w
+        y = (j + 0.5) / conv_h
+        
+        for scale, ars in zip(scales, aspect_ratios):
+            for ar in ars:
+                w = scale * ar / conv_w
+                h = scale / ar / conv_h
 
-				# Point form
-				prior_data += [x, y, x + w, y + h]
-	
-	return torch.Tensor(prior_data).view(-1, 4).cuda()
+                # Point form
+                prior_data += [x - w/2, y - h/2, x + w/2, y + h/2]
+    return torch.Tensor(prior_data).view(-1, 4).cuda()
 
 
 
@@ -103,103 +102,103 @@ batch_idx = 0
 
 
 def compute_hits(bboxes, anchors, iou_threshold=0.5):
-	ious = jaccard(bboxes, anchors)
-	perGTAnchorMax, _ = torch.max(ious, dim=1)
-	
-	return (perGTAnchorMax > iou_threshold)
+    ious = jaccard(bboxes, anchors)
+    perGTAnchorMax, _ = torch.max(ious, dim=1)
+    
+    return (perGTAnchorMax > iou_threshold)
 
 def compute_recall(hits, base_hits):
-	hits = (hits | base_hits).float()
-	return torch.sum(hits) / hits.size(0)
+    hits = (hits | base_hits).float()
+    return torch.sum(hits) / hits.size(0)
 
 
 def step(x, x_func, bboxes, base_hits, optim_idx):
-	# This should set the scale and aspect ratio
-	x_func(x, scales[optim_idx], aspect_ratios[optim_idx])
+    # This should set the scale and aspect ratio
+    x_func(x, scales[optim_idx], aspect_ratios[optim_idx])
 
-	anchors = make_priors(conv_sizes[optim_idx], scales[optim_idx], aspect_ratios[optim_idx])
+    anchors = make_priors(conv_sizes[optim_idx], scales[optim_idx], aspect_ratios[optim_idx])
 
-	return -float(compute_recall(compute_hits(bboxes, anchors), base_hits).cpu())
+    return -float(compute_recall(compute_hits(bboxes, anchors), base_hits).cpu())
 
 
-def optimize(full_bboxes, optim_idx, batch_size=10000):
-	global batch_idx, scales, aspect_ratios, conv_sizes
+def optimize(full_bboxes, optim_idx, batch_size=5000):
+    global batch_idx, scales, aspect_ratios, conv_sizes
 
-	start = batch_idx * batch_size
-	end   = min((batch_idx + 1) * batch_size, full_bboxes.size(0))
+    start = batch_idx * batch_size
+    end   = min((batch_idx + 1) * batch_size, full_bboxes.size(0))
 
-	if batch_idx > (full_bboxes.size(0) // batch_size):
-		batch_idx = 0
+    if batch_idx > (full_bboxes.size(0) // batch_size):
+        batch_idx = 0
 
-	bboxes = full_bboxes[start:end, :]
+    bboxes = full_bboxes[start:end, :]
 
-	anchor_base = [
-		make_priors(conv_sizes[idx], scales[idx], aspect_ratios[idx])
-			for idx in range(len(conv_sizes)) if idx != optim_idx]
-	base_hits = compute_hits(bboxes, torch.cat(anchor_base, dim=0))
-	
-	
-	def set_x(x, scales, aspect_ratios):
-		if optimize_scales:
-			for i in range(len(scales)):
-				scales[i] = max(x[i], 0)
-		else:
-			k = 0
-			for i in range(len(aspect_ratios)):
-				for j in range(len(aspect_ratios[i])):
-					aspect_ratios[i][j] = x[k]
-					k += 1
-			
+    anchor_base = [
+        make_priors(conv_sizes[idx], scales[idx], aspect_ratios[idx])
+            for idx in range(len(conv_sizes)) if idx != optim_idx]
+    base_hits = compute_hits(bboxes, torch.cat(anchor_base, dim=0))
+    
+    
+    def set_x(x, scales, aspect_ratios):
+        if optimize_scales:
+            for i in range(len(scales)):
+                scales[i] = max(x[i], 0)
+        else:
+            k = 0
+            for i in range(len(aspect_ratios)):
+                for j in range(len(aspect_ratios[i])):
+                    aspect_ratios[i][j] = x[k]
+                    k += 1
+            
 
-	res = minimize(step, x0=scales[optim_idx] if optimize_scales else sum(aspect_ratios[optim_idx], []), method='Powell',
-		args = (set_x, bboxes, base_hits, optim_idx),)
+    res = minimize(step, x0=scales[optim_idx] if optimize_scales else sum(aspect_ratios[optim_idx], []), method='Powell',
+        args = (set_x, bboxes, base_hits, optim_idx),)
 
 
 def pretty_str(x:list):
-	if isinstance(x, list):
-		return '[' + ', '.join([pretty_str(y) for y in x]) + ']'
-	elif isinstance(x, np.ndarray):
-		return pretty_str(list(x))
-	else:
-		return '%.2f' % x
+    if isinstance(x, list):
+        return '[' + ', '.join([pretty_str(y) for y in x]) + ']'
+    elif isinstance(x, np.ndarray):
+        return pretty_str(list(x))
+    else:
+        return '%.2f' % x
 
 if __name__ == '__main__':
-	
-	if use_augmented_boxes:
-		with open(aug_file, 'rb') as f:
-			bboxes = pickle.load(f)
-	else:
-		# Load widths and heights from a dump file. Obtain this with
-		# python3 scripts/save_bboxes.py
-		with open(dump_file, 'rb') as f:
-			bboxes = pickle.load(f)
+    
+    if use_augmented_boxes:
+        with open(aug_file, 'rb') as f:
+            bboxes = pickle.load(f)
+    else:
+        # Load widths and heights from a dump file. Obtain this with
+        # python3 scripts/save_bboxes.py
+        with open(dump_file, 'rb') as f:
+            bboxes = pickle.load(f)
 
-			bboxes = np.array(bboxes)
-			bboxes = to_relative(bboxes)
+            bboxes = np.array(bboxes)
+            bboxes = to_relative(bboxes)
 
-	with torch.no_grad():
-		bboxes = torch.Tensor(bboxes).cuda()
-		
-		def print_out():
-			if optimize_scales:
-				print('Scales: ' + pretty_str(scales))
-			else:
-				print('Aspect Ratios: ' + pretty_str(aspect_ratios))
+    with torch.no_grad():
+        bboxes = torch.Tensor(bboxes).cuda()
+        
+        def print_out():
+            if optimize_scales:
+                print('Scales: ' + pretty_str(scales))
+            else:
+                print('Aspect Ratios: ' + pretty_str(aspect_ratios))
 
-		for p in range(10):
-			print('(Sub Iteration) ', end='')
-			for i in range(len(conv_sizes)):
-				print('%d ' % i, end='', flush=True)
-				optimize(bboxes, i)
-			print('Done', end='\r')
-			
-			print('(Iteration %d) ' % p, end='')
-			print_out()
-			print()
+        for p in range(10):
+            print('(Sub Iteration) ', end='')
+            for i in range(len(conv_sizes)):
+                print('%d ' % i, end='', flush=True)
+                optimize(bboxes, i)
+            print('Done', end='\r')
+            
+            print('(Iteration %d) ' % p, end='')
+            print_out()
+            print()
 
-			optimize_scales = not optimize_scales
-		
-		print('scales = ' + pretty_str(scales))
-		print('aspect_ratios = ' + pretty_str(aspect_ratios))
+            optimize_scales = not optimize_scales
+        
+        print('scales = ' + pretty_str(scales))
+        print('aspect_ratios = ' + pretty_str(aspect_ratios))
 
 
