@@ -229,7 +229,8 @@ class MultiBoxLoss(nn.Module):
 
         # Ignore neutral samples
         keep = (conf_t >= 0).float()
-        
+        conf_t[conf_t < 0] = 0 # so that scatter doesn't drum up a fuss
+
         # Construct a 1-hot encoding of the true classes
         one_hot_t = conf_data.new_full(conf_data.size(), 0, requires_grad=False).view(-1, conf_data.size(-1))
         one_hot_t.scatter_(1, conf_t.view(-1, 1), 1)
