@@ -916,10 +916,8 @@ yrm35_fpn_config = yrm22_config.copy({
     'backbone': fixed_ssd_config.backbone.copy({
         # 0 is conv2
         'selected_layers': list(range(0, 4)),
-        
-        # These scales and aspect ratios are derived from the FPN paper
-        # https://arxiv.org/pdf/1612.03144.pdf
-        'pred_scales': [ [4] ] * 5, # 32 / 800 * 136 ...
+
+        'pred_scales': [ [4] ] * 5, # Sort of arbitrary
         'pred_aspect_ratios': [ [[1, 1/sqrt(2), sqrt(2)]] ]*5,
     }),
 
@@ -939,6 +937,17 @@ yrm35_fpn_config = yrm22_config.copy({
     # By their forces combined, they are... RoI Pooling!
     'mask_proto_normalize_emulate_roi_pooling': True,
     'mask_proto_crop': True,
+})
+
+yrm35_darknet_config = yrm35_fpn_config.copy({
+    'name': 'yrm35_darknet',
+
+    'backbone': darknet53_backbone.copy({
+        'selected_layers': list(range(1, 5)),
+        
+        'pred_scales': [ [4] ] * 5,
+        'pred_aspect_ratios': [ [[1, 1/sqrt(2), sqrt(2)]] ]*5,
+    }),
 })
 
 yrm36_base_config = yrm35_fpn_config.copy({
