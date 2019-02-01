@@ -963,6 +963,34 @@ yrm36_base_config = yrm35_fpn_config.copy({
     'focal_loss_gamma': 2,
 })
 
+yrm36_retina_config = yrm36_base_config.copy({
+    'name': 'yrm36_retina',
+
+    'backbone': yrm36_base_config.backbone.copy({
+        'selected_layers': list(range(1, 4)),
+
+        'use_pixel_scales': True,
+        'pred_scales': [[32], [64], [128], [256], [512]],
+    }),
+
+    'fpn': fpn_base.copy({
+        'num_downsample': 2,
+        'use_conv_downsample': True
+    }),
+
+    'mask_proto_src': 0, # I made it different in FPN for whatever reason (note that this is not 1)
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 3 + [(None, -2, {}), (256, 3, {'padding': 1})] + [(128, 1, {})],
+
+    'positive_iou_threshold': 0.5,
+    'negative_iou_threshold': 0.4,
+})
+
+yrm36_deep_config = yrm36_retina_config.copy({
+    'name': 'yrm36_deep',
+    
+    'extra_layers': (3, 3, 3),
+})
+
 yrm25_config = yrm22_config.copy({
     'name': 'yrm25',
     'mask_proto_reweight_mask_loss': True,
