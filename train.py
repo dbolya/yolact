@@ -197,11 +197,6 @@ def train():
     avg_window = 100
     loss_m_avg, loss_l_avg, loss_c_avg = (MovingAverage(avg_window), MovingAverage(avg_window), MovingAverage(avg_window))
 
-    # Wait until the specified iteration to turn on prediction matching, if the setting is on in the first place
-    use_prediction_matching = cfg.use_prediction_matching
-    if cfg.use_prediction_matching:
-        cfg.use_prediction_matching = False
-
     print('Begin training!')
     print()
     # try-except so you can use ctrl+c to save early and stop training
@@ -221,14 +216,21 @@ def train():
                 if iteration == cfg.max_iter:
                     break
 
+                # Change a config setting if we've reached the specified iteration
+                changed = False
+                for change in cfg.delayed_settings:
+                    if iteration >= change[0]:
+                        changed = True
+                        cfg.replace(change[1])
+                
+                # If a config setting was changed, remove it from the list so we don't keep checking
+                if changed:
+                    cfg.delayed_settings = [x for x in cfg.delayed_settings if x[0] > iteration]
+
                 # Adjust the learning rate at the given iterations, but also if we resume from past that iteration
                 while step_index < len(cfg.lr_steps) and iteration >= cfg.lr_steps[step_index]:
                     step_index += 1
                     adjust_learning_rate(optimizer, args.gamma, step_index)
-
-                # Nothing to see here--just the implementation of a setting we'll never use
-                if use_prediction_matching and iteration > cfg.prediction_matching_delay:
-                    cfg.use_prediction_matching = True
 
                 # Load training data
                 # Note, for training on multiple gpus this will use the custom replicate and gather I wrote up there

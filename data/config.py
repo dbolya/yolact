@@ -349,8 +349,10 @@ coco_base_config = Config({
     # for this IoU computation, the matching function will use the predicted bbox coordinates.
     # Don't turn this on if you're not using yolo regressors!
     'use_prediction_matching': False,
-    # The number of iterations to wait before starting prediction matching.
-    'prediction_matching_delay': 100,
+
+    # A list of settings to apply after the specified iteration. Each element of the list should look like
+    # (iteration, config_dict) where config_dict is a dictionary you'd pass into a config object's init.
+    'delayed_settings': [],
 
     'backbone': None,
     'name': 'base_config',
