@@ -286,6 +286,12 @@ class FPN(nn.Module):
             for _ in in_channels
         ])
 
+        if cfg.fpn.use_conv_downsample:
+            self.downsample_layers = nn.ModuleList([
+                nn.Conv2d(cfg.fpn.num_features, cfg.fpn.num_features, kernel_size=3, padding=1, stride=2)
+                for _ in range(cfg.fpn.num_downsample)
+            ])
+
     def forward(self, convouts):
         """
         Args:
@@ -310,11 +316,15 @@ class FPN(nn.Module):
             out[j] = F.relu(self.pred_layers[i](x))
 
         # In the original paper, this takes care of P6
-        for _ in range(cfg.fpn.num_downsample):
-            # I decied against putting the stride in the conv layers because the prediction module conv layers
-            # are shared, so it would be hard to add stride to them. I should probably have shared the weights
-            # and not the conv layers themselves, but eh, it was easier that way. I doubt this is that slow either.
-            out.append(out[-1][:, :, ::2, ::2]) # A stride 2 view on out[-1] along both height and width
+        for idx in range(cfg.fpn.num_downsample):
+            if cfg.fpn.use_conv_downsample:
+                # Thanks Retinanet, very cool.
+                out.append(self.downsample_layers[idx](out[-1]))
+            else:
+                # I decided against putting the stride in the conv layers because the prediction module conv layers
+                # are shared, so it would be hard to add stride to them. I should probably have shared the weights
+                # and not the conv layers themselves, but eh, it was easier that way. I doubt this is that slow either.
+                out.append(out[-1][:, :, ::2, ::2]) # A stride 2 view on out[-1] along both height and width
 
         return out
 
