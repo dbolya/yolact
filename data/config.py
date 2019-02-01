@@ -304,6 +304,11 @@ coco_base_config = Config({
     # use negatives that are most confidently not background.
     'ohem_use_most_confident': False,
 
+    # Use focal loss as described in https://arxiv.org/pdf/1708.02002.pdf instead of OHEM
+    'use_focal_loss': False,
+    'focal_loss_alpha': 0.25,
+    'focal_loss_gamma': 2,
+
     # Uses the same network format as mask_proto_net, except this time it's for adding extra head layers before the final
     # prediction in prediction modules. If this is none, no extra layers will be added.
     'extra_head_net': None,
@@ -1369,7 +1374,7 @@ yrm22_fcis_config = yrm22_config.copy({
 
 
 # Default config
-cfg = yrm22_fcis_config.copy()
+cfg = yrm36_base_config.copy()
 
 def set_cfg(config_name:str):
     """ Sets the active config. Works even if cfg is already imported! """

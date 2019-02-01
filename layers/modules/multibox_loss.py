@@ -172,6 +172,22 @@ class MultiBoxLoss(nn.Module):
                     elif cfg.mask_proto_loss == 'disj':
                         loss_p = -torch.mean(torch.max(F.log_softmax(proto_data, dim=-1), dim=-1)[0])
 
+        # Confidence loss
+        loss_c = 0
+        if cfg.use_focal_loss:
+            loss_c = self.focal_conf_loss(conf_data, conf_t)
+        else:
+            loss_c = self.ohem_conf_loss(conf_data, conf_t, pos, num)
+
+        # Divide all losses by the number of positives.
+        # Don't do it for loss_p because that doesn't depend on the anchors.
+        N = num_pos.data.sum().float()
+        loss_l /= N
+        loss_c /= N
+        loss_m /= N
+        return loss_l, loss_c, loss_m + loss_p
+
+    def ohem_conf_loss(self, conf_data, conf_t, pos, num):
         # Compute max conf across batch for hard negative mining
         batch_conf = conf_data.view(-1, self.num_classes)
         if cfg.ohem_use_most_confident:
@@ -202,15 +218,34 @@ class MultiBoxLoss(nn.Module):
         conf_p = conf_data[(pos_idx+neg_idx).gt(0)].view(-1, self.num_classes)
         targets_weighted = conf_t[(pos+neg).gt(0)]
         loss_c = F.cross_entropy(conf_p, targets_weighted, reduction='sum')
+        
+        return loss_c
 
-        # Divide all losses by the number of positives.
-        # Don't do it for loss_p because that doesn't depend on the anchors.
-        N = num_pos.data.sum().float()
-        loss_l /= N
-        loss_c /= N
-        loss_m /= N
-        return loss_l, loss_c, loss_m + loss_p
+    def focal_conf_loss(self, conf_data, conf_t, loss_alpha=0.05):
+        """
+        Focal loss as described in https://arxiv.org/pdf/1708.02002.pdf
+        Adapted from https://github.com/pytorch/pytorch/blob/master/modules/detectron/sigmoid_focal_loss_op.cu
+        """
 
+        # Ignore neutral samples
+        keep = (conf_t >= 0).float()
+        
+        # Construct a 1-hot encoding of the true classes
+        one_hot_t = conf_data.new_full(conf_data.size(), 0, requires_grad=False).view(-1, conf_data.size(-1))
+        one_hot_t.scatter_(1, conf_t.view(-1, 1), 1)
+        one_hot_t = one_hot_t.view(conf_data.size())
+
+        # Note this uses sigmoid, but we use softmax at test time. Could be a problem? idk
+        pred = torch.sigmoid(conf_data)
+
+        term1 = torch.pow(1 - pred, cfg.focal_loss_gamma) * torch.log(pred + 0.00001)
+        term2 = torch.pow(pred, cfg.focal_loss_gamma) * (-1 * conf_data * (conf_data >= 0).float() -
+                                                         torch.log(1 + torch.exp(conf_data - 2 * conf_data * (conf_data >= 0).float())))
+
+        loss1 = (-one_hot_t * term1 * cfg.focal_loss_alpha)
+        loss2 = (-(1-one_hot_t) * term2 * (1 - cfg.focal_loss_alpha))
+
+        return loss_alpha * (keep * (loss1 + loss2).sum(-1)).sum()
 
     def direct_mask_loss(self, pos_idx, idx_t, loc_data, mask_data, priors, masks):
         """ Crops the gt masks using the predicted bboxes, scales them down, and outputs the BCE loss. """
