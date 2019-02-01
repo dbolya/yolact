@@ -954,7 +954,7 @@ yrm36_base_config = yrm35_fpn_config.copy({
     'name': 'yrm36_base',
 
     # This delay is in place instead of the modified initialization in the original paper
-    'delayed_settings': [(150, { 'use_focal_loss': True })],
+    'delayed_settings': [(10000, { 'use_focal_loss': True })],
 
     # This is because I keep running out of memory
     'mask_proto_net': [(256, 3, {'padding': 1})] * 3 + [(100, 1, {})],
