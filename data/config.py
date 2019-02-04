@@ -989,6 +989,12 @@ yrm36_retina_config = yrm36_base_config.copy({
     'negative_iou_threshold': 0.4,
 })
 
+yrm35_retina_config = yrm36_retina_config.copy({
+    'name': 'yrm35_retina',
+
+    'use_focal_loss': False,
+})
+
 yrm36_deep_config = yrm36_retina_config.copy({
     'name': 'yrm36_deep',
     
