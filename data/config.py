@@ -308,6 +308,9 @@ coco_base_config = Config({
     'use_focal_loss': False,
     'focal_loss_alpha': 0.25,
     'focal_loss_gamma': 2,
+    
+    # The initial bias toward forground objects, as specified in the focal loss paper
+    'focal_loss_init_pi': 0.01,
 
     # Uses the same network format as mask_proto_net, except this time it's for adding extra head layers before the final
     # prediction in prediction modules. If this is none, no extra layers will be added.
@@ -953,14 +956,15 @@ yrm35_darknet_config = yrm35_fpn_config.copy({
 yrm36_base_config = yrm35_fpn_config.copy({
     'name': 'yrm36_base',
 
-    # This delay is in place instead of the modified initialization in the original paper
-    'delayed_settings': [(10000, { 'use_focal_loss': True })],
+    'use_focal_loss': True,
 
     # This is because I keep running out of memory
     'mask_proto_net': [(256, 3, {'padding': 1})] * 3 + [(100, 1, {})],
 
     'focal_loss_alpha': 0.25,
     'focal_loss_gamma': 2,
+
+    'focal_loss_init_pi': 0.01,
 })
 
 yrm36_retina_config = yrm36_base_config.copy({

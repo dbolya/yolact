@@ -221,7 +221,7 @@ class MultiBoxLoss(nn.Module):
         
         return loss_c
 
-    def focal_conf_loss(self, conf_data, conf_t, loss_alpha=0.05):
+    def focal_conf_loss(self, conf_data, conf_t, loss_alpha=0.01):
         """
         Focal loss as described in https://arxiv.org/pdf/1708.02002.pdf
         Adapted from https://github.com/pytorch/pytorch/blob/master/modules/detectron/sigmoid_focal_loss_op.cu

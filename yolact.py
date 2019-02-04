@@ -435,11 +435,22 @@ class Yolact(nn.Module):
         self.backbone.init_backbone(backbone_path)
 
         # Initialize the rest of the conv layers with xavier
-        for module in self.modules():
+        for name, module in self.named_modules():
             if isinstance(module, nn.Conv2d) and module not in self.backbone.backbone_modules:
                 nn.init.xavier_uniform_(module.weight.data)
+                
                 if module.bias is not None:
-                    module.bias.data.zero_()
+                    if cfg.use_focal_loss and 'conf_layer' in name:
+                        # Initialize the last layer as in the focal loss paper
+                        pi = cfg.focal_loss_init_pi
+                        phi = 1 - cfg.focal_loss_init_pi
+
+                        # Background should get confidence 1-pi
+                        module.bias.data[0]  = -np.log((1 - phi) / phi)
+                        # Foreground should get confidence pi
+                        module.bias.data[1:] = -np.log((1 -  pi) /  pi) 
+                    else:
+                        module.bias.data.zero_()
 
     def train(self, mode=True):
         super().train(mode)
