@@ -967,6 +967,9 @@ yrm36_base_config = yrm35_fpn_config.copy({
     'name': 'yrm36_base',
 
     'use_focal_loss': True,
+    
+    'conf_alpha': 0.01, # Start out with a low initial alpha
+    'delayed_settings': [(300, { 'conf_alpha': 1 })], # Spike it up after a couple iterations
 
     # This is because I keep running out of memory
     'mask_proto_net': [(256, 3, {'padding': 1})] * 3 + [(100, 1, {})],
@@ -974,7 +977,7 @@ yrm36_base_config = yrm35_fpn_config.copy({
     'focal_loss_alpha': 0.25,
     'focal_loss_gamma': 2,
 
-    'focal_loss_init_pi': 0.01,
+    'focal_loss_init_pi': 0.1,
 })
 
 yrm36_retina_config = yrm36_base_config.copy({
