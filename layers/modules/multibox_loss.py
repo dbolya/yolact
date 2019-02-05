@@ -38,17 +38,6 @@ class MultiBoxLoss(nn.Module):
         self.pos_threshold = pos_threshold
         self.neg_threshold = neg_threshold
         self.negpos_ratio = negpos_ratio
-        
-        # Extra loss coefficients to get all the losses to be in a similar range
-        self.mask_alpha = 0.4 / 256 * 140 * 140 # We'll divide this by mask_h and mask_w later
-        self.bbox_alpha = 5 if cfg.use_yolo_regressors else 1
-
-        if cfg.mask_proto_normalize_mask_loss_by_sqrt_area:
-            self.mask_alpha *= 30
-        if cfg.mask_proto_reweight_mask_loss:
-            self.mask_alpha /= 4
-        if cfg.mask_proto_crop and cfg.mask_proto_normalize_emulate_roi_pooling:
-            self.mask_alpha *= 0.2
 
         # If you output a proto mask with this area, your l1 loss will be l1_alpha
         # Note that the area is relative (so 1 would be the entire image)
@@ -148,7 +137,7 @@ class MultiBoxLoss(nn.Module):
         if cfg.train_boxes:
             loc_p = loc_data[pos_idx].view(-1, 4)
             loc_t = loc_t[pos_idx].view(-1, 4)
-            loss_l = F.smooth_l1_loss(loc_p, loc_t, reduction='sum') * self.bbox_alpha
+            loss_l = F.smooth_l1_loss(loc_p, loc_t, reduction='sum') * cfg.bbox_alpha
 
         loss_m = 0 # Mask Loss
         loss_p = 0 # Prototype Loss
@@ -160,7 +149,7 @@ class MultiBoxLoss(nn.Module):
                         pos_masks.append(masks[idx][idx_t[idx, pos[idx]]])
                     masks_t = torch.cat(pos_masks, 0)
                     masks_p = mask_data[pos, :].view(-1, cfg.mask_dim)
-                    loss_m = F.binary_cross_entropy(masks_p, masks_t, reduction='sum') * self.mask_alpha
+                    loss_m = F.binary_cross_entropy(masks_p, masks_t, reduction='sum') * cfg.mask_alpha
                 else:
                     loss_m = self.direct_mask_loss(pos_idx, idx_t, loc_data, mask_data, priors, masks)
             elif cfg.mask_type == mask_type.lincomb:
@@ -219,9 +208,9 @@ class MultiBoxLoss(nn.Module):
         targets_weighted = conf_t[(pos+neg).gt(0)]
         loss_c = F.cross_entropy(conf_p, targets_weighted, reduction='sum')
         
-        return loss_c
+        return cfg.conf_alpha * loss_c
 
-    def focal_conf_loss(self, conf_data, conf_t, loss_alpha=0.01):
+    def focal_conf_loss(self, conf_data, conf_t):
         """
         Focal loss as described in https://arxiv.org/pdf/1708.02002.pdf
         Adapted from https://github.com/pytorch/pytorch/blob/master/modules/detectron/sigmoid_focal_loss_op.cu
@@ -246,7 +235,7 @@ class MultiBoxLoss(nn.Module):
         loss1 = (-one_hot_t * term1 * cfg.focal_loss_alpha)
         loss2 = (-(1-one_hot_t) * term2 * (1 - cfg.focal_loss_alpha))
 
-        return loss_alpha * (keep * (loss1 + loss2).sum(-1)).sum()
+        return cfg.conf_alpha * (keep * (loss1 + loss2).sum(-1)).sum()
 
     def direct_mask_loss(self, pos_idx, idx_t, loc_data, mask_data, priors, masks):
         """ Crops the gt masks using the predicted bboxes, scales them down, and outputs the BCE loss. """
@@ -287,7 +276,7 @@ class MultiBoxLoss(nn.Module):
                 mask_t = torch.cat(scaled_masks, 0).gt(0.5).float() # Threshold downsampled mask
             
             pos_mask_data = mask_data[idx, cur_pos_idx_squeezed, :]
-            loss_m += F.binary_cross_entropy(pos_mask_data, mask_t, reduction='sum') * self.mask_alpha
+            loss_m += F.binary_cross_entropy(pos_mask_data, mask_t, reduction='sum') * cfg.mask_alpha
 
         return loss_m
     
@@ -424,4 +413,4 @@ class MultiBoxLoss(nn.Module):
 
             loss_m += torch.sum(pre_loss)
 
-        return loss_m * self.mask_alpha / mask_h / mask_w + loss_c
+        return loss_m * cfg.mask_alpha / mask_h / mask_w + loss_c

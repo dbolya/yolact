@@ -264,6 +264,11 @@ coco_base_config = Config({
     'gamma': 0.1,
     'lr_steps': (280000, 360000, 400000),
 
+    # The terms to scale the respective loss by
+    'conf_alpha': 1,
+    'bbox_alpha': 2,
+    'mask_alpha': 0.4 / 256 * 140 * 140, # Some funky equation. Don't worry about it.
+
     # See mask_type for details.
     'mask_type': mask_type.direct,
     'mask_size': 16,
@@ -617,10 +622,12 @@ yrm15_config = yolact_resnet101_maskrcnn_1_config.copy({
 yrm16_config = yolact_resnet101_maskrcnn_1_config.copy({
     'name': 'yrm16',
     'mask_proto_normalize_mask_loss_by_sqrt_area': True,
+    'mask_alpha': yolact_resnet101_maskrcnn_1_config.mask_alpha * 30,
 })
 yrm16_2_config = yolact_resnet101_maskrcnn_1_config.copy({
     'name': 'yrm16_2',
     'mask_proto_normalize_mask_loss_by_sqrt_area': True,
+    'mask_alpha': yolact_resnet101_maskrcnn_1_config.mask_alpha * 30,
 })
 yrm17_config = yrm13_config.copy({
     'name': 'yrm17',
@@ -788,6 +795,7 @@ yrm22_darknet_config = yrm22_newreg_config.copy({
 yrm16_3_config = yrm21_config.copy({
     'name': 'yrm16_3',
     'mask_proto_normalize_mask_loss_by_sqrt_area': True,
+    'mask_alpha': yrm21_config.mask_alpha * 30,
 })
 
 yrm23_config = yrm21_config.copy({
@@ -897,6 +905,7 @@ yrm22_test_twogpu_config = yrm22_freezebn_config.copy({
 yrm35_config = yrm22_config.copy({
     'name': 'yrm35',
     'mask_proto_normalize_emulate_roi_pooling': True,
+    'mask_alpha': yrm22_config.mask_alpha * 0.2,
     'crowd_iou_threshold': 0.7,
 })
 
@@ -940,6 +949,7 @@ yrm35_fpn_config = yrm22_config.copy({
     # By their forces combined, they are... RoI Pooling!
     'mask_proto_normalize_emulate_roi_pooling': True,
     'mask_proto_crop': True,
+    'mask_alpha': yrm22_config.mask_alpha * 0.2,
 })
 
 yrm35_darknet_config = yrm35_fpn_config.copy({
@@ -1004,12 +1014,14 @@ yrm36_deep_config = yrm36_retina_config.copy({
 yrm25_config = yrm22_config.copy({
     'name': 'yrm25',
     'mask_proto_reweight_mask_loss': True,
+    'mask_alpha': yrm22_config.mask_alpha / 4,
 })
 
 # Continue training config 25 with or without the reweighting
 yrm25_a_config = yrm22_config.copy({
     'name': 'yrm25_a',
     'mask_proto_reweight_mask_loss': True,
+    'mask_alpha': yrm22_config.mask_alpha / 4,
     # Start at lr = 1e-4 instead of 1e-3
     'lr_steps': (0, 280000, 360000, 400000),
 })
@@ -1017,6 +1029,7 @@ yrm25_a_config = yrm22_config.copy({
 yrm25_b_config = yrm22_config.copy({
     'name': 'yrm25_b',
     'mask_proto_reweight_mask_loss': False,
+    'mask_alpha': coco_base_config.mask_alpha,
     # Start at lr = 1e-4 instead of 1e-3
     'lr_steps': (0, 280000, 360000, 500000, 650000),
     'max_iter': 800000,
