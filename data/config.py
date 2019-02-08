@@ -1006,6 +1006,10 @@ yrm35_retina_config = yrm36_retina_config.copy({
     'name': 'yrm35_retina',
 
     'use_focal_loss': False,
+    
+    # For training longer as a test. I'll remove this later since this isn't the actual way to train it.
+    'max_iter': 800000,
+    'lr_steps': (400000, 400000+280000, 400000+360000, 400000+400000),
 })
 
 yrm36_deep_config = yrm36_retina_config.copy({
