@@ -411,7 +411,7 @@ class Yolact(nn.Module):
         
         # Stuff for jit
         # No JIT for Protonet or pass2 because it's fast enough already (actually slows down using JIT)
-        self.backbone_jit = JITModule(self.backbone)
+        self.backbone_jit = None
 
     def save_weights(self, path):
         """ Saves the model's weights using compression because the file sizes were getting too big. """
@@ -469,6 +469,11 @@ class Yolact(nn.Module):
 
     def forward(self, x):
         """ The input should be of size [batch_size, 3, img_h, img_w] """
+        # Initialize this here or DataParellel will murder me in my sleep
+        # which, admittedly, I could use some of right now.
+        if self.backbone_jit == None:
+            self.backbone_jit = JITModule(self.backbone)
+        
         with timer.env('pass1'):
             outs = self.backbone_jit(x)
 
