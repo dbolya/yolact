@@ -62,7 +62,7 @@ parser.add_argument('--validation_size', default=5000, type=int,
                     help='The number of images to use for validation.')
 parser.add_argument('--validation_epoch', default=2, type=int,
                     help='Output validation information every n iterations. If -1, do no validation.')
-parser.add_argument('--no_jit', dest='crop', action='store_true',
+parser.add_argument('--no_jit', dest='no_jit', action='store_true',
                     help='Don\'t use Pytorch 1.0 tracing functionality.')
 
 parser.set_defaults(no_jit=False)
