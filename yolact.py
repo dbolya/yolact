@@ -478,7 +478,7 @@ class Yolact(nn.Module):
             self.backbone_jit = JITModule(self.backbone)
         
         with timer.env('pass1'):
-            outs = self.backbone(x) if cfg.no_jit else self.backbone_jit(x)
+            outs = self.backbone_jit(x)
 
         if cfg.fpn is not None:
             with timer.env('fpn'):
