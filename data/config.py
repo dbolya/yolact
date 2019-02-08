@@ -1020,8 +1020,8 @@ yrm35_bigimg_config = yrm36_retina_config.copy({
     'use_focal_loss': False,
     'conf_alpha': coco_base_config.conf_alpha,
 
-    'max_size': 900,
-    'min_size': 900,
+    'max_size': 800,
+    'min_size': 800,
 
     'freeze_bn': True,
 })
