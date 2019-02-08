@@ -62,10 +62,16 @@ parser.add_argument('--validation_size', default=5000, type=int,
                     help='The number of images to use for validation.')
 parser.add_argument('--validation_epoch', default=2, type=int,
                     help='Output validation information every n iterations. If -1, do no validation.')
+parser.add_argument('--no_jit', dest='crop', action='store_true',
+                    help='Don\'t use Pytorch 1.0 tracing functionality.')
+
+parser.set_defaults(no_jit=False)
 args = parser.parse_args()
 
 if args.config is not None:
     set_cfg(args.config)
+
+cfg.no_jit = args.no_jit
 
 # Update training parameters from the config if necessary
 def replace(name):

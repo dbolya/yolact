@@ -73,6 +73,9 @@ class JITModule(nn.Module):
         self.net = [net]
     
     def forward(self, x):
+        if cfg.no_jit:
+            return self.net[0](x)
+
         if x.size() != self.last_size or self.training != self.last_training:
             self.last_size = x.size()
             self.last_training = self.training
