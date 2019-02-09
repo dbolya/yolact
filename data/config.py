@@ -386,6 +386,9 @@ coco_base_config = Config({
     # (iteration, config_dict) where config_dict is a dictionary you'd pass into a config object's init.
     'delayed_settings': [],
 
+    # Use command-line arguments to set this.
+    'no_jit': False,
+
     'backbone': None,
     'name': 'base_config',
 })
