@@ -8,7 +8,7 @@ from utils.functions import sanitize_coordinates, SavePath
 from layers.output_utils import postprocess, undo_image_transformation
 import pycocotools
 
-from data import cfg, set_cfg
+from data import cfg, set_cfg, set_dataset
 
 import numpy as np
 import torch
@@ -97,6 +97,8 @@ def parse_args(argv=None):
                         help='A path to an image to use for display.')
     parser.add_argument('--score_threshold', default=0, type=float ,
                         help='Detections with a score under this threshold will not be considered. This currently only works in display mode.')
+    parser.add_argument('--dataset', default=None, type=str,
+                        help='If specified, override the dataset specified in the config with this one (example: coco2017_dataset).')
 
     parser.set_defaults(no_bar=False, display=False, resume=False, output_coco_json=False, output_web_json=False, shuffle=False,
                         benchmark=False, no_sort=False, no_hash=False, mask_proto_debug=False, crop=True)
@@ -681,6 +683,8 @@ if __name__ == '__main__':
         print('Config not specified. Parsed %s from the file name.\n' % args.config)
         set_cfg(args.config)
 
+    if args.dataset is not None:
+        set_dataset(args.dataset)
 
     with torch.no_grad():
         if not os.path.exists('results'):

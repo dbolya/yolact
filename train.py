@@ -64,6 +64,8 @@ parser.add_argument('--validation_epoch', default=2, type=int,
                     help='Output validation information every n iterations. If -1, do no validation.')
 parser.add_argument('--no_jit', dest='no_jit', action='store_true',
                     help='Don\'t use Pytorch 1.0 tracing functionality.')
+parser.add_argument('--dataset', default=None, type=str,
+                    help='If specified, override the dataset specified in the config with this one (example: coco2017_dataset).')
 
 parser.set_defaults(no_jit=False)
 args = parser.parse_args()
@@ -72,6 +74,9 @@ if args.config is not None:
     set_cfg(args.config)
 
 cfg.no_jit = args.no_jit
+
+if args.dataset is not None:
+    set_dataset(args.dataset)
 
 # Update training parameters from the config if necessary
 def replace(name):

@@ -1491,4 +1491,7 @@ def set_cfg(config_name:str):
     # be used like ssd300_config.copy({'max_size': 400}) for extreme fine-tuning
     cfg.replace(eval(config_name))
 
+def set_dataset(dataset_name:str):
+    """ Sets the dataset of the current config. """
+    cfg.dataset = eval(dataset_name)
     
