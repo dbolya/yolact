@@ -1,4 +1,4 @@
-from data import COCO_ROOT, COCODetection, MEANS, COLORS, COCO_CLASSES
+from data import COCODetection, MEANS, COLORS, COCO_CLASSES
 from yolact import Yolact
 from utils.augmentations import BaseTransform, Resize
 from utils.functions import MovingAverage, ProgressBar
@@ -45,8 +45,6 @@ def parse_args(argv=None):
                         help='Further restrict the number of predictions to parse')
     parser.add_argument('--cuda', default=True, type=str2bool,
                         help='Use cuda to evaulate model')
-    parser.add_argument('--coco_root', default=COCO_ROOT,
-                        help='Location of VOC root directory')
     parser.add_argument('--cross_class_nms', default=True, type=str2bool,
                         help='Whether to use cross-class nms (faster) or do nms per class')
     parser.add_argument('--fast_nms', default=False, type=str2bool,
@@ -704,7 +702,7 @@ if __name__ == '__main__':
             exit()
 
         if args.image is None:
-            dataset = COCODetection(args.coco_root, cfg.dataset.valid, BaseTransform())
+            dataset = COCODetection(cfg.dataset.valid_images, cfg.dataset.valid_info, transform=BaseTransform())
             prep_coco_cats(dataset.coco.cats)
         else:
             dataset = None        

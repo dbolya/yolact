@@ -55,16 +55,36 @@ class Config(object):
 
 
 # Datasets
-coco2014_dataset = Config({
-    'name': 'COCO 2014',
-    'train': 'train2014',
-    'valid': 'val2014'
+dataset_base = Config({
+    'name': 'Base Dataset',
+
+    'train_images': './data/coco/images/',
+    'train_info':   'path_to_annotation_file',
+
+    'valid_images': './data/coco/images/',
+    'valid_info':   'path_to_annotation_file',
+
+    'has_gt': True,
 })
 
-coco2017_dataset = Config({
+coco2014_dataset = dataset_base.copy({
+    'name': 'COCO 2014',
+    
+    'train_info': './data/coco/annotations/instances_train2014.json',
+    'valid_info': './data/coco/annotations/instances_val2014.json',
+})
+
+coco2017_dataset = dataset_base.copy({
     'name': 'COCO 2017',
-    'train': 'train2017', # Trainval35k
-    'valid': 'val2017'    # Minibatch5k
+    
+    'train_info': './data/coco/annotations/instances_train2017.json',
+    'valid_info': './data/coco/annotations/instances_val2017.json',
+})
+
+coco2017_testdev_dataset = dataset_base.copy({
+    'name': 'COCO 2017 Test-Dev',
+
+    'valid_info': './data/coco/annotations/image_info_test-dev2017.json',
 })
 
 # Backbones

@@ -28,8 +28,6 @@ def str2bool(v):
 
 parser = argparse.ArgumentParser(
     description='Yolact Training Script')
-parser.add_argument('--dataset_root', default=COCO_ROOT,
-                    help='Dataset root directory path')
 parser.add_argument('--batch_size', default=32, type=int,
                     help='Batch size for training')
 parser.add_argument('--resume', default=None, type=str,
@@ -131,15 +129,15 @@ def train():
     if not os.path.exists(args.save_folder):
         os.mkdir(args.save_folder)
 
-    dataset = COCODetection(root=args.dataset_root,
-                            image_set=cfg.dataset.train,
+    dataset = COCODetection(image_path=cfg.dataset.train_images,
+                            info_file=cfg.dataset.train_info,
                             transform=SSDAugmentation(MEANS))
     
     if args.validation_epoch > 0:
         setup_eval()
-        val_dataset = COCODetection(root=args.dataset_root,
-                                image_set=cfg.dataset.valid,
-                                transform=BaseTransform(MEANS))
+        val_dataset = COCODetection(image_path=cfg.dataset.valid_images,
+                                    info_file=cfg.dataset.valid_info,
+                                    transform=BaseTransform(MEANS))
 
     if args.visdom:
         import visdom
