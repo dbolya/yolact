@@ -1047,6 +1047,21 @@ yrm35_moredata_config = yrm35_retina_config.copy({
     'dataset': coco2017_dataset,
 })
 
+yrm35_moredownsample_config = yrm35_moredata_config.copy({
+    'name': 'yrm35_moredownsample',
+
+    'backbone': yrm35_moredata_config.backbone.copy({
+        'pred_aspect_ratios': [ [[1, 1/sqrt(2), sqrt(2)]] ]*8,
+        'pred_scales': [[3.5], [3.5], [3.6], [3.3], [2.7], [2.1], [1.8], [1]],
+
+        'use_pixel_scales': False,
+    }),
+
+    'fpn': yrm35_moredata_config.fpn.copy({
+        'num_downsample': 5,
+    }),
+})
+
 yrm36_deep_config = yrm36_retina_config.copy({
     'name': 'yrm36_deep',
     
