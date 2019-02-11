@@ -1030,18 +1030,10 @@ yrm35_retina_config = yrm36_retina_config.copy({
 
     'use_focal_loss': False,
     'conf_alpha': coco_base_config.conf_alpha,
-    
-    # For training longer as a test. I'll remove this later since this isn't the actual way to train it.
-    'max_iter': 800000,
-    'lr_steps': (400000, 400000+280000, 400000+360000, 400000+400000),
 })
 
-# TODO: Make this depend on the config above after deleting the max_iter stuff
-yrm35_bigimg_config = yrm36_retina_config.copy({
+yrm35_bigimg_config = yrm35_retina_config.copy({
     'name': 'yrm35_bigimg',
-
-    'use_focal_loss': False,
-    'conf_alpha': coco_base_config.conf_alpha,
 
     'max_size': 800,
     'min_size': 800,
@@ -1049,12 +1041,8 @@ yrm35_bigimg_config = yrm36_retina_config.copy({
     'freeze_bn': True,
 })
 
-# TODO: Same as above
-yrm35_moredata_config = yrm36_retina_config.copy({
+yrm35_moredata_config = yrm35_retina_config.copy({
     'name': 'yrm35_moredata',
-
-    'use_focal_loss': False,
-    'conf_alpha': coco_base_config.conf_alpha,
 
     'dataset': coco2017_dataset,
 })
