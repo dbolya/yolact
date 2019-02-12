@@ -48,7 +48,7 @@ Because the acronym YOLACT doesn't fit our method anymore, the current name for 
    * Note that you can press ctrl+c while training and it will save an `*_interrupt.pth` file at the current iteration.
    * All weights are saved in the `./weights` directory by default with the file name `<config>_<epoch>_<iter>.pth`.
 ```Shell
-# Trains using the default config (whatever it is at the moment) and with batch size 32 (not advisable!)
+# Trains using the default config (whatever it is at the moment) and with batch size 8 (the default).
 python3 train.py
 
 # Trains yrm10_config with a batch_size of 5 (suprise). For the 550px models, 1 batch takes up around 1.8 gigs of VRAM, so specify accordingly.
