@@ -234,6 +234,11 @@ mask_type = Config({
     #                                 to the prototypes from the network head.
     #   - mask_proto_remove_empty_masks (bool): Remove masks that are downsampled to 0 during loss calculations.
     #   - mask_proto_reweight_coeff (float): The coefficient to multiple the forground pixels with if reweighting.
+    #   - mask_proto_coeff_diversity_loss (bool): Apply coefficient diversity loss on the coefficients so that the same
+    #                                             instance has similar coefficients.
+    #   - mask_proto_normalize_emulate_roi_pooling (bool): Normalize the mask loss to emulate roi pooling's affect on loss.
+    #   - mask_proto_double_loss (bool): Whether to use the old loss in addition to any special new losses.
+    #   - mask_proto_double_loss_alpha (float): The alpha to weight the above loss.
     'lincomb': 1,
 })
 
@@ -314,6 +319,8 @@ coco_base_config = Config({
     'mask_proto_reweight_coeff': 1,
     'mask_proto_coeff_diversity_loss': False,
     'mask_proto_normalize_emulate_roi_pooling': False,
+    'mask_proto_double_loss': False,
+    'mask_proto_double_loss_alpha': 1,
 
     # If using batchnorm anywhere inthe backbone, freeze the batchnorm layer during training.
     # Note: any additional batch norm layers after the backbone will not be froze.
@@ -1060,6 +1067,13 @@ yrm35_moredownsample_config = yrm35_moredata_config.copy({
     'fpn': yrm35_moredata_config.fpn.copy({
         'num_downsample': 5,
     }),
+})
+
+yrm35_doubleloss_config = yrm35_moredata_config.copy({
+    'name': 'yrm35_doubleloss',
+
+    'mask_proto_double_loss': True,
+    'mask_proto_double_loss_alpha': 2,
 })
 
 yrm36_deep_config = yrm36_retina_config.copy({

@@ -375,6 +375,14 @@ class MultiBoxLoss(nn.Module):
             pred_masks = proto_masks @ proto_coef.t()
             pred_masks = cfg.mask_proto_mask_activation(pred_masks)
 
+            if cfg.mask_proto_double_loss:
+                if cfg.mask_proto_mask_activation == activation_func.sigmoid:
+                    pre_loss = F.binary_cross_entropy(pred_masks, mask_t, reduction='sum')
+                else:
+                    pre_loss = F.smooth_l1_loss(pred_masks, mask_t, reduction='sum')
+                
+                loss_m += cfg.mask_proto_double_loss_alpha * pre_loss
+
             if cfg.mask_proto_crop:
                 # Shortening the variable name here
                 expnd = cfg.mask_proto_crop_expand
