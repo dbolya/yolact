@@ -12,6 +12,8 @@ class Detect(object):
     scores and threshold to a top_k number of output predictions for both
     confidence score and locations, as the predicted masks.
     """
+    # TODO: Refactor this whole class away. It needs to go.
+
     def __init__(self, num_classes, bkg_label, top_k, conf_thresh, nms_thresh):
         self.num_classes = num_classes
         self.background_label = bkg_label

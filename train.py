@@ -231,6 +231,11 @@ def train():
                     if iteration >= change[0]:
                         changed = True
                         cfg.replace(change[1])
+
+                        # Reset the loss averages because things might have changed
+                        loss_c_avg.reset()
+                        loss_l_avg.reset()
+                        loss_m_avg.reset()
                 
                 # If a config setting was changed, remove it from the list so we don't keep checking
                 if changed:

@@ -28,6 +28,11 @@ class MovingAverage():
         """ Same as add just more pythonic. """
         self.add(elem)
 
+    def reset(self):
+        """ Resets the MovingAverage to its initial state. """
+        self.window = []
+        self.sum = 0
+
     def get_avg(self):
         """ Returns the average of the elements in the window. """
         return self.sum / max(len(self.window), 1)
