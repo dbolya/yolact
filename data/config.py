@@ -993,27 +993,10 @@ yrm35_darknet_config = yrm35_fpn_config.copy({
     }),
 })
 
-yrm36_base_config = yrm35_fpn_config.copy({
-    'name': 'yrm36_base',
+yrm35_retina_config = yrm35_fpn_config.copy({
+    'name': 'yrm35_retina',
 
-    'use_focal_loss': True,
-    
-    'conf_alpha': 0.01, # Start out with a low initial alpha
-    'delayed_settings': [(300, { 'conf_alpha': 1 })], # Spike it up after a couple iterations
-
-    # This is because I keep running out of memory
-    'mask_proto_net': [(256, 3, {'padding': 1})] * 3 + [(100, 1, {})],
-
-    'focal_loss_alpha': 0.25,
-    'focal_loss_gamma': 2,
-
-    'focal_loss_init_pi': 0.1,
-})
-
-yrm36_retina_config = yrm36_base_config.copy({
-    'name': 'yrm36_retina',
-
-    'backbone': yrm36_base_config.backbone.copy({
+    'backbone': yrm35_fpn_config.backbone.copy({
         'selected_layers': list(range(1, 4)),
 
         'use_pixel_scales': True,
@@ -1030,13 +1013,6 @@ yrm36_retina_config = yrm36_base_config.copy({
 
     'positive_iou_threshold': 0.5,
     'negative_iou_threshold': 0.4,
-})
-
-yrm35_retina_config = yrm36_retina_config.copy({
-    'name': 'yrm35_retina',
-
-    'use_focal_loss': False,
-    'conf_alpha': coco_base_config.conf_alpha,
 })
 
 yrm35_bigimg_config = yrm35_retina_config.copy({
@@ -1076,10 +1052,17 @@ yrm35_doubleloss_config = yrm35_moredata_config.copy({
     'mask_proto_double_loss_alpha': 2,
 })
 
-yrm36_deep_config = yrm36_retina_config.copy({
-    'name': 'yrm36_deep',
-    
-    'extra_layers': (3, 3, 3),
+yrm36_base_config = yrm35_moredata_config.copy({
+    'name': 'yrm36_base',
+
+    'use_focal_loss': True,
+
+    'focal_loss_alpha': 0.25,
+    'focal_loss_gamma': 2,
+    'focal_loss_init_pi': 0.01,
+
+    'conf_alpha': 0.05,
+    'delayed_settings': [(200, {'conf_alpha': 100})],
 })
 
 yrm25_config = yrm22_config.copy({

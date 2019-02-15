@@ -213,29 +213,37 @@ class MultiBoxLoss(nn.Module):
     def focal_conf_loss(self, conf_data, conf_t):
         """
         Focal loss as described in https://arxiv.org/pdf/1708.02002.pdf
-        Adapted from https://github.com/pytorch/pytorch/blob/master/modules/detectron/sigmoid_focal_loss_op.cu
+        Adapted from https://github.com/clcarwin/focal_loss_pytorch/blob/master/focalloss.py
+        Note that this uses softmax and not the original sigmoid from the paper.
         """
+        num_classes = conf_data.size(-1)
 
-        # Ignore neutral samples
+        conf_t = conf_t.view(-1) # [batch_size*num_priors]
+        conf_data = conf_data.view(-1, num_classes) # [batch_size*num_priors, num_classes]
+
+        # Ignore neutral samples (class < 0)
         keep = (conf_t >= 0).float()
-        conf_t[conf_t < 0] = 0 # so that scatter doesn't drum up a fuss
+        conf_t[conf_t < 0] = 0 # so that gather doesn't drum up a fuss
 
-        # Construct a 1-hot encoding of the true classes
-        one_hot_t = conf_data.new_full(conf_data.size(), 0, requires_grad=False).view(-1, conf_data.size(-1))
-        one_hot_t.scatter_(1, conf_t.view(-1, 1), 1)
-        one_hot_t = one_hot_t.view(conf_data.size())
+        logpt = F.log_softmax(conf_data, dim=-1)
+        logpt = logpt.gather(1, conf_t.unsqueeze(-1))
+        logpt = logpt.view(-1)
+        pt    = logpt.exp()
 
-        # Note this uses sigmoid, but we use softmax at test time. Could be a problem? idk
-        pred = torch.sigmoid(conf_data)
+        # Weight the background class (conf_t = 0) with a higher loss than the foreground classes.
+        # The original paper used multiclass prediction, so they used sigmoid with each class predicting
+        # foreground or background for that particular class. There, they weight +1 or prediting foreground
+        # for that class with alpha and -1 or predicting background for that class with 1 - alpha. Here,
+        # we only predict a single class per instance so we use softmax, meaning one class gets chosen no
+        # matter what. Thus there's one background class (0) and c foreground classes (>0). So weight the
+        # only background class with 1 - alpha and all the foreground classes with alpha / c (everything sums to 1).
+        background = (conf_t == 0).float()
+        at = (1 - cfg.focal_loss_alpha) * background + cfg.focal_loss_alpha * (1 - background) / (num_classes - 1)
 
-        term1 = torch.pow(1 - pred, cfg.focal_loss_gamma) * torch.log(pred + 0.00001)
-        term2 = torch.pow(pred, cfg.focal_loss_gamma) * (-1 * conf_data * (conf_data >= 0).float() -
-                                                         torch.log(1 + torch.exp(conf_data - 2 * conf_data * (conf_data >= 0).float())))
+        loss = -at * (1 - pt) ** cfg.focal_loss_gamma * logpt
 
-        loss1 = (-one_hot_t * term1 * cfg.focal_loss_alpha)
-        loss2 = (-(1-one_hot_t) * term2 * (1 - cfg.focal_loss_alpha))
-
-        return cfg.conf_alpha * (keep * (loss1 + loss2).sum(-1)).sum()
+        # See comment above for keep
+        return cfg.conf_alpha * (loss * keep).sum()
 
     def direct_mask_loss(self, pos_idx, idx_t, loc_data, mask_data, priors, masks):
         """ Crops the gt masks using the predicted bboxes, scales them down, and outputs the BCE loss. """
