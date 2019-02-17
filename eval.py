@@ -93,6 +93,8 @@ def parse_args(argv=None):
                         help='Do not crop output masks with the predicted bounding box.')
     parser.add_argument('--image', default=None, type=str,
                         help='A path to an image to use for display.')
+    parser.add_argument('--video', default=None, type=str,
+                        help='A path to a video to evaluate on.')
     parser.add_argument('--score_threshold', default=0, type=float ,
                         help='Detections with a score under this threshold will not be considered. This currently only works in display mode.')
     parser.add_argument('--dataset', default=None, type=str,
@@ -114,50 +116,62 @@ iou_thresholds = [x / 100 for x in range(50, 100, 5)]
 coco_cats = [] # Call prep_coco_cats to fill this
 coco_cats_inv = {}
 
-def prep_display(dets_out, img, gt, gt_masks, h, w):
-    img_numpy = undo_image_transformation(img, w, h)
+def prep_display(dets_out, img, gt, gt_masks, h, w, undo_transform=True):
+    """
+    Note: If undo_transform=False then im_h and im_w are allowed to be None.
+    gt and gt_masks are also allowed to be none (until I reimplement that functionality).
+    """
+    if undo_transform:
+        img_numpy = undo_image_transformation(img, w, h)
+    else:
+        img_numpy = img / 255.0
+        h, w, _ = img.shape
     
     with timer.env('Postprocess'):
         t = postprocess(dets_out, w, h, visualize_lincomb=args.display_lincomb, crop_masks=args.crop)
 
     with timer.env('Copy'):
-        classes, scores, boxes, masks = [x[:args.top_k].cpu().numpy() for x in t]
-        if classes.shape[0] == 0:
-            print('Warning: No detections found.')
-            return img_numpy
+        masks = t[3][:args.top_k] # We'll need this later
+        classes, scores, boxes = [x[:args.top_k].cpu().numpy() for x in t[:3]]
+    
+    if classes.shape[0] == 0:
+        print('Warning: No detections found.')
+        return img_numpy
 
+    img_gpu = torch.Tensor(img_numpy).cuda()
+
+    # Draw masks first on the gpu
+    if args.display_masks:
+        for j in reversed(range(min(args.top_k, classes.shape[0]))):
+            if scores[j] >= args.score_threshold:
+                color = COLORS[j % len(COLORS)]
+
+                mask = masks[j, :, :, None]
+                mask_color = mask @ (torch.Tensor(color[:3]).view(1, 3) / 255.0)
+                mask_alpha = 0.35
+
+                # Alpha only the region of the image that contains the mask
+                img_gpu = img_gpu * (1 - mask) \
+                        + img_gpu * mask * (1-mask_alpha) + mask_color * mask_alpha
+        
+    # Then draw the stuff that needs to be done on the cpu
+    img_numpy = img_gpu.cpu().numpy()
     for j in reversed(range(min(args.top_k, classes.shape[0]))):
-        x1, y1, x2, y2 = boxes[j, :]
-        text_pt = (x1, y2 - 5)
-        color = COLORS[j % len(COLORS)]
-        _class = COCO_CLASSES[classes[j]]
         score = scores[j]
 
-        if score < args.score_threshold:
-            continue
-        
-        if args.display_bboxes:
-            cv2.rectangle(img_numpy, (x1, y1), (x2, y2), color, 2)
+        if scores[j] >= args.score_threshold:
+            x1, y1, x2, y2 = boxes[j, :]
+            text_pt = (x1, y2 - 5)
+            color = COLORS[j % len(COLORS)]
+            _class = COCO_CLASSES[classes[j]]
 
-        if args.display_masks:
-            mask = np.tile(masks[j].reshape(h, w, 1), (1, 1, 3)).astype(np.float32)
-            color_np = np.array(color[:3], dtype=np.float32).reshape(1, 1, 3) / 255.0
-            color_np = np.tile(color_np, (h, w, 1))
-            mask_color = mask * color_np
+            if args.display_bboxes:
+                cv2.rectangle(img_numpy, (x1, y1), (x2, y2), color, 2)
 
-            mask_alpha = 0.35
-
-            # Blend image and mask
-            image_crop = img_numpy * mask
-            img_numpy *= (1-mask)
-            img_numpy += image_crop * (1-mask_alpha) + mask_color * mask_alpha
-        
-        text_str = '%s (%.2f)' % (_class, score) if args.display_scores else _class
-        cv2.putText(img_numpy, text_str, text_pt, cv2.FONT_HERSHEY_PLAIN, 1.5, color, 2, cv2.LINE_AA)
+            text_str = '%s (%.2f)' % (_class, score) if args.display_scores else _class
+            cv2.putText(img_numpy, text_str, text_pt, cv2.FONT_HERSHEY_PLAIN, 1.5, color, 2, cv2.LINE_AA)
     
-    timer.print_stats()
-
-    return img_numpy
+    return np.clip(img_numpy, 0, 1)
 
 def prep_benchmark(dets_out, h, w):
     with timer.env('Postprocess'):
@@ -483,7 +497,7 @@ def badhash(x):
     x = ((x >> 16) ^ x) & 0xFFFFFFFF
     return x
 
-def evalimage(path:str):
+def evalimage(net:Yolact, path:str):
     img = np.array(Image.open(path).convert('RGB')).transpose(1, 0, 2)[:, :, (2,1,0)]
     w, h, _ = img.shape
     img = torch.Tensor(BaseTransform()(img)[0]).cuda()
@@ -497,9 +511,75 @@ def evalimage(path:str):
     preds = net(batch)
     img_numpy = prep_display(preds, img, None, None, h, w)
     
-    plt.imshow(np.clip(img_numpy, 0, 1))
+    plt.imshow(img_numpy)
     plt.title(path)
     plt.show()
+
+from multiprocessing.pool import ThreadPool
+    
+def evalvideo(net:Yolact, path:str):
+    vid = cv2.VideoCapture(path)
+    transform = BaseTransform()
+    frame_times = MovingAverage()
+    fps = 0
+
+    def get_next_frame(vid):
+        _, frame = vid.read()
+        return frame
+
+    def transform_frame(frame, transform):
+        img = torch.Tensor(transform(frame)[0]).cuda()
+        img = img.permute(2, 0, 1).contiguous()
+        return img
+
+    def eval_network(img):
+        return net(img.unsqueeze(0))
+
+    def prep_frame(preds, img):
+        return prep_display(preds, img, None, None, None, None, undo_transform=False)
+
+    # Jump-start the staggered frame process
+    image0 = get_next_frame(vid)
+    input1 = eval_network(transform_frame(image0, transform))
+    image1 = get_next_frame(vid)
+    input2 = transform_frame(image1, transform)
+    input3 = get_next_frame(vid)
+
+    pool = ThreadPool(processes=4)
+
+    print()
+    while vid.isOpened():
+        timer.reset()
+
+        with timer.env('Everything'):
+            t3 = pool.apply_async(get_next_frame, args=(vid,))
+            t2 = pool.apply_async(transform_frame, args=(input3, transform))
+            t1 = pool.apply_async(eval_network, args=(input2,))
+            t0 = pool.apply_async(prep_frame, args=(input1, image0))
+            
+            cv2.imshow(path, t0.get())
+            if cv2.waitKey(1) == 27: # Press Escape to close
+                break
+
+            image0 = image1
+            image1 = input3
+            input1 = t1.get()
+            input2 = t2.get()
+            input3 = t3.get()
+        
+        # Ignore the second frame (pytorch still initializing)
+        if fps == 0:
+            fps = 1
+        else:
+            frame_times.add(timer.total_time())
+            fps = 1 / frame_times.get_avg()
+
+            print('\rAvg FPS: %.2f' % fps, end='')
+    print()
+    
+    pool.terminate()
+    vid.release()
+    cv2.destroyAllWindows()
 
 
 def evaluate(net:Yolact, dataset, train_mode=False):
@@ -508,7 +588,10 @@ def evaluate(net:Yolact, dataset, train_mode=False):
     cfg.mask_proto_debug = args.mask_proto_debug
 
     if args.image is not None:
-        evalimage(args.image)
+        evalimage(net, args.image)
+        return
+    elif args.video is not None:
+        evalvideo(net, args.video)
         return
 
     frame_times = MovingAverage()
@@ -583,7 +666,7 @@ def evaluate(net:Yolact, dataset, train_mode=False):
             if args.display:
                 if it > 1:
                     print('Avg FPS: %.4f' % (1 / frame_times.get_avg()))
-                plt.imshow(np.clip(img_numpy, 0, 1))
+                plt.imshow(img_numpy)
                 plt.title(str(dataset.ids[image_idx]))
                 plt.show()
             elif not args.no_bar:
@@ -701,7 +784,7 @@ if __name__ == '__main__':
             calc_map(ap_data)
             exit()
 
-        if args.image is None:
+        if args.image is None and args.video is None:
             dataset = COCODetection(cfg.dataset.valid_images, cfg.dataset.valid_info, transform=BaseTransform())
             prep_coco_cats(dataset.coco.cats)
         else:
