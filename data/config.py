@@ -1030,6 +1030,26 @@ yrm35_moredata_config = yrm35_retina_config.copy({
     'dataset': coco2017_dataset,
 })
 
+yrm35_resnet50_config = yrm35_moredata_config.copy({
+    'name': 'yrm35_resnet50',
+
+    'backbone': resnet50_backbone.copy({
+        'selected_layers': list(range(1, 4)),
+
+        'use_pixel_scales': True,
+        'pred_scales': [[32], [64], [128], [256], [512]],
+        'pred_aspect_ratios': [ [[1, 1/sqrt(2), sqrt(2)]] ]*5,
+    }),
+})
+
+yrm35_resnet50_SIN_config = yrm35_resnet50_config.copy({
+    'name': 'yrm35_resnet50_SIN',
+
+    'backbone': yrm35_resnet50_config.backbone.copy({
+        'path': 'resnet50_SIN_IN_reduced_fc.pth',
+    })
+})
+
 yrm35_moredownsample_config = yrm35_moredata_config.copy({
     'name': 'yrm35_moredownsample',
 
