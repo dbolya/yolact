@@ -116,7 +116,7 @@ iou_thresholds = [x / 100 for x in range(50, 100, 5)]
 coco_cats = [] # Call prep_coco_cats to fill this
 coco_cats_inv = {}
 
-def prep_display(dets_out, img, gt, gt_masks, h, w, undo_transform=True):
+def prep_display(dets_out, img, gt, gt_masks, h, w, undo_transform=True, class_color=False):
     """
     Note: If undo_transform=False then im_h and im_w are allowed to be None.
     gt and gt_masks are also allowed to be none (until I reimplement that functionality).
@@ -140,11 +140,13 @@ def prep_display(dets_out, img, gt, gt_masks, h, w, undo_transform=True):
 
     img_gpu = torch.Tensor(img_numpy).cuda()
 
+    get_color = lambda j: COLORS[(classes[j] if class_color else j) % len(COLORS)]
+
     # Draw masks first on the gpu
     if args.display_masks:
         for j in reversed(range(min(args.top_k, classes.shape[0]))):
             if scores[j] >= args.score_threshold:
-                color = COLORS[j % len(COLORS)]
+                color = get_color(j)
 
                 mask = masks[j, :, :, None]
                 mask_color = mask @ (torch.Tensor(color[:3]).view(1, 3) / 255.0)
@@ -162,7 +164,7 @@ def prep_display(dets_out, img, gt, gt_masks, h, w, undo_transform=True):
         if scores[j] >= args.score_threshold:
             x1, y1, x2, y2 = boxes[j, :]
             text_pt = (x1, y2 - 5)
-            color = COLORS[j % len(COLORS)]
+            color = get_color(j)
             _class = COCO_CLASSES[classes[j]]
 
             if args.display_bboxes:
@@ -528,15 +530,18 @@ def evalvideo(net:Yolact, path:str):
         return frame
 
     def transform_frame(frame, transform):
-        img = torch.Tensor(transform(frame)[0]).cuda()
-        img = img.permute(2, 0, 1).contiguous()
-        return img
+        with torch.no_grad():
+            img = torch.Tensor(transform(frame)[0]).cuda()
+            img = img.permute(2, 0, 1).contiguous()
+            return img
 
     def eval_network(img):
-        return net(img.unsqueeze(0))
+        with torch.no_grad():
+            return net(img.unsqueeze(0))
 
     def prep_frame(preds, img):
-        return prep_display(preds, img, None, None, None, None, undo_transform=False)
+        with torch.no_grad():
+            return prep_display(preds, img, None, None, None, None, undo_transform=False, class_color=True)
 
     # Jump-start the staggered frame process
     image0 = get_next_frame(vid)
