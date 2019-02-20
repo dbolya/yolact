@@ -53,6 +53,8 @@ def parse_args(argv=None):
                         help='Whether or not to display masks over bounding boxes')
     parser.add_argument('--display_bboxes', default=True, type=str2bool,
                         help='Whether or not to display bboxes around masks')
+    parser.add_argument('--display_text', default=True, type=str2bool,
+                        help='Whether or not to display text (class [score])')
     parser.add_argument('--display_scores', default=False, type=str2bool,
                         help='Whether or not to display scores in addition to classes')
     parser.add_argument('--display', dest='display', action='store_true',
@@ -158,20 +160,23 @@ def prep_display(dets_out, img, gt, gt_masks, h, w, undo_transform=True, class_c
         
     # Then draw the stuff that needs to be done on the cpu
     img_numpy = img_gpu.cpu().numpy()
-    for j in reversed(range(min(args.top_k, classes.shape[0]))):
-        score = scores[j]
+    
+    if args.display_text or args.display_bboxes:
+        for j in reversed(range(min(args.top_k, classes.shape[0]))):
+            score = scores[j]
 
-        if scores[j] >= args.score_threshold:
-            x1, y1, x2, y2 = boxes[j, :]
-            text_pt = (x1, y2 - 5)
-            color = get_color(j)
-            _class = COCO_CLASSES[classes[j]]
+            if scores[j] >= args.score_threshold:
+                x1, y1, x2, y2 = boxes[j, :]
+                text_pt = (x1, y2 - 5)
+                color = get_color(j)
+                _class = COCO_CLASSES[classes[j]]
 
-            if args.display_bboxes:
-                cv2.rectangle(img_numpy, (x1, y1), (x2, y2), color, 2)
+                if args.display_bboxes:
+                    cv2.rectangle(img_numpy, (x1, y1), (x2, y2), color, 2)
 
-            text_str = '%s (%.2f)' % (_class, score) if args.display_scores else _class
-            cv2.putText(img_numpy, text_str, text_pt, cv2.FONT_HERSHEY_PLAIN, 1.5, color, 2, cv2.LINE_AA)
+                if args.display_text:
+                    text_str = '%s (%.2f)' % (_class, score) if args.display_scores else _class
+                    cv2.putText(img_numpy, text_str, text_pt, cv2.FONT_HERSHEY_PLAIN, 1.5, color, 2, cv2.LINE_AA)
     
     return np.clip(img_numpy, 0, 1)
 
