@@ -228,15 +228,12 @@ class MultiBoxLoss(nn.Module):
         logpt = logpt.view(-1)
         pt    = logpt.exp()
 
-        # Weight the background class (conf_t = 0) with a higher loss than the foreground classes.
-        # The original paper used multiclass prediction, so they used sigmoid with each class predicting
-        # foreground or background for that particular class. There, they weight +1 or prediting foreground
-        # for that class with alpha and -1 or predicting background for that class with 1 - alpha. Here,
-        # we only predict a single class per instance so we use softmax, meaning one class gets chosen no
-        # matter what. Thus there's one background class (0) and c foreground classes (>0). So weight the
-        # only background class with 1 - alpha and all the foreground classes with alpha / c (everything sums to 1).
+        # I adapted the alpha_t calculation here from
+        # https://github.com/pytorch/pytorch/blob/master/modules/detectron/softmax_focal_loss_op.cu
+        # You'd think you want all the alphas to sum to one, but in the original implementation they
+        # just give background an alpha of 1-alpha and each forground an alpha of alpha.
         background = (conf_t == 0).float()
-        at = (1 - cfg.focal_loss_alpha) * background + cfg.focal_loss_alpha * (1 - background) / (num_classes - 1)
+        at = (1 - cfg.focal_loss_alpha) * background + cfg.focal_loss_alpha * (1 - background)
 
         loss = -at * (1 - pt) ** cfg.focal_loss_gamma * logpt
 
