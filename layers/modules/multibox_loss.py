@@ -216,10 +216,8 @@ class MultiBoxLoss(nn.Module):
         Adapted from https://github.com/clcarwin/focal_loss_pytorch/blob/master/focalloss.py
         Note that this uses softmax and not the original sigmoid from the paper.
         """
-        num_classes = conf_data.size(-1)
-
         conf_t = conf_t.view(-1) # [batch_size*num_priors]
-        conf_data = conf_data.view(-1, num_classes) # [batch_size*num_priors, num_classes]
+        conf_data = conf_data.view(-1, conf_data.size(-1)) # [batch_size*num_priors, num_classes]
 
         # Ignore neutral samples (class < 0)
         keep = (conf_t >= 0).float()

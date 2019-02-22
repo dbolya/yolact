@@ -1093,17 +1093,19 @@ yrm35_maskrcnnparams_config = yrm35_moredata_config.copy({
     'lr_warmup_until': 500,
 })
 
-yrm36_base_config = yrm35_moredata_config.copy({
-    'name': 'yrm36_base',
+yrm36_softmax_config = yrm35_moredata_config.copy({
+    'name': 'yrm36_softmax',
 
     'use_focal_loss': True,
 
     'focal_loss_alpha': 0.25,
     'focal_loss_gamma': 2,
-    'focal_loss_init_pi': 0.01,
+    'focal_loss_init_pi': 0.001,
 
-    'conf_alpha': 0.05,
-    'delayed_settings': [(200, {'conf_alpha': 100})],
+    'conf_alpha': 1,
+    
+    'lr_warmup_init': yrm35_moredata_config.lr / 100,
+    'lr_warmup_until': 500,
 })
 
 yrm25_config = yrm22_config.copy({
@@ -1542,7 +1544,7 @@ yrm22_fcis_config = yrm22_config.copy({
 
 
 # Default config
-cfg = yrm36_base_config.copy()
+cfg = yrm36_softmax_config.copy()
 
 def set_cfg(config_name:str):
     """ Sets the active config. Works even if cfg is already imported! """
