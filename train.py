@@ -190,8 +190,9 @@ def train():
     
     save_path = lambda epoch, iteration: SavePath(cfg.name, epoch, iteration).get_path(root=args.save_folder)
     time_avg = MovingAverage()
-    avg_window = 100
-    loss_m_avg, loss_l_avg, loss_c_avg = (MovingAverage(avg_window), MovingAverage(avg_window), MovingAverage(avg_window))
+
+    loss_types = ['B', 'C', 'M']
+    loss_avgs  = [MovingAverage(100) for _ in loss_types]
 
     print('Begin training!')
     print()
@@ -220,9 +221,8 @@ def train():
                         cfg.replace(change[1])
 
                         # Reset the loss averages because things might have changed
-                        loss_c_avg.reset()
-                        loss_l_avg.reset()
-                        loss_m_avg.reset()
+                        for avg in loss_avgs:
+                            avg.reset()
                 
                 # If a config setting was changed, remove it from the list so we don't keep checking
                 if changed:
@@ -246,17 +246,16 @@ def train():
                 wrapper = ScatterWrapper(targets, masks, num_crowds)
                 losses = criterion(out, wrapper, wrapper.make_mask())
                 
-                loss_l, loss_c, loss_m = [x.mean() for x in losses] # Mean here because Dataparallel
-                loss = loss_l + loss_c + loss_m
+                losses = [x.mean() for x in losses] # Mean here because Dataparallel
+                loss = sum(losses)
                 
                 # Backprop
                 loss.backward() # Do this to free up vram even if loss is not finite
                 if torch.isfinite(loss).item():
                     optimizer.step()
                 
-                loss_c_avg.add(loss_c.item())
-                loss_l_avg.add(loss_l.item())
-                loss_m_avg.add(loss_m.item())
+                for avg, loss in zip(loss_avgs, losses):
+                    avg.add(loss.item())
 
                 cur_time  = time.time()
                 elapsed   = cur_time - last_time
@@ -268,12 +267,10 @@ def train():
 
                 if iteration % 10 == 0:
                     eta_str = datetime.timedelta(seconds=(cfg.max_iter-iteration) * time_avg.get_avg())
-                    l = loss_l_avg.get_avg()
-                    c = loss_c_avg.get_avg()
-                    m = loss_m_avg.get_avg()
-                    t = l + c + m
-                    print('[%3d] %7d || B: %.3f | C: %.3f | M: %.3f | T: %.3f || ETA: %s || timer: %.3f'
-                            % (epoch, iteration, l,c,m,t, eta_str, elapsed), flush=True)
+                    t = sum([x.get_avg() for x in loss_avgs])
+                    loss_labels = sum([[loss_types[i], loss_avgs[i].get_avg()] for i in range(len(loss_avgs))], [])
+                    print(('[%3d] %7d ||' + (' %s: %.3f |' * len(loss_avgs)) + ' T: %.3f || ETA: %s || timer: %.3f')
+                            % tuple([epoch, iteration] + loss_labels + [t, eta_str, elapsed]), flush=True)
                 
                 iteration += 1
 

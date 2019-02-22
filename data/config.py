@@ -322,8 +322,8 @@ coco_base_config = Config({
     'mask_proto_double_loss': False,
     'mask_proto_double_loss_alpha': 1,
 
-    # If using batchnorm anywhere inthe backbone, freeze the batchnorm layer during training.
-    # Note: any additional batch norm layers after the backbone will not be froze.
+    # If using batchnorm anywhere in the backbone, freeze the batchnorm layer during training.
+    # Note: any additional batch norm layers after the backbone will not be frozen.
     'freeze_bn': False,
 
     # Set this to a config object if you want an FPN (inherit from fpn_base). See fpn_base for details.
