@@ -1097,6 +1097,12 @@ yrm35_maskrcnnparams_config = yrm35_moredata_config.copy({
     'lr_warmup_until': 500,
 })
 
+yrm35_splitpredheads_config = yrm35_moredata_config.copy({
+    'name': 'yrm35_splitpredheads',
+
+    'share_prediction_module': False,
+})
+
 yrm36_softmax_config = yrm35_moredata_config.copy({
     'name': 'yrm36_softmax',
 
