@@ -551,9 +551,9 @@ class Yolact(nn.Module):
         else:
             if cfg.use_objectness_score:
                 # See focal_loss_sigmoid in multibox_loss.py for details
-                objectness = torch.sigmoid(pred_outs['conf'][:, 0])
-                pred_outs['conf'][:, 1:] = objectness * F.softmax(pred_outs['conf'][:, 1:], -1)
-                pred_outs['conf'][:, 0 ] = 1 - objectness
+                objectness = torch.sigmoid(pred_outs['conf'][:, :, 0])
+                pred_outs['conf'][:, :, 1:] = objectness[:, :, None] * F.softmax(pred_outs['conf'][:, :, 1:], -1)
+                pred_outs['conf'][:, :, 0 ] = 1 - objectness
             else:
                 pred_outs['conf'] = F.softmax(pred_outs['conf'], -1)
 
