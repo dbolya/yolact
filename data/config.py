@@ -1078,6 +1078,21 @@ yrm35_doubleloss_config = yrm35_moredata_config.copy({
     'mask_proto_double_loss_alpha': 2,
 })
 
+yrm35_maskrcnnparams_config = yrm35_moredata_config.copy({
+    'name': 'yrm35_maskrcnnparams',
+
+    'lr': 0.003,
+    'momentum': 0.9,
+    'decay': 5e-4,
+
+    'gamma': 0.1,
+    'lr_steps': (120000, 160000),
+    'max_iter': 180000,
+
+    'lr_warmup_init': 0.001,
+    'lr_warmup_until': 500,
+})
+
 yrm36_base_config = yrm35_moredata_config.copy({
     'name': 'yrm36_base',
 
