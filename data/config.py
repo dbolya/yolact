@@ -350,6 +350,10 @@ coco_base_config = Config({
     # The initial bias toward forground objects, as specified in the focal loss paper
     'focal_loss_init_pi': 0.01,
 
+    # Use class[0] to be the objectness score and class[1:] to be the softmax predicted class.
+    # Note: at the moment this is only implemented if use_focal_loss is on.
+    'use_objectness_score': False,
+
     # Uses the same network format as mask_proto_net, except this time it's for adding extra head layers before the final
     # prediction in prediction modules. If this is none, no extra layers will be added.
     'extra_head_net': None,
@@ -1106,6 +1110,12 @@ yrm36_softmax_config = yrm35_moredata_config.copy({
     
     'lr_warmup_init': yrm35_moredata_config.lr / 100,
     'lr_warmup_until': 500,
+})
+
+yrm36_sigmoid_config = yrm36_softmax_config.copy({
+    'name': 'yrm36_sigmoid',
+
+    'use_objectness_score': True,
 })
 
 yrm25_config = yrm22_config.copy({

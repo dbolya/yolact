@@ -481,7 +481,7 @@ class Yolact(nn.Module):
         if self.backbone_jit == None:
             self.backbone_jit = JITModule(self.backbone)
         
-        with timer.env('pass1'):
+        with timer.env('backbone'):
             outs = self.backbone(x) if cfg.no_jit else self.backbone_jit(x)
 
         if cfg.fpn is not None:
@@ -517,7 +517,7 @@ class Yolact(nn.Module):
                     proto_out = torch.cat([proto_out, torch.ones(*bias_shape)], -1)
 
 
-        with timer.env('pass2'):
+        with timer.env('pred_heads'):
             pred_outs = { 'loc': [], 'conf': [], 'mask': [], 'priors': [] }
 
             if cfg.use_instance_coeff:
@@ -549,7 +549,14 @@ class Yolact(nn.Module):
         if self.training:
             return pred_outs
         else:
-            pred_outs['conf'] = F.softmax(pred_outs['conf'], -1)
+            if cfg.use_objectness_score:
+                # See focal_loss_sigmoid in multibox_loss.py for details
+                objectness = torch.sigmoid(pred_outs['conf'][:, 0])
+                pred_outs['conf'][:, 1:] = objectness * F.softmax(pred_outs['conf'][:, 1:], -1)
+                pred_outs['conf'][:, 0 ] = 1 - objectness
+            else:
+                pred_outs['conf'] = F.softmax(pred_outs['conf'], -1)
+
             return self.detect(pred_outs)
 
 

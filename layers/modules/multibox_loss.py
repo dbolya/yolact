@@ -164,7 +164,10 @@ class MultiBoxLoss(nn.Module):
         # Confidence loss
         loss_c = 0
         if cfg.use_focal_loss:
-            loss_c = self.focal_conf_loss(conf_data, conf_t)
+            if cfg.use_objectness_score:
+                loss_c = self.focal_conf_sigmoid_loss(conf_data, conf_t)
+            else:
+                loss_c = self.focal_conf_loss(conf_data, conf_t)
         else:
             loss_c = self.ohem_conf_loss(conf_data, conf_t, pos, num)
 
@@ -239,6 +242,40 @@ class MultiBoxLoss(nn.Module):
 
         # See comment above for keep
         return cfg.conf_alpha * (loss * keep).sum()
+    
+    def focal_conf_sigmoid_loss(self, conf_data, conf_t):
+        """
+        Instead of using softmax, use class[0] to be the objectness score and do sigmoid focal loss on that.
+        Then for the rest of the classes, softmax them and apply CE for only the positive examples.
+
+        If class[0] = 1 implies forground and class[0] = 0 implies background then you achieve something
+        similar during test-time to softmax by setting class[1:] = softmax(class[1:]) * class[0] and invert class[0].
+        """
+
+        conf_t = conf_t.view(-1) # [batch_size*num_priors]
+        conf_data = conf_data.view(-1, conf_data.size(-1)) # [batch_size*num_priors, num_classes]
+
+        # Ignore neutral samples (class < 0)
+        keep = (conf_t >= 0).float()
+        conf_t[conf_t < 0] = 0 # so that gather doesn't drum up a fuss
+
+        background = (conf_t == 0).float()
+        at = (1 - cfg.focal_loss_alpha) * background + cfg.focal_loss_alpha * (1 - background)
+
+        logpt = F.logsigmoid(conf_data[:, 0]) * (1 - background) + F.logsigmoid(-conf_data[:, 0]) * background
+        pt    = logpt.exp()
+
+        obj_loss = -at * (1 - pt) ** cfg.focal_loss_gamma * logpt
+
+        # All that was the objectiveness loss--now time for the class confidence loss
+        pos_mask = conf_t > 0
+        conf_data_pos = (conf_data[:, 1:])[pos_mask] # Now this has just 80 classes
+        conf_t_pos    = conf_t[pos_mask] - 1         # So subtract 1 here
+
+        class_loss = F.cross_entropy(conf_data_pos, conf_t_pos, reduction='sum')
+
+        return cfg.conf_alpha * (class_loss + (obj_loss * keep).sum())
+
 
     def direct_mask_loss(self, pos_idx, idx_t, loc_data, mask_data, priors, masks):
         """ Crops the gt masks using the predicted bboxes, scales them down, and outputs the BCE loss. """
