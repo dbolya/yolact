@@ -48,8 +48,6 @@ parser.add_argument('--decay', '--weight_decay', default=None, type=float,
                     help='Weight decay for SGD. Leave as None to read this from the config.')
 parser.add_argument('--gamma', default=None, type=float,
                     help='For each lr step, what to multiply the lr by. Leave as None to read this from the config.')
-parser.add_argument('--visdom', default=False, type=str2bool,
-                    help='Use visdom for loss visualization')
 parser.add_argument('--save_folder', default='weights/',
                     help='Directory for saving checkpoint models')
 parser.add_argument('--config', default=None,
@@ -139,11 +137,6 @@ def train():
                                     info_file=cfg.dataset.valid_info,
                                     transform=BaseTransform(MEANS))
 
-    if args.visdom:
-        import visdom
-        global viz
-        viz = visdom.Visdom(port=8091)
-
     # Parallel wraps the underlying module, but when saving and loading we don't want that
     yolact_net = Yolact()
     net = yolact_net
@@ -188,12 +181,6 @@ def train():
     
     # Which learning rate adjustment step are we on? lr' = lr * gamma ^ step_index
     step_index = 0
-
-    if args.visdom:
-        vis_title = 'Training yolact with config %s' % cfg.name
-        vis_legend = ['Loc Loss', 'Conf Loss', 'Total Loss']
-        iter_plot = create_vis_plot('Iteration', 'Loss', vis_title, vis_legend)
-        epoch_plot = create_vis_plot('Epoch', 'Loss', vis_title, vis_legend)
 
     data_loader = data.DataLoader(dataset, args.batch_size,
                                   num_workers=args.num_workers,
@@ -287,10 +274,6 @@ def train():
                     t = l + c + m
                     print('[%3d] %7d || B: %.3f | C: %.3f | M: %.3f | T: %.3f || ETA: %s || timer: %.3f'
                             % (epoch, iteration, l,c,m,t, eta_str, elapsed), flush=True)
-                    
-
-                if args.visdom:
-                    update_vis_plot(iteration, loss_l_avg.get_avg(), loss_c_avg.get_avg(), iter_plot, epoch_plot, 'append')
                 
                 iteration += 1
 
@@ -302,9 +285,6 @@ def train():
             if args.validation_epoch > 0:
                 if epoch % args.validation_epoch == 0 and epoch > 0:
                     compute_validation_map(yolact_net, val_dataset)
-
-            if args.visdom:
-                    update_vis_plot(epoch, loss_l_avg.get_avg(), loss_c_avg.get_avg(), epoch_plot, None, 'append', epoch_size)
     except KeyboardInterrupt:
         print('Stopping early. Saving network...')
         
@@ -327,36 +307,6 @@ def adjust_learning_rate(optimizer, gamma, step):
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
 
-
-def create_vis_plot(_xlabel, _ylabel, _title, _legend):
-    return viz.line(
-        X=torch.zeros((1,)).cpu(),
-        Y=torch.zeros((1, 3)).cpu(),
-        opts=dict(
-            xlabel=_xlabel,
-            ylabel=_ylabel,
-            title=_title,
-            legend=_legend
-        )
-    )
-
-
-def update_vis_plot(iteration, loc, conf, window1, window2, update_type,
-                    epoch_size=1):
-    viz.line(
-        X=torch.ones((1, 3)).cpu() * iteration,
-        Y=torch.Tensor([loc, conf, loc + conf]).unsqueeze(0).cpu() / epoch_size,
-        win=window1,
-        update=update_type
-    )
-    # initialize epoch plot on first iteration
-    if iteration == 0:
-        viz.line(
-            X=torch.zeros((1, 3)).cpu(),
-            Y=torch.Tensor([loc, conf, loc + conf]).unsqueeze(0).cpu(),
-            win=window2,
-            update=True
-        )
 
 def prepare_data(datum):
     images, (targets, masks, num_crowds) = datum
