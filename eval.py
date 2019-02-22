@@ -97,6 +97,8 @@ def parse_args(argv=None):
                         help='A path to an image to use for display.')
     parser.add_argument('--video', default=None, type=str,
                         help='A path to a video to evaluate on.')
+    parser.add_argument('--video_multiframe', default=1, type=int,
+                        help='The number of frames to evaluate in parallel to make videos play at higher fps.')
     parser.add_argument('--score_threshold', default=0, type=float ,
                         help='Detections with a score under this threshold will not be considered. This currently only works in display mode.')
     parser.add_argument('--dataset', default=None, type=str,
@@ -529,62 +531,82 @@ def evalvideo(net:Yolact, path:str):
     transform = BaseTransform()
     frame_times = MovingAverage()
     fps = 0
+    frame_time_target = 1 / vid.get(cv2.CAP_PROP_FPS)
+
+    # Prime the network on the first frame because I do some thread unsafe things otherwise
+    net(torch.Tensor(transform(vid.read()[1])[0]).cuda().permute(2, 0, 1).contiguous().unsqueeze(0))
 
     def get_next_frame(vid):
-        _, frame = vid.read()
-        return frame
+        return [vid.read()[1] for _ in range(args.video_multiframe)]
 
-    def transform_frame(frame, transform):
+    def transform_frame(frame):
         with torch.no_grad():
+            if frame is None:
+                return None
+            
             img = torch.Tensor(transform(frame)[0]).cuda()
             img = img.permute(2, 0, 1).contiguous()
-            return img
+            return frame, img
 
-    def eval_network(img):
+    def eval_network(inp):
         with torch.no_grad():
-            return net(img.unsqueeze(0))
+            if inp is None:
+                return None
 
-    def prep_frame(preds, img):
+            frame, img = inp
+            return frame, net(img.unsqueeze(0))
+
+    def prep_frame(inp):
         with torch.no_grad():
-            return prep_display(preds, img, None, None, None, None, undo_transform=False, class_color=True)
+            if inp is None:
+                return None
+                
+            frame, preds = inp
+            return prep_display(preds, frame, None, None, None, None, undo_transform=False, class_color=True)
 
-    # Jump-start the staggered frame process
-    image0 = get_next_frame(vid)
-    input1 = eval_network(transform_frame(image0, transform))
-    image1 = get_next_frame(vid)
-    input2 = transform_frame(image1, transform)
-    input3 = get_next_frame(vid)
+    sequence = [prep_frame, eval_network, transform_frame]
+    pool = ThreadPool(processes=1 + args.video_multiframe * len(sequence))
 
-    pool = ThreadPool(processes=4)
+    active_frames = []
 
     print()
     while vid.isOpened():
+        showed_a_frame = False
         timer.reset()
 
         with timer.env('Everything'):
-            t3 = pool.apply_async(get_next_frame, args=(vid,))
-            t2 = pool.apply_async(transform_frame, args=(input3, transform))
-            t1 = pool.apply_async(eval_network, args=(input2,))
-            t0 = pool.apply_async(prep_frame, args=(input1, image0))
+            next_frames = pool.apply_async(get_next_frame, args=(vid,))
             
-            cv2.imshow(path, t0.get())
-            if cv2.waitKey(1) == 27: # Press Escape to close
-                break
+            for frame in active_frames:
+                frame['value'] = pool.apply_async(sequence[frame['idx']], args=(frame['value'],))
+            
+            for frame in active_frames[:args.video_multiframe]:
+                if frame['idx'] == 0:
+                    time.sleep(frame_time_target)
 
-            image0 = image1
-            image1 = input3
-            input1 = t1.get()
-            input2 = t2.get()
-            input3 = t3.get()
+                    cv2.imshow(path, frame['value'].get())
+                    if cv2.waitKey(1) == 27: # Press Escape to close
+                        break
+
+                    showed_a_frame = True
+
+            active_frames = [x for x in active_frames if x['idx'] > 0]
+            for frame in reversed(active_frames):
+                frame['value'] = frame['value'].get()
+                frame['idx'] -= 1
+            
+            next_frames = next_frames.get()
+            active_frames += [{'value': x, 'idx': len(sequence)-1} for x in next_frames]
         
         # Ignore the second frame (pytorch still initializing)
-        if fps == 0:
-            fps = 1
-        else:
-            frame_times.add(timer.total_time())
-            fps = 1 / frame_times.get_avg()
+        if showed_a_frame:
+            if fps == 0:
+                fps = 1
+            else:
+                frame_times.add(timer.total_time())
+                fps = args.video_multiframe / frame_times.get_avg()
 
-            print('\rAvg FPS: %.2f' % fps, end='')
+                print('\rAvg FPS: %.2f' % fps, end='')
     print()
     
     pool.terminate()
