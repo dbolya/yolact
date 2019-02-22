@@ -289,6 +289,12 @@ coco_base_config = Config({
     'gamma': 0.1,
     'lr_steps': (280000, 360000, 400000),
 
+    # Initial learning rate to linearly warmup from (if until > 0)
+    'lr_warmup_init': 1e-4,
+
+    # If > 0 then increase the lr linearly from warmup_init to lr each iter for until iters
+    'lr_warmup_until': 500,
+
     # The terms to scale the respective loss by
     'conf_alpha': 1,
     'bbox_alpha': 1.5,

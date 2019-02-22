@@ -228,10 +228,14 @@ def train():
                 if changed:
                     cfg.delayed_settings = [x for x in cfg.delayed_settings if x[0] > iteration]
 
+                # Warm up by linearly interpolating the learning rate from some smaller value
+                if cfg.lr_warmup_until > 0 and iteration <= cfg.lr_warmup_until:
+                    set_lr(optimizer, (args.lr - cfg.lr_warmup_init) * (iteration / cfg.lr_warmup_until) + cfg.lr_warmup_init)
+
                 # Adjust the learning rate at the given iterations, but also if we resume from past that iteration
                 while step_index < len(cfg.lr_steps) and iteration >= cfg.lr_steps[step_index]:
                     step_index += 1
-                    adjust_learning_rate(optimizer, args.gamma, step_index)
+                    set_lr(optimizer, args.lr * (args.gamma ** step_index))
 
                 # Load training data
                 # Note, for training on multiple gpus this will use the custom replicate and gather I wrote up there
@@ -294,15 +298,9 @@ def train():
     yolact_net.save_weights(save_path(epoch, iteration))
 
 
-def adjust_learning_rate(optimizer, gamma, step):
-    """Sets the learning rate to the initial LR decayed by 10 at every
-        specified step
-    # Adapted from PyTorch Imagenet example:
-    # https://github.com/pytorch/examples/blob/master/imagenet/main.py
-    """
-    lr = args.lr * (gamma ** (step))
+def set_lr(optimizer, new_lr):
     for param_group in optimizer.param_groups:
-        param_group['lr'] = lr
+        param_group['lr'] = new_lr
 
 
 def prepare_data(datum):
