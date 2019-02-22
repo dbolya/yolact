@@ -410,7 +410,7 @@ class Yolact(nn.Module):
             self.prediction_layers.append(pred)
 
         # For use in evaluation
-        self.detect = Detect(cfg.num_classes, bkg_label=0, top_k=200, conf_thresh=0.01, nms_thresh=0.45)
+        self.detect = Detect(cfg.num_classes, bkg_label=0, top_k=200, conf_thresh=0.05, nms_thresh=0.5)
         
         # Stuff for jit
         # No JIT for Protonet or pass2 because it's fast enough already (actually slows down using JIT)
