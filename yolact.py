@@ -444,18 +444,22 @@ class Yolact(nn.Module):
                 
                 if module.bias is not None:
                     if cfg.use_focal_loss and 'conf_layer' in name:
-                        # Initialize the last layer as in the focal loss paper.
-                        # Because we use softmax and not sigmoid, I had to derive an alternate expression
-                        # on a notecard. Define pi to be the probability of outputting a foreground detection.
-                        # Then let z = sum(exp(x)) - exp(x_0). Finally let c be the number of foreground classes.
-                        # Chugging through the math, this gives us
-                        #   x_0 = log(z * (1 - pi) / pi)    where 0 is the background class
-                        #   x_i = log(z / c)                for all i > 0
-                        # For simplicity (and because we have a degree of freedom here), set z = 1. Then we have
-                        #   x_0 =  log((1 - pi) / pi)       note: don't split up the log for numerical stability
-                        #   x_i = -log(c)                   for all i > 0
-                        module.bias.data[0]  = np.log((1 - cfg.focal_loss_init_pi) / cfg.focal_loss_init_pi)
-                        module.bias.data[1:] = -np.log(module.bias.size(0) - 1)
+                        if not cfg.use_sigmoid_focal_loss:
+                            # Initialize the last layer as in the focal loss paper.
+                            # Because we use softmax and not sigmoid, I had to derive an alternate expression
+                            # on a notecard. Define pi to be the probability of outputting a foreground detection.
+                            # Then let z = sum(exp(x)) - exp(x_0). Finally let c be the number of foreground classes.
+                            # Chugging through the math, this gives us
+                            #   x_0 = log(z * (1 - pi) / pi)    where 0 is the background class
+                            #   x_i = log(z / c)                for all i > 0
+                            # For simplicity (and because we have a degree of freedom here), set z = 1. Then we have
+                            #   x_0 =  log((1 - pi) / pi)       note: don't split up the log for numerical stability
+                            #   x_i = -log(c)                   for all i > 0
+                            module.bias.data[0]  = np.log((1 - cfg.focal_loss_init_pi) / cfg.focal_loss_init_pi)
+                            module.bias.data[1:] = -np.log(module.bias.size(0) - 1)
+                        else:
+                            module.bias.data[0]  = -np.log(cfg.focal_loss_init_pi / (1 - cfg.focal_loss_init_pi))
+                            module.bias.data[1:] = -np.log((1 - cfg.focal_loss_init_pi) / cfg.focal_loss_init_pi)
                     else:
                         module.bias.data.zero_()
 

@@ -350,6 +350,9 @@ coco_base_config = Config({
     # The initial bias toward forground objects, as specified in the focal loss paper
     'focal_loss_init_pi': 0.01,
 
+    # Whether to use sigmoid focal loss instead of softmax, all else being the same.
+    'use_sigmoid_focal_loss': False,
+
     # Use class[0] to be the objectness score and class[1:] to be the softmax predicted class.
     # Note: at the moment this is only implemented if use_focal_loss is on.
     'use_objectness_score': False,
@@ -1118,10 +1121,17 @@ yrm36_softmax_config = yrm35_moredata_config.copy({
     'lr_warmup_until': 500,
 })
 
+yrm36_objectness_config = yrm36_softmax_config.copy({
+    'name': 'yrm36_objectness',
+
+    'use_objectness_score': True,
+})
+
 yrm36_sigmoid_config = yrm36_softmax_config.copy({
     'name': 'yrm36_sigmoid',
 
-    'use_objectness_score': True,
+    'focal_loss_init_pi': 0.01,
+    'use_sigmoid_focal_loss': True,
 })
 
 yrm25_config = yrm22_config.copy({

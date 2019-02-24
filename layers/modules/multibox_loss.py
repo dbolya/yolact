@@ -164,8 +164,10 @@ class MultiBoxLoss(nn.Module):
         # Confidence loss
         loss_c = 0
         if cfg.use_focal_loss:
-            if cfg.use_objectness_score:
+            if cfg.use_sigmoid_focal_loss:
                 loss_c = self.focal_conf_sigmoid_loss(conf_data, conf_t)
+            elif cfg.use_objectness_score:
+                loss_c = self.focal_conf_objectness_loss(conf_data, conf_t)
             else:
                 loss_c = self.focal_conf_loss(conf_data, conf_t)
         else:
@@ -244,6 +246,35 @@ class MultiBoxLoss(nn.Module):
         return cfg.conf_alpha * (loss * keep).sum()
     
     def focal_conf_sigmoid_loss(self, conf_data, conf_t):
+        """ Focal loss but using sigmoid like the original paper. """
+        num_classes = conf_data.size(-1)
+
+        conf_t = conf_t.view(-1) # [batch_size*num_priors]
+        conf_data = conf_data.view(-1, num_classes) # [batch_size*num_priors, num_classes]
+
+        # Ignore neutral samples (class < 0)
+        keep = (conf_t >= 0).float()
+        conf_t[conf_t < 0] = 0 # can't mask with -1, so filter that out
+
+        # Compute a one-hot embedding of conf_t
+        # From https://github.com/kuangliu/pytorch-retinanet/blob/master/utils.py
+        conf_one_t = torch.eye(num_classes, device=conf_t.get_device())[conf_t]
+        conf_pm_t  = conf_one_t * 2 - 1 # -1 if background, +1 if forground for specific class
+
+        logpt = F.logsigmoid(conf_data * conf_pm_t) # note: 1 - sigmoid(x) = sigmoid(-x)
+        pt    = logpt.exp()
+
+        # Switch the alpha for the background class because even though we're using sigmoid, I'm still
+        # predicting background as class[0]. Maybe I should change this?
+        at = cfg.focal_loss_alpha * conf_one_t + (1 - cfg.focal_loss_alpha) * (1 - conf_one_t)
+        at[..., 0] = 1 - at[..., 0] # This should be 1 most of the time so invert alpha
+
+        loss = -at * (1 - pt) ** cfg.focal_loss_gamma * logpt
+        loss = keep * loss.sum(dim=-1)
+
+        return cfg.conf_alpha * loss.sum()
+    
+    def focal_conf_objectness_loss(self, conf_data, conf_t):
         """
         Instead of using softmax, use class[0] to be the objectness score and do sigmoid focal loss on that.
         Then for the rest of the classes, softmax them and apply CE for only the positive examples.
