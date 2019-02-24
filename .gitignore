@@ -148,3 +148,4 @@ status.sh
 train.sh
 img/
 scripts/aws-ohio/
+scripts/aws3/

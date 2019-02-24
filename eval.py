@@ -1,6 +1,6 @@
 from data import COCODetection, MEANS, COLORS, COCO_CLASSES
 from yolact import Yolact
-from utils.augmentations import BaseTransform, Resize
+from utils.augmentations import BaseTransform, FastBaseTransform, Resize
 from utils.functions import MovingAverage, ProgressBar
 from layers.box_utils import jaccard, center_size
 from utils import timer
@@ -127,12 +127,14 @@ def prep_display(dets_out, img, gt, gt_masks, h, w, undo_transform=True, class_c
     """
     if undo_transform:
         img_numpy = undo_image_transformation(img, w, h)
+        img_gpu = torch.Tensor(img_numpy).cuda()
     else:
-        img_numpy = img / 255.0
+        img_gpu = img / 255.0
         h, w, _ = img.shape
     
     with timer.env('Postprocess'):
         t = postprocess(dets_out, w, h, visualize_lincomb=args.display_lincomb, crop_masks=args.crop)
+        torch.cuda.synchronize()
 
     with timer.env('Copy'):
         masks = t[3][:args.top_k] # We'll need this later
@@ -141,8 +143,6 @@ def prep_display(dets_out, img, gt, gt_masks, h, w, undo_transform=True, class_c
     if classes.shape[0] == 0:
         print('Warning: No detections found.')
         return img_numpy
-
-    img_gpu = torch.Tensor(img_numpy).cuda()
 
     get_color = lambda j: COLORS[(classes[j] if class_color else j) % len(COLORS)]
 
@@ -170,7 +170,7 @@ def prep_display(dets_out, img, gt, gt_masks, h, w, undo_transform=True, class_c
             if scores[j] >= args.score_threshold:
                 x1, y1, x2, y2 = boxes[j, :]
                 text_pt = (x1, y2 - 5)
-                color = get_color(j)
+                color = [x / 255 for x in get_color(j)]
                 _class = COCO_CLASSES[classes[j]]
 
                 if args.display_bboxes:
@@ -180,7 +180,7 @@ def prep_display(dets_out, img, gt, gt_masks, h, w, undo_transform=True, class_c
                     text_str = '%s (%.2f)' % (_class, score) if args.display_scores else _class
                     cv2.putText(img_numpy, text_str, text_pt, cv2.FONT_HERSHEY_PLAIN, 1.5, color, 2, cv2.LINE_AA)
     
-    return np.clip(img_numpy, 0, 1)
+    return img_numpy
 
 def prep_benchmark(dets_out, h, w):
     with timer.env('Postprocess'):
@@ -525,93 +525,99 @@ def evalimage(net:Yolact, path:str):
     plt.show()
 
 from multiprocessing.pool import ThreadPool
-    
+
 def evalvideo(net:Yolact, path:str):
     vid = cv2.VideoCapture(path)
-    transform = BaseTransform()
+    transform = FastBaseTransform()
     frame_times = MovingAverage()
     fps = 0
     frame_time_target = 1 / vid.get(cv2.CAP_PROP_FPS)
 
-    # Prime the network on the first frame because I do some thread unsafe things otherwise
-    net(torch.Tensor(transform(vid.read()[1])[0]).cuda().permute(2, 0, 1).contiguous().unsqueeze(0))
+    def cleanup_and_exit():
+        print()
+        pool.terminate()
+        vid.release()
+        cv2.destroyAllWindows()
+        exit()
 
     def get_next_frame(vid):
         return [vid.read()[1] for _ in range(args.video_multiframe)]
 
-    def transform_frame(frame):
+    def transform_frame(frames):
         with torch.no_grad():
-            if frame is None:
-                return None
-            
-            img = torch.Tensor(transform(frame)[0]).cuda()
-            img = img.permute(2, 0, 1).contiguous()
-            return frame, img
+            frames = [torch.Tensor(frame).float().cuda() for frame in frames]
+            return frames, transform(torch.stack(frames, 0))
 
     def eval_network(inp):
         with torch.no_grad():
-            if inp is None:
-                return None
-
-            frame, img = inp
-            return frame, net(img.unsqueeze(0))
+            frames, imgs = inp
+            return frames, net(imgs)
 
     def prep_frame(inp):
         with torch.no_grad():
-            if inp is None:
-                return None
-                
             frame, preds = inp
             return prep_display(preds, frame, None, None, None, None, undo_transform=False, class_color=True)
 
+    extract_frame = lambda x, i: (x[0][i], {k: v[i].unsqueeze(0) for k, v in x[1].items()})
+
+    # Prime the network on the first frame because I do some thread unsafe things otherwise
+    print('Initializing model... ', end='')
+    eval_network(transform_frame(get_next_frame(vid)))
+    print('Done.')
+
+    # For each frame the sequence of functions it needs to go through to be processed (in reversed order)
     sequence = [prep_frame, eval_network, transform_frame]
-    pool = ThreadPool(processes=1 + args.video_multiframe * len(sequence))
+    pool = ThreadPool(processes=len(sequence) + args.video_multiframe)
 
     active_frames = []
 
     print()
     while vid.isOpened():
-        showed_a_frame = False
-        timer.reset()
+        start_time = time.time()
 
-        with timer.env('Everything'):
-            next_frames = pool.apply_async(get_next_frame, args=(vid,))
-            
-            for frame in active_frames:
-                frame['value'] = pool.apply_async(sequence[frame['idx']], args=(frame['value'],))
-            
-            for frame in active_frames[:args.video_multiframe]:
-                if frame['idx'] == 0:
-                    time.sleep(frame_time_target)
-
-                    cv2.imshow(path, frame['value'].get())
-                    if cv2.waitKey(1) == 27: # Press Escape to close
-                        break
-
-                    showed_a_frame = True
-
-            active_frames = [x for x in active_frames if x['idx'] > 0]
-            for frame in reversed(active_frames):
-                frame['value'] = frame['value'].get()
-                frame['idx'] -= 1
-            
-            next_frames = next_frames.get()
-            active_frames += [{'value': x, 'idx': len(sequence)-1} for x in next_frames]
+        # Start loading the next frames from the disk
+        next_frames = pool.apply_async(get_next_frame, args=(vid,))
         
-        # Ignore the second frame (pytorch still initializing)
-        if showed_a_frame:
-            if fps == 0:
-                fps = 1
-            else:
-                frame_times.add(timer.total_time())
-                fps = args.video_multiframe / frame_times.get_avg()
+        # For each frame in our active processing queue, dispatch a job
+        # for that frame using the current function in the sequence
+        for frame in active_frames:
+            frame['value'] = pool.apply_async(sequence[frame['idx']], args=(frame['value'],))
+        
+        # For each frame whose job was the last in the sequence (i.e. for all final outputs)
+        for frame in active_frames:
+            if frame['idx'] == 0:
+                # Wait here so that the frame has time to process and so that the video plays at the proper speed
+                time.sleep(frame_time_target)
 
-                print('\rAvg FPS: %.2f' % fps, end='')
-    print()
+                cv2.imshow(path, frame['value'].get())
+                if cv2.waitKey(1) == 27: # Press Escape to close
+                    cleanup_and_exit()
+
+        # Remove the finished frames from the processing queue
+        active_frames = [x for x in active_frames if x['idx'] > 0]
+
+        # Finish evaluating every frame in the processing queue and advanced their position in the sequence
+        for frame in list(reversed(active_frames)):
+            frame['value'] = frame['value'].get()
+            frame['idx'] -= 1
+
+            if frame['idx'] == 0:
+                # Split this up into individual threads for prep_frame since it doesn't support batch size
+                active_frames += [{'value': extract_frame(frame['value'], i), 'idx': 0} for i in range(1, args.video_multiframe)]
+                frame['value'] = extract_frame(frame['value'], 0)
+
+        
+        # Finish loading in the next frames and add them to the processing queue
+        active_frames.append({'value': next_frames.get(), 'idx': len(sequence)-1})
+        
+        # Compute FPS
+        frame_times.add(time.time() - start_time)
+        fps = args.video_multiframe / frame_times.get_avg()
+
+        print('\rAvg FPS: %.2f     ' % fps, end='')
     
-    pool.terminate()
-    vid.release()
-    cv2.destroyAllWindows()
+    cleanup_and_exit()
+    
 
 
 def evaluate(net:Yolact, dataset, train_mode=False):
