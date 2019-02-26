@@ -191,8 +191,8 @@ def train():
     save_path = lambda epoch, iteration: SavePath(cfg.name, epoch, iteration).get_path(root=args.save_folder)
     time_avg = MovingAverage()
 
-    loss_types = ['B', 'C', 'M']
-    loss_avgs  = [MovingAverage(100) for _ in loss_types]
+    loss_types = ['B', 'C', 'M', 'P', 'D'] # Forms the print order
+    loss_avgs  = { k: MovingAverage(100) for k in loss_types }
 
     print('Begin training!')
     print()
@@ -250,16 +250,17 @@ def train():
                 wrapper = ScatterWrapper(targets, masks, num_crowds)
                 losses = criterion(out, wrapper, wrapper.make_mask())
                 
-                losses = [x.mean() for x in losses] # Mean here because Dataparallel
-                loss = sum(losses)
+                losses = { k: v.mean() for k,v in losses.items() } # Mean here because Dataparallel
+                loss = sum([losses[k] for k in losses])
                 
                 # Backprop
                 loss.backward() # Do this to free up vram even if loss is not finite
                 if torch.isfinite(loss).item():
                     optimizer.step()
                 
-                for avg, loss in zip(loss_avgs, losses):
-                    avg.add(loss.item())
+                # Add the loss to the moving average for bookkeeping
+                for k in losses:
+                    loss_avgs[k].add(losses[k].item())
 
                 cur_time  = time.time()
                 elapsed   = cur_time - last_time
@@ -270,11 +271,13 @@ def train():
                     time_avg.add(elapsed)
 
                 if iteration % 10 == 0:
-                    eta_str = datetime.timedelta(seconds=(cfg.max_iter-iteration) * time_avg.get_avg())
-                    t = sum([x.get_avg() for x in loss_avgs])
-                    loss_labels = sum([[loss_types[i], loss_avgs[i].get_avg()] for i in range(len(loss_avgs))], [])
-                    print(('[%3d] %7d ||' + (' %s: %.3f |' * len(loss_avgs)) + ' T: %.3f || ETA: %s || timer: %.3f')
-                            % tuple([epoch, iteration] + loss_labels + [t, eta_str, elapsed]), flush=True)
+                    eta_str = str(datetime.timedelta(seconds=(cfg.max_iter-iteration) * time_avg.get_avg())).split('.')[0]
+                    
+                    total = sum([loss_avgs[k].get_avg() for k in losses])
+                    loss_labels = sum([[k, loss_avgs[k].get_avg()] for k in loss_types if k in losses], [])
+                    
+                    print(('[%3d] %7d ||' + (' %s: %.3f |' * len(losses)) + ' T: %.3f || ETA: %s || timer: %.3f')
+                            % tuple([epoch, iteration] + loss_labels + [total, eta_str, elapsed]), flush=True)
                 
                 iteration += 1
 

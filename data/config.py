@@ -236,6 +236,7 @@ mask_type = Config({
     #   - mask_proto_reweight_coeff (float): The coefficient to multiple the forground pixels with if reweighting.
     #   - mask_proto_coeff_diversity_loss (bool): Apply coefficient diversity loss on the coefficients so that the same
     #                                             instance has similar coefficients.
+    #   - mask_proto_coeff_diversity_alpha (float): The weight to use for the coefficient diversity loss.
     #   - mask_proto_normalize_emulate_roi_pooling (bool): Normalize the mask loss to emulate roi pooling's affect on loss.
     #   - mask_proto_double_loss (bool): Whether to use the old loss in addition to any special new losses.
     #   - mask_proto_double_loss_alpha (float): The alpha to weight the above loss.
@@ -324,6 +325,7 @@ coco_base_config = Config({
     'mask_proto_remove_empty_masks': False,
     'mask_proto_reweight_coeff': 1,
     'mask_proto_coeff_diversity_loss': False,
+    'mask_proto_coeff_diversity_alpha': 1,
     'mask_proto_normalize_emulate_roi_pooling': False,
     'mask_proto_double_loss': False,
     'mask_proto_double_loss_alpha': 1,
@@ -1104,6 +1106,13 @@ yrm35_splitpredheads_config = yrm35_moredata_config.copy({
     'name': 'yrm35_splitpredheads',
 
     'share_prediction_module': False,
+})
+
+yrm35_coeffdiv_config = yrm35_moredata_config.copy({
+    'name': 'yrm35_coeffdiv',
+
+    'mask_proto_coeff_diversity_loss': True,
+    'mask_proto_coeff_diversity_alpha': 10,
 })
 
 yrm36_softmax_config = yrm35_moredata_config.copy({
