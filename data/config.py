@@ -1141,6 +1141,10 @@ yrm36_sigmoid_config = yrm36_softmax_config.copy({
 
     'focal_loss_init_pi': 0.01,
     'use_sigmoid_focal_loss': True,
+
+    'lr_warmup_init': yrm35_moredata_config.lr / 3,
+    'conf_alpha': 4,
+})
 })
 
 yrm25_config = yrm22_config.copy({

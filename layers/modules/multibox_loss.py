@@ -245,7 +245,11 @@ class MultiBoxLoss(nn.Module):
         return cfg.conf_alpha * (loss * keep).sum()
     
     def focal_conf_sigmoid_loss(self, conf_data, conf_t):
-        """ Focal loss but using sigmoid like the original paper. """
+        """
+        Focal loss but using sigmoid like the original paper.
+        Note: To make things mesh easier, the network still predicts 81 class confidences in this mode.
+              Because retinanet originally only predicts 80, we simply just don't use conf_data[..., 0]
+        """
         num_classes = conf_data.size(-1)
 
         conf_t = conf_t.view(-1) # [batch_size*num_priors]
@@ -263,10 +267,8 @@ class MultiBoxLoss(nn.Module):
         logpt = F.logsigmoid(conf_data * conf_pm_t) # note: 1 - sigmoid(x) = sigmoid(-x)
         pt    = logpt.exp()
 
-        # Switch the alpha for the background class because even though we're using sigmoid, I'm still
-        # predicting background as class[0]. Maybe I should change this?
         at = cfg.focal_loss_alpha * conf_one_t + (1 - cfg.focal_loss_alpha) * (1 - conf_one_t)
-        at[..., 0] = 1 - at[..., 0] # This should be 1 most of the time so invert alpha
+        at[..., 0] = 0 # Set alpha for the background class to 0 because sigmoid focal loss doesn't use it
 
         loss = -at * (1 - pt) ** cfg.focal_loss_gamma * logpt
         loss = keep * loss.sum(dim=-1)
