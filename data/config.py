@@ -1115,6 +1115,21 @@ yrm35_coeffdiv_config = yrm35_moredata_config.copy({
     'mask_proto_coeff_diversity_alpha': 10,
 })
 
+yrm35_deepretina_config = yrm35_moredata_config.copy({
+    'name': 'yrm35_deepretina',
+
+    'backbone': yrm35_retina_config.backbone.copy({
+        'pred_scales': [[x, round(x * (2 ** (1/3))), round(x * (2 ** (2/3)))] for x in [32, 64, 128, 256, 512]],
+        'pred_aspect_ratios': [ [ [1, 1/sqrt(2), sqrt(2)] ] * 3 ] * 5,
+    }),
+
+    # Idk why I put this in the original retina config
+    'extra_head_net': [],
+    'extra_layers': (4, 4, 4),
+
+    'max_size': 600,
+})
+
 yrm36_softmax_config = yrm35_moredata_config.copy({
     'name': 'yrm36_softmax',
 
@@ -1145,6 +1160,21 @@ yrm36_sigmoid_config = yrm36_softmax_config.copy({
     'lr_warmup_init': yrm35_moredata_config.lr / 3,
     'conf_alpha': 4,
 })
+
+yrm36_deepretina_config = yrm35_deepretina_config.copy({
+    'name': 'yrm36_deepretina',
+
+    'use_focal_loss': True,
+
+    'focal_loss_alpha': 0.25,
+    'focal_loss_gamma': 2,
+    'focal_loss_init_pi': 0.01,
+    'use_sigmoid_focal_loss': True,
+
+    'conf_alpha': 4,
+    
+    'lr_warmup_init': yrm35_moredata_config.lr / 3,
+    'lr_warmup_until': 500,
 })
 
 yrm25_config = yrm22_config.copy({
