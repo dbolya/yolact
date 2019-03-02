@@ -1160,6 +1160,7 @@ yrm35_all_losses_config = yrm35_moredata_config.copy({
 
     'use_instance_coeff': True,
     'mask_proto_coeff_diversity_loss': True,
+    'mask_proto_coeff_diversity_alpha': 10,
 })
 
 yrm36_softmax_config = yrm35_moredata_config.copy({
