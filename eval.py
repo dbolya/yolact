@@ -188,6 +188,10 @@ def prep_benchmark(dets_out, h, w):
 
     with timer.env('Copy'):
         classes, scores, boxes, masks = [x[:args.top_k].cpu().numpy() for x in t]
+    
+    with timer.env('Sync'):
+        # Just in case
+        torch.cuda.synchronize()
 
 def prep_coco_cats(cats):
     """ Prepare inverted table for category id lookup given a coco cats object. """
