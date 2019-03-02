@@ -81,6 +81,7 @@ class MultiBoxLoss(nn.Module):
             inst_data = None
         
         targets, masks, num_crowds = wrapper.get_args(wrapper_mask)
+        labels = [None] * len(targets) # Used in sem segm loss
 
         num = loc_data.size(0)
         # This is necessary for training on multiple GPUs because
@@ -98,9 +99,17 @@ class MultiBoxLoss(nn.Module):
 
         defaults = priors.data
 
+        if cfg.use_class_existence_loss:
+            class_existence_t = loc_data.new(num, num_classes-1)
+
         for idx in range(num):
-            truths = targets[idx][:, :-1].data
-            labels = targets[idx][:, -1].data
+            truths      = targets[idx][:, :-1].data
+            labels[idx] = targets[idx][:, -1].data.long()
+
+            if cfg.use_class_existence_loss:
+                # Construct a one-hot vector for each object and collapse it into an existence vector with max
+                # Also it's fine to include the crowd annotations here
+                class_existence_t[idx, :] = torch.eye(num_classes-1, device=conf_t.get_device())[labels[idx]].max(dim=0)[0]
 
             # Split the crowd annotations because they come bundled in
             cur_crowds = num_crowds[idx]
@@ -109,14 +118,14 @@ class MultiBoxLoss(nn.Module):
                 crowd_boxes, truths = split(truths)
 
                 # We don't use the crowd labels or masks
-                _, labels = split(labels)
-                _, masks[idx] = split(masks[idx])
+                _, labels[idx] = split(labels[idx])
+                _, masks[idx]  = split(masks[idx])
             else:
                 crowd_boxes = None
 
             
             match(self.pos_threshold, self.neg_threshold,
-                  truths, defaults, labels, crowd_boxes,
+                  truths, defaults, labels[idx], crowd_boxes,
                   loc_t, conf_t, idx_t, idx, loc_data[idx])
                   
             gt_box_t[idx, :, :] = truths[idx_t[idx]]
@@ -171,14 +180,57 @@ class MultiBoxLoss(nn.Module):
         else:
             losses['C'] = self.ohem_conf_loss(conf_data, conf_t, pos, num)
 
+        # These losses also don't depend on anchors
+        if cfg.use_class_existence_loss:
+            losses['E'] = self.class_existence_loss(predictions['classes'], class_existence_t)
+        if cfg.use_semantic_segmentation_loss:
+            losses['S'] = self.semantic_segmentation_loss(predictions['segm'], masks, labels)
+
         # Divide all losses by the number of positives.
         # Don't do it for loss[P] because that doesn't depend on the anchors.
         N = num_pos.data.sum().float()
         for k in losses:
-            if k != 'P':
+            if k not in ('P', 'E', 'S'):
                 losses[k] /= N
+            else:
+                losses[k] /= num # Divide by batch size otherwise
 
+        # Loss Key:
+        #  - B: Box Localization Loss
+        #  - C: Class Confidence Loss
+        #  - M: Mask Loss
+        #  - P: Prototype Loss
+        #  - D: Coefficient Diversity Loss
+        #  - E: Class Existence Loss
+        #  - S: Semantic Segmentation Loss
         return losses
+
+    def class_existence_loss(self, class_data, class_existence_t):
+        return cfg.class_existence_alpha * F.binary_cross_entropy_with_logits(class_data, class_existence_t, reduction='sum')
+
+    def semantic_segmentation_loss(self, segment_data, mask_t, class_t, interpolation_mode='bilinear'):
+        # Note num_classes here is without the background class so cfg.num_classes-1
+        batch_size, num_classes, mask_h, mask_w = segment_data.size()
+        loss_s = 0
+        
+        for idx in range(batch_size):
+            cur_segment = segment_data[idx]
+            cur_class_t = class_t[idx]
+
+            with torch.no_grad():
+                downsampled_masks = F.interpolate(mask_t[idx].unsqueeze(0), (mask_h, mask_w),
+                                                  mode=interpolation_mode, align_corners=False).squeeze(0)
+                downsampled_masks = downsampled_masks.gt(0.5).float()
+                
+                # Construct Semantic Segmentation
+                segment_t = torch.zeros_like(cur_segment, requires_grad=False)
+                for obj_idx in range(downsampled_masks.size(0)):
+                    segment_t[cur_class_t[obj_idx]] = torch.max(segment_t[cur_class_t[obj_idx]], downsampled_masks[obj_idx])
+            
+            loss_s += F.binary_cross_entropy_with_logits(cur_segment, segment_t, reduction='sum')
+        
+        return loss_s / mask_h / mask_w * cfg.semantic_segmentation_alpha
+
 
     def ohem_conf_loss(self, conf_data, conf_t, pos, num):
         # Compute max conf across batch for hard negative mining

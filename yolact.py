@@ -409,6 +409,15 @@ class Yolact(nn.Module):
                                     parent        = parent)
             self.prediction_layers.append(pred)
 
+        # Extra parameters for the extra losses
+        if cfg.use_class_existence_loss:
+            # This comes from the smallest layer selected
+            # Also note that cfg.num_classes includes background
+            self.class_existence_fc = nn.Linear(src_channels[-1], cfg.num_classes - 1)
+        
+        if cfg.use_semantic_segmentation_loss:
+            self.semantic_seg_conv = nn.Conv2d(src_channels[0], cfg.num_classes-1, kernel_size=1)
+
         # For use in evaluation
         self.detect = Detect(cfg.num_classes, bkg_label=0, top_k=200, conf_thresh=0.05, nms_thresh=0.5)
         
@@ -551,6 +560,14 @@ class Yolact(nn.Module):
             pred_outs['proto'] = proto_out
 
         if self.training:
+
+            # For the extra loss functions
+            if cfg.use_class_existence_loss:
+                pred_outs['classes'] = self.class_existence_fc(outs[-1].mean(dim=(2, 3)))
+
+            if cfg.use_semantic_segmentation_loss:
+                pred_outs['segm'] = self.semantic_seg_conv(outs[0])
+
             return pred_outs
         else:
             if cfg.use_sigmoid_focal_loss:

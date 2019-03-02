@@ -274,7 +274,7 @@ fpn_base = Config({
 # Configs
 coco_base_config = Config({
     'dataset': coco2014_dataset,
-    'num_classes': 81,
+    'num_classes': 81, # This should include the background class
 
     'max_iter': 400000,
 
@@ -358,6 +358,16 @@ coco_base_config = Config({
     # Use class[0] to be the objectness score and class[1:] to be the softmax predicted class.
     # Note: at the moment this is only implemented if use_focal_loss is on.
     'use_objectness_score': False,
+
+    # Adds a global pool + fc layer to the smallest selected layer that predicts the existence of each of the 80 classes.
+    # This branch is only evaluated during training time and is just there for multitask learning.
+    'use_class_existence_loss': False,
+    'class_existence_alpha': 1,
+
+    # Adds a 1x1 convolution directly to the biggest selected layer that predicts a semantic segmentations for each of the 80 classes.
+    # This branch is only evaluated during training time and is just there for multitask learning.
+    'use_semantic_segmentation_loss': False,
+    'semantic_segmentation_alpha': 1,
 
     # Uses the same network format as mask_proto_net, except this time it's for adding extra head layers before the final
     # prediction in prediction modules. If this is none, no extra layers will be added.
@@ -1128,6 +1138,28 @@ yrm35_deepretina_config = yrm35_moredata_config.copy({
     'extra_layers': (4, 4, 4),
 
     'max_size': 600,
+})
+
+yrm35_class_existence_config = yrm35_moredata_config.copy({
+    'name': 'yrm35_class_existence',
+
+    'use_class_existence_loss': True,
+})
+
+yrm35_semantic_segmentation_config = yrm35_moredata_config.copy({
+    'name': 'yrm35_semantic_segmentation',
+
+    'use_semantic_segmentation_loss': True,
+})
+
+yrm35_all_losses_config = yrm35_moredata_config.copy({
+    'name': 'yrm35_all_losses',
+
+    'use_class_existence_loss': True,
+    'use_semantic_segmentation_loss': True,
+
+    'use_instance_coeff': True,
+    'mask_proto_coeff_diversity_loss': True,
 })
 
 yrm36_softmax_config = yrm35_moredata_config.copy({
