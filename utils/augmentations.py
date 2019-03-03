@@ -627,7 +627,12 @@ class FastBaseTransform(object):
         # Return value is in channel order [n, c, h, w] and RGB
         return img
 
+def do_nothing(img=None, masks=None, boxes=None, labels=None):
+    return img, masks, boxes, labels
 
+
+def enable_if(condition, obj):
+    return obj if condition else do_nothing
 
 class SSDAugmentation(object):
     """ Transform to be used when training. """
@@ -636,10 +641,10 @@ class SSDAugmentation(object):
         self.augment = Compose([
             ConvertFromInts(),
             ToAbsoluteCoords(),
-            PhotometricDistort(),
-            Expand(mean),
-            RandomSampleCrop(),
-            RandomMirror(),
+            enable_if(cfg.augment_photometric_distort, PhotometricDistort()),
+            enable_if(cfg.augment_expand, Expand(mean)),
+            enable_if(cfg.augment_random_sample_crop, RandomSampleCrop()),
+            enable_if(cfg.augment_random_mirror, RandomMirror()),
             Resize(),
             Pad(cfg.max_size, cfg.max_size, mean),
             ToPercentCoords(),

@@ -330,6 +330,16 @@ coco_base_config = Config({
     'mask_proto_double_loss': False,
     'mask_proto_double_loss_alpha': 1,
 
+    # SSD data augmentation parameters
+    # Randomize hue, vibrance, etc.
+    'augment_photometric_distort': True,
+    # Have a chance to scale down the image and pad (to emulate smaller detections)
+    'augment_expand': True,
+    # Potentialy sample a random crop from the image and put it in a random place
+    'augment_random_sample_crop': True,
+    # Mirror the image with a probability of 1/2
+    'augment_random_mirror': True,
+
     # If using batchnorm anywhere in the backbone, freeze the batchnorm layer during training.
     # Note: any additional batch norm layers after the backbone will not be frozen.
     'freeze_bn': False,
@@ -1053,6 +1063,14 @@ yrm35_moredata_config = yrm35_retina_config.copy({
     'name': 'yrm35_moredata',
 
     'dataset': coco2017_dataset,
+})
+
+yrm35_noaug_config = yrm35_moredata_config.copy({
+    'name': 'yrm35_noaug',
+
+    'augment_expand': False,
+    'augment_random_mirror': False,
+    'augment_random_sample_crop': False,
 })
 
 yrm35_resnet50_config = yrm35_moredata_config.copy({
