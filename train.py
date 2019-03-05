@@ -60,10 +60,12 @@ parser.add_argument('--validation_epoch', default=2, type=int,
                     help='Output validation information every n iterations. If -1, do no validation.')
 parser.add_argument('--no_jit', dest='no_jit', action='store_true',
                     help='Don\'t use Pytorch 1.0 tracing functionality.')
+parser.add_argument('--keep_latest', dest='keep_latest', action='store_true',
+                    help='Only keep the latest checkpoint instead of each one.')
 parser.add_argument('--dataset', default=None, type=str,
                     help='If specified, override the dataset specified in the config with this one (example: coco2017_dataset).')
 
-parser.set_defaults(no_jit=False)
+parser.set_defaults(no_jit=False, keep_latest=False)
 args = parser.parse_args()
 
 if args.config is not None:
@@ -282,8 +284,15 @@ def train():
                 iteration += 1
 
                 if iteration % args.save_interval == 0 and iteration != args.start_iter:
+                    if args.keep_latest:
+                        latest = SavePath.get_latest(args.save_folder, cfg.name)
+
                     print('Saving state, iter:', iteration)
                     yolact_net.save_weights(save_path(epoch, iteration))
+
+                    if args.keep_latest and latest is not None:
+                        print('Deleting old save...')
+                        os.remove(latest)
             
             # This is done per epoch
             if args.validation_epoch > 0:
