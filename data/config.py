@@ -1220,6 +1220,12 @@ yrm36_sigmoid_config = yrm36_softmax_config.copy({
     'conf_alpha': 10,
 })
 
+yrm36_semantic_segmentation_config = yrm36_sigmoid_config.copy({
+    'name': 'yrm36_semantic_segmentation',
+    
+    'use_semantic_segmentation_loss': True,
+})
+
 yrm36_deepretina_config = yrm35_deepretina_config.copy({
     'name': 'yrm36_deepretina',
 
@@ -1230,7 +1236,7 @@ yrm36_deepretina_config = yrm35_deepretina_config.copy({
     'focal_loss_init_pi': 0.01,
     'use_sigmoid_focal_loss': True,
 
-    'conf_alpha': 4,
+    'conf_alpha': 10,
     
     'lr_warmup_init': yrm35_moredata_config.lr / 3,
     'lr_warmup_until': 500,
