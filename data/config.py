@@ -1158,19 +1158,27 @@ yrm35_deepretina_config = yrm35_moredata_config.copy({
     'max_size': 600,
 })
 
-yrm35_class_existence_config = yrm35_moredata_config.copy({
+yrm35_class_existence_config = yrm35_noaug_config.copy({
     'name': 'yrm35_class_existence',
 
     'use_class_existence_loss': True,
 })
 
-yrm35_semantic_segmentation_config = yrm35_moredata_config.copy({
+yrm35_semantic_segmentation_config = yrm35_noaug_config.copy({
     'name': 'yrm35_semantic_segmentation',
 
     'use_semantic_segmentation_loss': True,
 })
 
-yrm35_all_losses_config = yrm35_moredata_config.copy({
+yrm35_instance_coeffs_config = yrm35_noaug_config.copy({
+    'name': 'yrm35_instance_coeffs',
+
+    'use_instance_coeff': True,
+    'mask_proto_coeff_diversity_loss': True,
+    'mask_proto_coeff_diversity_alpha': 10,
+})
+
+yrm35_all_losses_config = yrm35_noaug_config.copy({
     'name': 'yrm35_all_losses',
 
     'use_class_existence_loss': True,
@@ -1181,7 +1189,7 @@ yrm35_all_losses_config = yrm35_moredata_config.copy({
     'mask_proto_coeff_diversity_alpha': 10,
 })
 
-yrm36_softmax_config = yrm35_moredata_config.copy({
+yrm36_softmax_config = yrm35_noaug_config.copy({
     'name': 'yrm36_softmax',
 
     'use_focal_loss': True,
@@ -1192,7 +1200,7 @@ yrm36_softmax_config = yrm35_moredata_config.copy({
 
     'conf_alpha': 1,
     
-    'lr_warmup_init': yrm35_moredata_config.lr / 100,
+    'lr_warmup_init': yrm35_noaug_config.lr / 100,
     'lr_warmup_until': 500,
 })
 
@@ -1209,7 +1217,7 @@ yrm36_sigmoid_config = yrm36_softmax_config.copy({
     'use_sigmoid_focal_loss': True,
 
     'lr_warmup_init': yrm35_moredata_config.lr / 3,
-    'conf_alpha': 4,
+    'conf_alpha': 10,
 })
 
 yrm36_deepretina_config = yrm35_deepretina_config.copy({
