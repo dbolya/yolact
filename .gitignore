@@ -4,6 +4,7 @@
 **/.settings
 .project
 .pydevproject
+weights
 
 # external/*
 
