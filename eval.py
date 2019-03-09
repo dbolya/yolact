@@ -1,4 +1,4 @@
-from data import COCODetection, MEANS, COLORS, COCO_CLASSES
+from data import COCODetection, MEANS, COLORS, COCO_CLASSES, CITYSCAPES_CLASSES
 from yolact import Yolact
 from utils.augmentations import BaseTransform, FastBaseTransform, Resize
 from utils.functions import MovingAverage, ProgressBar
@@ -28,6 +28,12 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import cv2
+
+if cfg.dataset.name == 'CityScapes':
+    CLASSES = CITYSCAPES_CLASSES
+else:
+    CLASSES = COCO_CLASSES
+    
 
 def str2bool(v):
     if v.lower() in ('yes', 'true', 't', 'y', '1'):
@@ -173,7 +179,7 @@ def prep_display(dets_out, img, gt, gt_masks, h, w, undo_transform=True, class_c
                 x1, y1, x2, y2 = boxes[j, :]
                 text_pt = (x1, y2 - 5)
                 color = [x / 255 for x in get_color(j)]
-                _class = COCO_CLASSES[classes[j]]
+                _class = CLASSES[classes[j]]
 
                 if args.display_bboxes:
                     cv2.rectangle(img_numpy, (x1, y1), (x2, y2), color, 2)
@@ -203,17 +209,17 @@ def prep_coco_cats(cats):
         name_lookup[cat_obj['name']] = _id
 
     # Bit of a roundabout way to do this but whatever
-    for i in range(len(COCO_CLASSES)):
-        coco_cats.append(name_lookup[COCO_CLASSES[i]])
+    for i in range(len(CLASSES)):
+        coco_cats.append(name_lookup[CLASSES[i]])
         coco_cats_inv[coco_cats[-1]] = i
 
 
 def get_coco_cat(transformed_cat_id):
-    """ transformed_cat_id is [0,80) as indices in COCO_CLASSES """
+    """ transformed_cat_id is [0,80) as indices in CLASSES """
     return coco_cats[transformed_cat_id]
 
 def get_transformed_cat(coco_cat_id):
-    """ transformed_cat_id is [0,80) as indices in COCO_CLASSES """
+    """ transformed_cat_id is [0,80) as indices in CLASSES """
     return coco_cats_inv[coco_cat_id]
 
 
@@ -283,7 +289,7 @@ class Detections:
             image_obj['dets'].append({
                 'score': bbox['score'],
                 'bbox': bbox['bbox'],
-                'category': COCO_CLASSES[get_transformed_cat(bbox['category_id'])],
+                'category': CLASSES[get_transformed_cat(bbox['category_id'])],
                 'mask': mask['segmentation'],
             })
 
@@ -648,8 +654,8 @@ def evaluate(net:Yolact, dataset, train_mode=False):
         # For each class and iou, stores tuples (score, isPositive)
         # Index ap_data[type][iouIdx][classIdx]
         ap_data = {
-            'box' : [[APDataObject() for _ in COCO_CLASSES] for _ in iou_thresholds],
-            'mask': [[APDataObject() for _ in COCO_CLASSES] for _ in iou_thresholds]
+            'box' : [[APDataObject() for _ in CLASSES] for _ in iou_thresholds],
+            'mask': [[APDataObject() for _ in CLASSES] for _ in iou_thresholds]
         }
         detections = Detections()
     else:
@@ -754,7 +760,7 @@ def calc_map(ap_data):
     print('Calculating mAP...')
     aps = [{'box': [], 'mask': []} for _ in iou_thresholds]
 
-    for _class in range(len(COCO_CLASSES)):
+    for _class in range(len(CLASSES)):
         for iou_idx in range(len(iou_thresholds)):
             for iou_type in ('box', 'mask'):
                 ap_obj = ap_data[iou_type][iou_idx][_class]

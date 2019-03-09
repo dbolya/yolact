@@ -19,9 +19,6 @@ import numpy as np
 import argparse
 import datetime
 
-# Oof
-import eval as eval_script
-
 def str2bool(v):
     return v.lower() in ("yes", "true", "t", "1")
 
@@ -69,8 +66,9 @@ parser.set_defaults(no_jit=False, keep_latest=False)
 args = parser.parse_args()
 
 # FYXTODO
-args.batch_size = 4
-args.num_workers = 0
+# args.batch_size = 4
+# args.num_workers = 0
+# args.config = 'yrm35_cityscapes_config'
 
 if args.config is not None:
     set_cfg(args.config)
@@ -79,6 +77,9 @@ cfg.no_jit = args.no_jit
 
 if args.dataset is not None:
     set_dataset(args.dataset)
+
+# Oof
+import eval as eval_script
 
 # Update training parameters from the config if necessary
 def replace(name):
@@ -135,13 +136,15 @@ def train():
 
     dataset = COCODetection(image_path=cfg.dataset.train_images,
                             info_file=cfg.dataset.train_info,
-                            transform=SSDAugmentation(MEANS))
+                            transform=SSDAugmentation(MEANS),
+                            dataset_name=cfg.dataset.name)
     
     if args.validation_epoch > 0:
         setup_eval()
         val_dataset = COCODetection(image_path=cfg.dataset.valid_images,
                                     info_file=cfg.dataset.valid_info,
-                                    transform=BaseTransform(MEANS))
+                                    transform=BaseTransform(MEANS),
+                                    dataset_name=cfg.dataset.name)
 
     # Parallel wraps the underlying module, but when saving and loading we don't want that
     yolact_net = Yolact()

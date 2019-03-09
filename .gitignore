@@ -5,6 +5,9 @@
 .project
 .pydevproject
 weights
+data/cityscapes
+data/coco/annotations
+data/coco/images
 
 # external/*
 

@@ -87,6 +87,15 @@ coco2017_testdev_dataset = dataset_base.copy({
     'valid_info': './data/coco/annotations/image_info_test-dev2017.json',
 })
 
+cityscapes_dataset = dataset_base.copy({
+    'name': 'CityScapes',
+    
+    'train_info': './data/cityscapes/coco_format_annot/instancesonly_filtered_gtFine_train.json',
+    'valid_info': './data/cityscapes/coco_format_annot/instancesonly_filtered_gtFine_val.json',
+    'train_images': './data/cityscapes/leftImg8bit_trainvaltest/leftImg8bit/train',
+    'valid_images': './data/cityscapes/leftImg8bit_trainvaltest/leftImg8bit/val',
+})
+
 # Backbones
 from backbone import ResNetBackbone, VGGBackbone, ResNetBackboneGN, DarkNetBackbone
 from torchvision.models.vgg import cfg as vggcfg
@@ -1063,6 +1072,13 @@ yrm35_moredata_config = yrm35_retina_config.copy({
     'name': 'yrm35_moredata',
 
     'dataset': coco2017_dataset,
+})
+
+yrm35_cityscapes_config = yrm35_retina_config.copy({
+    'name': 'yrm35_cityscapes',
+
+    'dataset': cityscapes_dataset,
+    'num_classes': 9, # This should include the background class
 })
 
 yrm35_noaug_config = yrm35_moredata_config.copy({
