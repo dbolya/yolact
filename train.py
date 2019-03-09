@@ -176,7 +176,6 @@ def train():
             if (epoch+1)*epoch_size < iteration:
                 continue
 
-            
             for datum in data_loader:
                 # Stop if we've reached an epoch if we're resuming from start_iter
                 if iteration == (epoch+1)*epoch_size:
@@ -198,7 +197,7 @@ def train():
                 # Load training data
                 images, targets, masks, num_crowds = prepare_data(datum)
                 
-                # Forward Pass
+                # Forward Pass (bbox_coords, class_confs, mask_output, prior_boxes, prototypes)
                 out = net(images)
                 
                 # Compute Loss
@@ -348,7 +347,7 @@ def compute_validation_map(yolact_net, dataset):
     with torch.no_grad():
         yolact_net.eval()
         print()
-        print("Computing validation mAP (this may take a while)...", flush=True)
+        print("Computing validation mAP (this may take a while)...")
         eval_script.evaluate(yolact_net, dataset, train_mode=True)
         yolact_net.train()
 

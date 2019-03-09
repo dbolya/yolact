@@ -1,10 +1,16 @@
+
+**/__pycache__
+**/*.pyc
+**/.settings
+.project
+.pydevproject
+
+# external/*
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
-
-.project
-.pydevproject
 
 # C extensions
 *.so

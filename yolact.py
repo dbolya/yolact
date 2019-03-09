@@ -202,9 +202,10 @@ class Yolact(nn.Module):
             self.proto_src = cfg.mask_proto_src
             in_channels = 3 if self.proto_src is None else self.backbone.channels[self.proto_src]
             in_channels += self.num_grids
+            in_channels_arr = np.array([in_channels])
 
-            def make_layer(layer_cfg):
-                nonlocal in_channels
+            def make_layer(layer_cfg, in_channels_arr):
+                in_channels = in_channels_arr[0]
                 num_channels = layer_cfg[0]
                 kernel_size = layer_cfg[1]
                 
@@ -224,11 +225,12 @@ class Yolact(nn.Module):
                         layer = nn.ConvTranspose2d(in_channels, num_channels, -kernel_size, **layer_cfg[2])
                 
                 in_channels = num_channels if num_channels is not None else in_channels
+                in_channels_arr[0] = in_channels
                 return [layer, nn.ReLU(inplace=True)]
 
             # The -1 here is to remove the last relu because we might want to change it to another function
-            self.proto_net = nn.Sequential(*(sum([make_layer(x) for x in cfg.mask_proto_net], [])[:-1]))
-            cfg.mask_dim = in_channels
+            self.proto_net = nn.Sequential(*(sum([make_layer(x, in_channels_arr) for x in cfg.mask_proto_net], [])[:-1]))
+            cfg.mask_dim = in_channels_arr[0]
 
             if cfg.mask_proto_bias:
                 cfg.mask_dim += 1
