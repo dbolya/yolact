@@ -48,23 +48,47 @@ class Config(object):
 
         for key, val in new_config_dict.items():
             self.__setattr__(key, val)
+    
+    def print(self):
+        for k, v in vars(self).items():
+            print(k, ' = ', v)
 
 
 # Datasets
-coco2014_dataset = Config({
-    'name': 'COCO 2014',
-    'train': 'train2014',
-    'valid': 'val2014'
+dataset_base = Config({
+    'name': 'Base Dataset',
+
+    'train_images': './data/coco/images/',
+    'train_info':   'path_to_annotation_file',
+
+    'valid_images': './data/coco/images/',
+    'valid_info':   'path_to_annotation_file',
+
+    'has_gt': True,
 })
 
-coco2017_dataset = Config({
+coco2014_dataset = dataset_base.copy({
+    'name': 'COCO 2014',
+    
+    'train_info': './data/coco/annotations/instances_train2014.json',
+    'valid_info': './data/coco/annotations/instances_val2014.json',
+})
+
+coco2017_dataset = dataset_base.copy({
     'name': 'COCO 2017',
-    'train': 'train2017', # Trainval35k
-    'valid': 'val2017'    # Minibatch5k
+    
+    'train_info': './data/coco/annotations/instances_train2017.json',
+    'valid_info': './data/coco/annotations/instances_val2017.json',
+})
+
+coco2017_testdev_dataset = dataset_base.copy({
+    'name': 'COCO 2017 Test-Dev',
+
+    'valid_info': './data/coco/annotations/image_info_test-dev2017.json',
 })
 
 # Backbones
-from backbone import ResNetBackbone, VGGBackbone
+from backbone import ResNetBackbone, VGGBackbone, ResNetBackboneGN, DarkNetBackbone
 from torchvision.models.vgg import cfg as vggcfg
 from math import sqrt
 import torch
@@ -73,7 +97,8 @@ import torch
 resnet_transform = Config({
     'channel_order': 'RGB',
     'normalize': True,
-    'subtract_means': False
+    'subtract_means': False,
+    'to_float': False,
 })
 
 vgg_transform = Config({
@@ -81,7 +106,15 @@ vgg_transform = Config({
     # the channel order of vgg_reducedfc.pth is RGB.
     'channel_order': 'RGB',
     'normalize': False,
-    'subtract_means': True
+    'subtract_means': True,
+    'to_float': False,
+})
+
+darknet_transform = Config({
+    'channel_order': 'RGB',
+    'normalize': False,
+    'subtract_means': False,
+    'to_float': True,
 })
 
 resnet101_backbone = Config({
@@ -94,6 +127,20 @@ resnet101_backbone = Config({
     'selected_layers': list(range(2, 8)),
     'pred_scales': [[1]]*6,
     'pred_aspect_ratios': [ [[0.66685089, 1.7073535, 0.87508774, 1.16524493, 0.49059086]] ] * 6,
+    'use_pixel_scales': False,
+})
+
+resnet101_gn_backbone = Config({
+    'name': 'ResNet101_GN',
+    'path': 'R-101-GN.pkl',
+    'type': ResNetBackboneGN,
+    'args': ([3, 4, 23, 3],),
+    'transform': resnet_transform,
+
+    'selected_layers': list(range(2, 8)),
+    'pred_scales': [[1]]*6,
+    'pred_aspect_ratios': [ [[0.66685089, 1.7073535, 0.87508774, 1.16524493, 0.49059086]] ] * 6,
+    'use_pixel_scales': False,
 })
 
 resnet50_backbone = resnet101_backbone.copy({
@@ -102,6 +149,19 @@ resnet50_backbone = resnet101_backbone.copy({
     'type': ResNetBackbone,
     'args': ([3, 4, 6, 3],),
     'transform': resnet_transform,
+})
+
+darknet53_backbone = Config({
+    'name': 'DarkNet53',
+    'path': 'darknet53.pth',
+    'type': DarkNetBackbone,
+    'args': ([1, 2, 8, 8, 4],),
+    'transform': darknet_transform,
+
+    'selected_layers': list(range(3, 9)),
+    'pred_scales': [[3.5, 4.95], [3.6, 4.90], [3.3, 4.02], [2.7, 3.10], [2.1, 2.37], [1.8, 1.92]],
+    'pred_aspect_ratios': [ [[1, sqrt(2), 1/sqrt(2), sqrt(3), 1/sqrt(3)][:n], [1]] for n in [3, 5, 5, 5, 3, 3] ],
+    'use_pixel_scales': False,
 })
 
 vgg16_arch = [[64, 64],
@@ -123,6 +183,7 @@ vgg16_backbone = Config({
     'selected_layers': [3] + list(range(5, 10)),
     'pred_scales': [[5, 4]]*6,
     'pred_aspect_ratios': [ [[1], [1, sqrt(2), 1/sqrt(2), sqrt(3), 1/sqrt(3)][:n]] for n in [3, 5, 5, 5, 3, 3] ],
+    'use_pixel_scales': False,
 })
 
 mask_type = Config({
@@ -151,6 +212,9 @@ mask_type = Config({
     #                                        coeffs, what activation to apply to the final mask.
     #   - mask_proto_coeff_activation (func): The activation to apply to the mask coefficients.
     #   - mask_proto_crop (bool): If True, crop the mask with the predicted bbox during training.
+    #   - mask_proto_crop_expand (float): If cropping, the percent to expand the cropping bbox by
+    #                                     in each direction. This is to make the model less reliant
+    #                                     on perfect bbox predictions.
     #   - mask_proto_loss (str [l1|disj]): If not None, apply an l1 or disjunctive regularization
     #                                      loss directly to the prototype masks.
     #   - mask_proto_binarize_downsampled_gt (bool): Binarize GT after dowsnampling during training?
@@ -169,6 +233,13 @@ mask_type = Config({
     #   - mask_proto_prototypes_as_features_no_grad (bool): If the above is set, don't backprop gradients to
     #                                 to the prototypes from the network head.
     #   - mask_proto_remove_empty_masks (bool): Remove masks that are downsampled to 0 during loss calculations.
+    #   - mask_proto_reweight_coeff (float): The coefficient to multiple the forground pixels with if reweighting.
+    #   - mask_proto_coeff_diversity_loss (bool): Apply coefficient diversity loss on the coefficients so that the same
+    #                                             instance has similar coefficients.
+    #   - mask_proto_coeff_diversity_alpha (float): The weight to use for the coefficient diversity loss.
+    #   - mask_proto_normalize_emulate_roi_pooling (bool): Normalize the mask loss to emulate roi pooling's affect on loss.
+    #   - mask_proto_double_loss (bool): Whether to use the old loss in addition to any special new losses.
+    #   - mask_proto_double_loss_alpha (float): The alpha to weight the above loss.
     'lincomb': 1,
 })
 
@@ -181,14 +252,55 @@ activation_func = Config({
     'none':    lambda x: x,
 })
 
+
+fpn_base = Config({
+    # The number of features to have in each FPN layer
+    'num_features': 256,
+
+    # The upsampling mode used
+    'interpolation_mode': 'bilinear',
+
+    # The number of extra layers to be produced by downsampling starting at P5
+    'num_downsample': 1,
+
+    # Whether to down sample with a 3x3 stride 2 conv layer instead of just a stride 2 selection
+    'use_conv_downsample': False,
+
+    # Whether to pad the pred layers with 1 on each side (I forgot to add this at the start)
+    # This is just here for backwards compatibility
+    'pad': True,
+})
+
 # Configs
 coco_base_config = Config({
     'dataset': coco2014_dataset,
-    'num_classes': 81,
-    'lr_steps': (280000, 360000, 400000),
+    'num_classes': 81, # This should include the background class
+
     'max_iter': 400000,
+
+    # The maximum number of detections for evaluation
     'max_num_detections': 100,
-    
+
+    # dw' = momentum * dw - lr * (grad + decay * w)
+    'lr': 1e-3,
+    'momentum': 0.9,
+    'decay': 5e-4,
+
+    # For each lr step, what to multiply the lr with
+    'gamma': 0.1,
+    'lr_steps': (280000, 360000, 400000),
+
+    # Initial learning rate to linearly warmup from (if until > 0)
+    'lr_warmup_init': 1e-4,
+
+    # If > 0 then increase the lr linearly from warmup_init to lr each iter for until iters
+    'lr_warmup_until': 500,
+
+    # The terms to scale the respective loss by
+    'conf_alpha': 1,
+    'bbox_alpha': 1.5,
+    'mask_alpha': 0.4 / 256 * 140 * 140, # Some funky equation. Don't worry about it.
+
     # See mask_type for details.
     'mask_type': mask_type.direct,
     'mask_size': 16,
@@ -200,6 +312,7 @@ coco_base_config = Config({
     'mask_proto_mask_activation': activation_func.sigmoid,
     'mask_proto_coeff_activation': activation_func.tanh,
     'mask_proto_crop': True,
+    'mask_proto_crop_expand': 0,
     'mask_proto_loss': None,
     'mask_proto_binarize_downsampled_gt': True,
     'mask_proto_normalize_mask_loss_by_sqrt_area': False,
@@ -210,6 +323,68 @@ coco_base_config = Config({
     'mask_proto_prototypes_as_features': False,
     'mask_proto_prototypes_as_features_no_grad': False,
     'mask_proto_remove_empty_masks': False,
+    'mask_proto_reweight_coeff': 1,
+    'mask_proto_coeff_diversity_loss': False,
+    'mask_proto_coeff_diversity_alpha': 1,
+    'mask_proto_normalize_emulate_roi_pooling': False,
+    'mask_proto_double_loss': False,
+    'mask_proto_double_loss_alpha': 1,
+
+    # SSD data augmentation parameters
+    # Randomize hue, vibrance, etc.
+    'augment_photometric_distort': True,
+    # Have a chance to scale down the image and pad (to emulate smaller detections)
+    'augment_expand': True,
+    # Potentialy sample a random crop from the image and put it in a random place
+    'augment_random_sample_crop': True,
+    # Mirror the image with a probability of 1/2
+    'augment_random_mirror': True,
+
+    # If using batchnorm anywhere in the backbone, freeze the batchnorm layer during training.
+    # Note: any additional batch norm layers after the backbone will not be frozen.
+    'freeze_bn': False,
+
+    # Set this to a config object if you want an FPN (inherit from fpn_base). See fpn_base for details.
+    'fpn': None,
+
+    # Use the same weights for each network head
+    'share_prediction_module': False,
+
+    # For hard negative mining, instead of using the negatives that are leastl confidently background,
+    # use negatives that are most confidently not background.
+    'ohem_use_most_confident': False,
+
+    # Use focal loss as described in https://arxiv.org/pdf/1708.02002.pdf instead of OHEM
+    'use_focal_loss': False,
+    'focal_loss_alpha': 0.25,
+    'focal_loss_gamma': 2,
+    
+    # The initial bias toward forground objects, as specified in the focal loss paper
+    'focal_loss_init_pi': 0.01,
+
+    # Whether to use sigmoid focal loss instead of softmax, all else being the same.
+    'use_sigmoid_focal_loss': False,
+
+    # Use class[0] to be the objectness score and class[1:] to be the softmax predicted class.
+    # Note: at the moment this is only implemented if use_focal_loss is on.
+    'use_objectness_score': False,
+
+    # Adds a global pool + fc layer to the smallest selected layer that predicts the existence of each of the 80 classes.
+    # This branch is only evaluated during training time and is just there for multitask learning.
+    'use_class_existence_loss': False,
+    'class_existence_alpha': 1,
+
+    # Adds a 1x1 convolution directly to the biggest selected layer that predicts a semantic segmentations for each of the 80 classes.
+    # This branch is only evaluated during training time and is just there for multitask learning.
+    'use_semantic_segmentation_loss': False,
+    'semantic_segmentation_alpha': 1,
+
+    # Uses the same network format as mask_proto_net, except this time it's for adding extra head layers before the final
+    # prediction in prediction modules. If this is none, no extra layers will be added.
+    'extra_head_net': None,
+
+    # What params should the final head layers have (the ones that predict box, confidence, and mask coeffs)
+    'head_layer_params': {'kernel_size': 3, 'padding': 1},
 
     # Add extra layers between the backbone and the network heads
     # The order is (bbox, conf, mask)
@@ -236,6 +411,15 @@ coco_base_config = Config({
     # Whether or not to do post processing on the cpu at test time
     'force_cpu_nms': True,
 
+    # Whether to use mask coefficient cosine similarity nms instead of bbox iou nms
+    'use_coeff_nms': False,
+
+    # Whether or not to have a separate branch whose sole purpose is to act as the coefficients for coeff_diversity_loss
+    # Remember to turn on coeff_diversity_loss, or these extra coefficients won't do anything!
+    # To see their effect, also remember to turn on use_coeff_nms.
+    'use_instance_coeff': False,
+    'num_instance_coeffs': 64,
+
     # Whether or not to tie the mask loss / box loss to 0
     'train_masks': True,
     'train_boxes': True,
@@ -259,8 +443,13 @@ coco_base_config = Config({
     # for this IoU computation, the matching function will use the predicted bbox coordinates.
     # Don't turn this on if you're not using yolo regressors!
     'use_prediction_matching': False,
-    # The number of iterations to wait before starting prediction matching.
-    'prediction_matching_delay': 100,
+
+    # A list of settings to apply after the specified iteration. Each element of the list should look like
+    # (iteration, config_dict) where config_dict is a dictionary you'd pass into a config object's init.
+    'delayed_settings': [],
+
+    # Use command-line arguments to set this.
+    'no_jit': False,
 
     'backbone': None,
     'name': 'base_config',
@@ -498,10 +687,12 @@ yrm15_config = yolact_resnet101_maskrcnn_1_config.copy({
 yrm16_config = yolact_resnet101_maskrcnn_1_config.copy({
     'name': 'yrm16',
     'mask_proto_normalize_mask_loss_by_sqrt_area': True,
+    'mask_alpha': yolact_resnet101_maskrcnn_1_config.mask_alpha * 30,
 })
 yrm16_2_config = yolact_resnet101_maskrcnn_1_config.copy({
     'name': 'yrm16_2',
     'mask_proto_normalize_mask_loss_by_sqrt_area': True,
+    'mask_alpha': yolact_resnet101_maskrcnn_1_config.mask_alpha * 30,
 })
 yrm17_config = yrm13_config.copy({
     'name': 'yrm17',
@@ -541,6 +732,16 @@ fixed_ssd_config = yrm13_config.copy({
 
 })
 
+fixed_ssd_gn_config = fixed_ssd_config.copy({
+    'name': 'fixed_ssd_gn',
+    
+    'backbone': resnet101_gn_backbone.copy({
+        'selected_layers': list(range(2, 8)),
+        'pred_scales': [[3.5, 4.95], [3.6, 4.90], [3.3, 4.02], [2.7, 3.10], [2.1, 2.37], [1.8, 1.92]],
+        'pred_aspect_ratios': [ [[1, sqrt(2), 1/sqrt(2), sqrt(3), 1/sqrt(3)][:n], [1]] for n in [3, 5, 5, 5, 3, 3] ],
+    })
+})
+
 yrm18_config = yrm13_config.copy({
     'name': 'yrm18',
     'mask_proto_coeff_activation': activation_func.none,
@@ -561,13 +762,26 @@ yrm20_config = fixed_ssd_config.copy({
 # Any configs based off of it will also not work
 yrm21_config = fixed_ssd_config.copy({
     'name': 'yrm21',
-    # This option doesn't exit anymore
+    # This option doesn't exist anymore
     'mask_proto_replace_deconv_with_upsample': True,
 })
 
 yrm22_config = fixed_ssd_config.copy({
     'name': 'yrm22',
     'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(None, -2, {}), (256, 3, {'padding': 1})] * 2 + [(256, 1, {})],
+})
+
+yrm22_gn_config = fixed_ssd_gn_config.copy({
+    'name': 'yrm22_gn',
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(None, -2, {}), (256, 3, {'padding': 1})] * 2 + [(256, 1, {})],
+    'crowd_iou_threshold': 0.7,
+    'lr_steps': (280000, 410000, 458000),
+    'max_iter': 458000,
+})
+
+yrm22_gn_highlr_config = yrm22_gn_config.copy({
+    'name': 'yrm22_gn_highlr',
+    'lr': 2e-3
 })
 
 yrm22_2_config = yrm22_config.copy({
@@ -580,9 +794,73 @@ yrm22_crowd_config = yrm22_config.copy({
     'crowd_iou_threshold': 0.7,
 })
 
+# Continue training with crowds to see if anything improves
+yrm22_long_config = yrm22_config.copy({
+    'name': 'yrm22_long',
+    'crowd_iou_threshold': 0.7,
+    'lr_steps': (0, 280000, 360000, 400000),
+})
+
+yrm22_nopad_config = yrm22_crowd_config.copy({
+    'name': 'yrm22_nopad',
+    'mask_proto_net': [(256, 3, {'padding': 0})] * 4 + [(None, -2, {}), (256, 3, {'padding': 0})] * 2 + [(256, 1, {})],
+})
+
+yrm22_nodecay_config = yrm22_crowd_config.copy({
+    'name': 'yrm22_nodecay',
+    'decay': 0,
+})
+
+yrm22_freezebn_config = yrm22_crowd_config.copy({
+    'name': 'yrm22_freezebn',
+    'freeze_bn': True,
+})
+
+yrm22_fewerproto_config = yrm22_crowd_config.copy({
+    'name': 'yrm22_fewerproto',
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(None, -2, {}), (256, 3, {'padding': 1})] * 2 + [(128, 1, {})],
+})
+
+yrm22_muchfewerproto_config = yrm22_crowd_config.copy({
+    'name': 'yrm22_muchfewerproto',
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(None, -2, {}), (256, 3, {'padding': 1})] * 2 + [(64, 1, {})],
+})
+
+yrm22_newreg_config = yrm22_crowd_config.copy({
+    'name': 'yrm22_newreg',
+    'gamma': 0.3, # approx sqrt(0.1)
+    'lr_steps': (140000, 260000, 310000, 360000, 380000, 400000),
+})
+
+yrm22_optimanchor_config = yrm22_newreg_config.copy({
+    'name': 'yrm22_optimanchor',
+    'backbone': yrm22_newreg_config.backbone.copy({
+        'pred_scales': [[1.73, 2.96], [3.12, 2.44, 1.01], [2.09, 2.25, 3.32], [0.90, 2.17, 3.00], [1.03, 2.16], [0.75]],
+        'pred_aspect_ratios': [[[0.59, 0.95], [0.62, 1.18]], [[0.49, 0.75], [0.68, 1.26], [0.64, 1.57]], [[1.94, 1.28], [0.56, 0.84], [0.62, 1.13]], [[1.66, 2.63], [0.51, 1.82], [1.28, 0.76]], [[0.45, 2.43], [0.97]], [[1.88]]]
+    }),
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(None, -2, {}), (256, 3, {'padding': 1})] * 2 + [(128, 1, {})]
+})
+
+yrm22_coeffdiv_config = yrm22_newreg_config.copy({
+    'name': 'yrm22_coeffdiv',
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(None, -2, {}), (256, 3, {'padding': 1})] * 2 + [(128, 1, {})],
+    'mask_proto_coeff_diversity_loss': True,
+
+    'use_coeff_nms': True,
+})
+
+yrm22_darknet_config = yrm22_newreg_config.copy({
+    'name': 'yrm22_darknet',
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(None, -2, {}), (256, 3, {'padding': 1})] * 2 + [(128, 1, {})],
+
+    'backbone': darknet53_backbone,
+    'mask_proto_src': 3,
+})
+
 yrm16_3_config = yrm21_config.copy({
     'name': 'yrm16_3',
     'mask_proto_normalize_mask_loss_by_sqrt_area': True,
+    'mask_alpha': yrm21_config.mask_alpha * 30,
 })
 
 yrm23_config = yrm21_config.copy({
@@ -595,16 +873,386 @@ yrm24_config = yrm21_config.copy({
     'train_boxes': False,
 })
 
+yrm32_config = yrm22_newreg_config.copy({
+    'name': 'yrm32',
+    'freeze_bn': False,
+    'decay': 1e-4,
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(None, -2, {}), (256, 3, {'padding': 1})] * 2 + [(128, 1, {})],
+    'extra_head_net': [(512, 3, {'padding': 1})] + [(256, 3, {'padding': 1})] * 2 + [(512, 3, {'padding': 1}), (1024, 3, {'padding': 1})],
+    'head_layer_params': {'kernel_size': 1, 'padding': 0},
+})
+
+yrm32_protofeat_config = yrm32_config.copy({
+    'name': 'yrm32_protoin',
+    'mask_proto_prototypes_as_features': True,
+    'mask_proto_prototypes_as_features_no_grad': True,
+})
+
+yrm32_massivelad_config = yrm32_config.copy({
+    'name': 'yrm32_massivelad',
+    'extra_head_net': None,
+    'head_layer_params': {'kernel_size': 3, 'padding': 1},
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 3 + 
+        [(None, -2, {}), (256, 3, {'padding': 1})] +
+        [(None, -2, {}), (128, 3, {'padding': 1})] +
+        [(None, -2, {}), ( 64, 3, {'padding': 1})] +
+        [(64, 1, {})],
+})
+
+yrm32_othermassivelad_config = yrm32_config.copy({
+    'name': 'yrm32_othermassivelad',
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 3 + 
+        [(None, -2, {}), (256, 3, {'padding': 1})] +
+        [(None, -2, {}), (128, 3, {'padding': 1})] +
+        [(None, -2, {}), ( 64, 3, {'padding': 1})] +
+        [(64, 1, {})],
+})
+
+yrm32_bnmassivelad_config = yrm32_othermassivelad_config.copy({
+    'name': 'yrm32_bnmassivelad',
+    'freeze_bn': False,
+})
+
+yrm32_absoluteunit_config = yrm32_massivelad_config.copy({
+    'name': 'yrm32_absoluteunit',
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 2 + 
+        [(None, -2, {}), (256, 3, {'padding': 1})] +
+        [(None, -2, {}), (128, 3, {'padding': 1})] +
+        [(None, -2, {}), ( 64, 3, {'padding': 1})] +
+        [(None, -2, {}), ( 64, 3, {'padding': 1})] +
+        [(64, 1, {})],
+})
+
+# Atrous!
+yrm34_config = yrm32_config.copy({
+    'name': 'yrm34',
+    'backbone': yrm32_config.backbone.copy({
+        'args': (yrm32_config.backbone.args[0], [2]),
+
+        'selected_layers': list(range(2, 8)),
+        'pred_scales': [[3.76], [3.72], [3.58], [3.14], [2.75], [2.12]],
+        'pred_aspect_ratios': [[[0.86, 1.51, 0.55]], [[0.84, 1.45, 0.49]], [[0.88, 1.43, 0.52]], [[0.96, 1.61, 0.60]], [[0.91, 1.32, 0.66]], [[0.74, 1.22, 0.90]]]}),
+    'extra_head_net': [(512, 3, {'padding': 1})] + [(512, 3, {'padding': 1}), (1024, 3, {'padding': 1})],
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(None, -2, {}), (256, 3, {'padding': 1})] * 2 + [(128, 1, {})],
+    'freeze_bn': True,
+})
+
+yrm34b_config = yrm34_config.copy({
+    'name': 'yrm34b',
+    'backbone': yrm34_config.backbone.copy({
+        'scales': [[3.91, 2.31], [3.39, 1.86], [3.20, 2.93], [2.69, 2.62], [2.63, 2.05], [2.13]],
+        'aspect_ratios': [[[0.66], [0.82]], [[0.61, 1.20], [1.30]], [[0.62, 1.02], [0.48, 1.60]], [[0.92, 1.66,
+0.63], [0.43]], [[1.68, 0.98, 0.63], [0.59, 1.89, 1.36]], [[1.20, 0.86]]]
+    })
+})
+
+yrm34c_config = yrm22_config.copy({
+    'name': 'yrm34c',
+
+    'backbone': yrm22_config.backbone.copy({
+        'selected_layers': list(range(1, 7)),
+
+        'pred_scales': [[3.91, 2.31], [3.39, 1.86], [3.20, 2.93], [2.69, 2.62], [2.63, 2.05], [2.13]],
+        'pred_aspect_ratios': [[[0.66], [0.82]], [[0.61, 1.20], [1.30]], [[0.62, 1.02], [0.48, 1.60]], [[0.92, 1.66,
+0.63], [0.43]], [[1.68, 0.98, 0.63], [0.59, 1.89, 1.36]], [[1.20, 0.86]]]
+    }),
+    
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(None, -2, {}), (256, 3, {'padding': 1})] * 2 + [(128, 1, {})],
+})
+
+yrm22_test_onegpu_config = yrm22_freezebn_config.copy({
+    'name': 'yrm22_test_onegpu'
+})
+yrm22_test_twogpu_config = yrm22_freezebn_config.copy({
+    'name': 'yrm22_test_twogpu'
+})
+
+yrm35_config = yrm22_config.copy({
+    'name': 'yrm35',
+    'mask_proto_normalize_emulate_roi_pooling': True,
+    'mask_alpha': yrm22_config.mask_alpha * 0.2,
+    'crowd_iou_threshold': 0.7,
+})
+
+yrm35_crop_config = yrm35_config.copy({
+    'name': 'yrm35_crop',
+    'mask_proto_crop': True,
+    'lr_steps': (0, 280000, 360000, 500000, 650000),
+    'max_iter': 800000,
+})
+
+yrm35_expand_config = yrm35_crop_config.copy({
+    'name': 'yrm35_expand',
+    'mask_proto_crop_expand': 0.1,
+    'lr_steps': (140000, 260000, 310000, 360000, 380000, 400000),
+})
+
+yrm35_fpn_config = yrm22_config.copy({
+    'name': 'yrm35_fpn',
+    
+    'backbone': fixed_ssd_config.backbone.copy({
+        # 0 is conv2
+        'selected_layers': list(range(0, 4)),
+
+        'pred_scales': [ [4] ] * 5, # Sort of arbitrary
+        'pred_aspect_ratios': [ [[1, 1/sqrt(2), sqrt(2)]] ]*5,
+    }),
+
+    # Finally, FPN
+    # This replaces each selected layer with the corresponding FPN version
+    'fpn': fpn_base.copy({ 'pad': False, }),
+
+    'mask_proto_src': 0,
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(128, 1, {})],
+    
+    'extra_head_net': [(256, 3, {'padding': 1})],
+    # 'head_layer_params': {'kernel_size': 1, 'padding': 0},
+    
+    'share_prediction_module': True,
+    'crowd_iou_threshold': 0.7,
+
+    # By their forces combined, they are... RoI Pooling!
+    'mask_proto_normalize_emulate_roi_pooling': True,
+    'mask_proto_crop': True,
+    'mask_alpha': yrm22_config.mask_alpha * 0.2,
+})
+
+yrm35_darknet_config = yrm35_fpn_config.copy({
+    'name': 'yrm35_darknet',
+
+    'backbone': darknet53_backbone.copy({
+        'selected_layers': list(range(1, 5)),
+        
+        'pred_scales': [ [4] ] * 5,
+        'pred_aspect_ratios': [ [[1, 1/sqrt(2), sqrt(2)]] ]*5,
+    }),
+})
+
+yrm35_retina_config = yrm35_fpn_config.copy({
+    'name': 'yrm35_retina',
+
+    'backbone': yrm35_fpn_config.backbone.copy({
+        'selected_layers': list(range(1, 4)),
+
+        'use_pixel_scales': True,
+        'pred_scales': [[32], [64], [128], [256], [512]],
+    }),
+
+    'fpn': fpn_base.copy({
+        'num_downsample': 2,
+        'use_conv_downsample': True
+    }),
+
+    'mask_proto_src': 0, # I made it different in FPN for whatever reason (note that this is not 1)
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 3 + [(None, -2, {}), (256, 3, {'padding': 1})] + [(128, 1, {})],
+
+    'positive_iou_threshold': 0.5,
+    'negative_iou_threshold': 0.4,
+})
+
+yrm35_bigimg_config = yrm35_retina_config.copy({
+    'name': 'yrm35_bigimg',
+
+    'max_size': 800,
+    'min_size': 800,
+
+    'freeze_bn': True,
+})
+
+yrm35_moredata_config = yrm35_retina_config.copy({
+    'name': 'yrm35_moredata',
+
+    'dataset': coco2017_dataset,
+})
+
+yrm35_noaug_config = yrm35_moredata_config.copy({
+    'name': 'yrm35_noaug',
+
+    'augment_expand': False,
+    'augment_random_mirror': False,
+    'augment_random_sample_crop': False,
+})
+
+yrm35_resnet50_config = yrm35_moredata_config.copy({
+    'name': 'yrm35_resnet50',
+
+    'backbone': resnet50_backbone.copy({
+        'selected_layers': list(range(1, 4)),
+
+        'use_pixel_scales': True,
+        'pred_scales': [[32], [64], [128], [256], [512]],
+        'pred_aspect_ratios': [ [[1, 1/sqrt(2), sqrt(2)]] ]*5,
+    }),
+})
+
+yrm35_resnet50_SIN_config = yrm35_resnet50_config.copy({
+    'name': 'yrm35_resnet50_SIN',
+
+    'backbone': yrm35_resnet50_config.backbone.copy({
+        'path': 'resnet50_SIN_IN_reduced_fc.pth',
+    })
+})
+
+yrm35_moredownsample_config = yrm35_moredata_config.copy({
+    'name': 'yrm35_moredownsample',
+
+    'backbone': yrm35_moredata_config.backbone.copy({
+        'pred_aspect_ratios': [ [[1, 1/sqrt(2), sqrt(2)]] ]*8,
+        'pred_scales': [[3.5], [3.5], [3.6], [3.3], [2.7], [2.1], [1.8], [1]],
+
+        'use_pixel_scales': False,
+    }),
+
+    'fpn': yrm35_moredata_config.fpn.copy({
+        'num_downsample': 5,
+    }),
+})
+
+yrm35_doubleloss_config = yrm35_moredata_config.copy({
+    'name': 'yrm35_doubleloss',
+
+    'mask_proto_double_loss': True,
+    'mask_proto_double_loss_alpha': 2,
+})
+
+yrm35_maskrcnnparams_config = yrm35_moredata_config.copy({
+    'name': 'yrm35_maskrcnnparams',
+
+    'lr': 0.003,
+    'momentum': 0.9,
+    'decay': 5e-4,
+
+    'gamma': 0.1,
+    'lr_steps': (120000, 160000),
+    'max_iter': 180000,
+
+    'lr_warmup_init': 0.001,
+    'lr_warmup_until': 500,
+})
+
+yrm35_splitpredheads_config = yrm35_moredata_config.copy({
+    'name': 'yrm35_splitpredheads',
+
+    'share_prediction_module': False,
+})
+
+yrm35_coeffdiv_config = yrm35_moredata_config.copy({
+    'name': 'yrm35_coeffdiv',
+
+    'mask_proto_coeff_diversity_loss': True,
+    'mask_proto_coeff_diversity_alpha': 10,
+})
+
+yrm35_deepretina_config = yrm35_moredata_config.copy({
+    'name': 'yrm35_deepretina',
+
+    'backbone': yrm35_retina_config.backbone.copy({
+        'pred_scales': [[x, round(x * (2 ** (1/3))), round(x * (2 ** (2/3)))] for x in [32, 64, 128, 256, 512]],
+        'pred_aspect_ratios': [ [ [1, 1/sqrt(2), sqrt(2)] ] * 3 ] * 5,
+    }),
+
+    # Idk why I put this in the original retina config
+    'extra_head_net': [],
+    'extra_layers': (4, 4, 4),
+
+    'max_size': 600,
+})
+
+yrm35_class_existence_config = yrm35_noaug_config.copy({
+    'name': 'yrm35_class_existence',
+
+    'use_class_existence_loss': True,
+})
+
+yrm35_semantic_segmentation_config = yrm35_noaug_config.copy({
+    'name': 'yrm35_semantic_segmentation',
+
+    'use_semantic_segmentation_loss': True,
+})
+
+yrm35_instance_coeffs_config = yrm35_noaug_config.copy({
+    'name': 'yrm35_instance_coeffs',
+
+    'use_instance_coeff': True,
+    'mask_proto_coeff_diversity_loss': True,
+    'mask_proto_coeff_diversity_alpha': 10,
+})
+
+yrm35_all_losses_config = yrm35_noaug_config.copy({
+    'name': 'yrm35_all_losses',
+
+    'use_class_existence_loss': True,
+    'use_semantic_segmentation_loss': True,
+
+    'use_instance_coeff': True,
+    'mask_proto_coeff_diversity_loss': True,
+    'mask_proto_coeff_diversity_alpha': 10,
+})
+
+yrm36_softmax_config = yrm35_noaug_config.copy({
+    'name': 'yrm36_softmax',
+
+    'use_focal_loss': True,
+
+    'focal_loss_alpha': 0.25,
+    'focal_loss_gamma': 2,
+    'focal_loss_init_pi': 0.001,
+
+    'conf_alpha': 1,
+    
+    'lr_warmup_init': yrm35_noaug_config.lr / 100,
+    'lr_warmup_until': 500,
+})
+
+yrm36_objectness_config = yrm36_softmax_config.copy({
+    'name': 'yrm36_objectness',
+
+    'use_objectness_score': True,
+})
+
+yrm36_sigmoid_config = yrm36_softmax_config.copy({
+    'name': 'yrm36_sigmoid',
+
+    'focal_loss_init_pi': 0.01,
+    'use_sigmoid_focal_loss': True,
+
+    'lr_warmup_init': yrm35_moredata_config.lr / 3,
+    'conf_alpha': 10,
+})
+
+yrm36_semantic_segmentation_config = yrm36_sigmoid_config.copy({
+    'name': 'yrm36_semantic_segmentation',
+    
+    'use_semantic_segmentation_loss': True,
+})
+
+yrm36_deepretina_config = yrm35_deepretina_config.copy({
+    'name': 'yrm36_deepretina',
+
+    'use_focal_loss': True,
+
+    'focal_loss_alpha': 0.25,
+    'focal_loss_gamma': 2,
+    'focal_loss_init_pi': 0.01,
+    'use_sigmoid_focal_loss': True,
+
+    'conf_alpha': 10,
+    
+    'lr_warmup_init': yrm35_moredata_config.lr / 3,
+    'lr_warmup_until': 500,
+})
 
 yrm25_config = yrm22_config.copy({
     'name': 'yrm25',
     'mask_proto_reweight_mask_loss': True,
+    'mask_alpha': yrm22_config.mask_alpha / 4,
 })
 
 # Continue training config 25 with or without the reweighting
 yrm25_a_config = yrm22_config.copy({
     'name': 'yrm25_a',
     'mask_proto_reweight_mask_loss': True,
+    'mask_alpha': yrm22_config.mask_alpha / 4,
     # Start at lr = 1e-4 instead of 1e-3
     'lr_steps': (0, 280000, 360000, 400000),
 })
@@ -612,8 +1260,26 @@ yrm25_a_config = yrm22_config.copy({
 yrm25_b_config = yrm22_config.copy({
     'name': 'yrm25_b',
     'mask_proto_reweight_mask_loss': False,
+    'mask_alpha': coco_base_config.mask_alpha,
     # Start at lr = 1e-4 instead of 1e-3
-    'lr_steps': (0, 280000, 360000, 400000),
+    'lr_steps': (0, 280000, 360000, 500000, 650000),
+    'max_iter': 800000,
+    # 'use_coeff_nms': True
+})
+
+yrm25_half_config = yrm25_config.copy({
+    'name': 'yrm25_half',
+    'mask_proto_reweight_coeff': 0.5,
+})
+
+yrm25_smol_config = yrm25_config.copy({
+    'name': 'yrm25_smol',
+    'mask_proto_reweight_coeff': 1/32,
+})
+
+yrm25_double_config = yrm25_config.copy({
+    'name': 'yrm25_double',
+    'mask_proto_reweight_coeff': 2,
 })
 
 # This is a big boi, tread with caution
@@ -646,6 +1312,84 @@ yrm28_2_config = yrm28_config.copy({
     'mask_proto_prototypes_as_features_no_grad': True, 
 })
 
+yrm28_reset_config = yrm28_2_config.copy({
+    'name': 'yrm28_reset',
+    'crowd_iou_threshold': 0.7,
+})
+
+yrm30_config = yrm22_config.copy({
+    'name': 'yrm30',
+    
+    'backbone': fixed_ssd_config.backbone.copy({
+        # 0 is conv2
+        'selected_layers': list(range(0, 4)),
+        
+        # These scales and aspect ratios are derived from the FPN paper
+        # https://arxiv.org/pdf/1612.03144.pdf
+        'pred_scales': [ [5.3] ] * 5, # 32 / 800 * 136 ...
+        'pred_aspect_ratios': [ [[1, 1/2, 2]] ]*5,
+    }),
+
+    # Finally, FPN
+    # This replaces each selected layer with the corresponding FPN version
+    'fpn': fpn_base.copy({ 'pad': False, }),
+
+    'mask_proto_src': 0,
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 6 + [(256, 1, {})],
+
+    'share_prediction_module': True,
+    'crowd_iou_threshold': 0.7,
+})
+
+yrm30_gn_config = yrm30_config.copy({
+    'name': 'yrm30_gn',
+    'backbone': fixed_ssd_gn_config.backbone.copy({
+        # 0 is conv2
+        'selected_layers': list(range(0, 4)),
+        
+        # These scales and aspect ratios are derived from the FPN paper
+        # https://arxiv.org/pdf/1612.03144.pdf
+        'pred_scales': [ [5.3] ] * 5, # 32 / 800 * 136 ...
+        'pred_aspect_ratios': [ [[1, 1/2, 2]] ]*5,
+    }),
+})
+
+yrm30_lowlr_config = yrm30_config.copy({
+    'name': 'yrm30_lowlr',
+    'lr_steps': (0, 280000, 360000, 400000),
+})
+
+yrm30_halflr_config = yrm30_config.copy({
+    'name': 'yrm30_halflr',
+    'lr': 5e-4
+})
+
+yrm30_bighead_config = yrm30_gn_config.copy({
+    'name': 'yrm30_bighead',
+    'num_head_features': 512,
+})
+
+yrm30_oldsrc_config = yrm30_halflr_config.copy({
+    'name': 'yrm30_oldsrc',
+    'mask_proto_src': 2,
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(None, -2, {}), (256, 3, {'padding': 1})] * 2 + [(256, 1, {})],
+})
+
+yrm33_config = yrm30_config.copy({
+    'name': 'yrm33',
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(128, 1, {})],
+    'extra_head_net': [(256, 3, {'padding': 1}), (512, 3, {'padding': 1}), (1024, 3, {'padding': 1})],
+    'head_layer_params': {'kernel_size': 1, 'padding': 0},
+    'freeze_bn': True,
+    'gamma': 0.3, # approx sqrt(0.1)
+    'lr_steps': (140000, 260000, 310000, 360000, 380000, 400000),
+    'lr': 1e-3,
+})
+
+yrm31_config = yrm22_config.copy({
+    'name': 'yrm31',
+    'ohem_use_most_confident': True
+})
 
 
 yolact_vgg16_config = ssd550_config.copy({
@@ -662,8 +1406,279 @@ yolact_vgg16_config = ssd550_config.copy({
     'mask_proto_layer': 0,
 })
 
+
+yrm300vgg_config = coco_base_config.copy({
+    'name': 'yrm300vgg',
+
+    'backbone': vgg16_backbone.copy({
+        'selected_layers': [3] + list(range(5, 10)),
+        'pred_scales': [[3.5, 4.95], [3.6, 4.90], [3.3, 4.02], [2.7, 3.10], [2.1, 2.37], [1.8, 1.92]],
+        'pred_aspect_ratios': [ [[1, sqrt(2), 1/sqrt(2), sqrt(3), 1/sqrt(3)][:n], [1]] for n in [3, 5, 5, 5, 3, 3] ],
+    }),
+
+    'max_size': 300,
+
+    'train_masks': True,
+    'preserve_aspect_ratio': False,
+    'use_prediction_module': False,
+    'use_yolo_regressors': False,
+
+    'mask_type': mask_type.lincomb,
+    'masks_to_train': 100,
+    'mask_proto_src': 3,
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(None, -2, {}), (256, 3, {'padding': 1})] * 2 + [(128, 1, {})],
+    'mask_proto_crop': False,
+    
+    'crowd_iou_threshold': 0.7,
+    
+    'gamma': 0.3, # approx sqrt(0.1)
+    'lr_steps': (140000, 260000, 310000, 360000, 380000, 400000),
+})
+
+
+cvpr_resnet101_config = coco_base_config.copy({
+    'name': 'cvpr_resnet101',
+    
+    'dataset': coco2017_dataset,
+
+    'backbone': resnet101_backbone.copy({
+        'selected_layers': list(range(2, 8)),
+
+        'pred_scales': [[1.68, 2.91],
+                        [2.95, 2.22, 0.84],
+                        [2.23, 2.17, 3.12],
+                        [0.76, 1.94, 2.72],
+                        [2.10, 2.65],
+                        [1.80, 1.92]],
+
+        'pred_aspect_ratios': [[[0.72, 0.96], [0.68, 1.17]],
+                               [[1.28, 0.66], [0.63, 1.23], [0.89, 1.40]],
+                               [[2.05, 1.24], [0.57, 0.83], [0.61, 1.15]],
+                               [[1.00, 2.21], [0.47, 1.60], [1.44, 0.79]],
+                               [[1.00, 1.41, 0.71, 1.73, 0.58], [1.08]],
+                               [[1.00, 1.41, 0.71, 1.73, 0.58], [1.00]]]
+    }),
+
+    'max_size': 550,
+
+    'train_masks': True,
+    'preserve_aspect_ratio': False,
+    'use_prediction_module': False,
+    'use_yolo_regressors': False,
+
+    'mask_type': mask_type.lincomb,
+    'masks_to_train': 100,
+    'mask_proto_src': 2,
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 3 + [(None, -2, {}), (256, 3, {'padding': 1})] * 2 + [(128, 1, {})],
+    'mask_proto_crop': False,
+    'mask_proto_coeff_diversity_loss': True,
+
+    'use_coeff_nms': False,
+
+    'use_instance_coeff': True,
+    'num_instance_coeffs': 64,
+
+    'crowd_iou_threshold': 0.7,
+    
+    'decay': 1e-4,
+    'gamma': 0.3, # approx sqrt(0.1)
+    'max_iter': 800000,
+    'lr_steps': (100000, 200000, 300000, 400000, 500000, 600000, 700000, 800000),
+})
+
+cvpr300_resnet101_config = cvpr_resnet101_config.copy({
+    'name': 'cvpr300_resnet101',
+
+    'backbone': cvpr_resnet101_config.backbone.copy({ 'selected_layers': list(range(1, 7)) }),
+
+    'max_size': 300,
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 2 + [(None, -2, {}), (256, 3, {'padding': 1})] * 3 + [(128, 1, {})],
+})
+
+
+cvpr_resnet50_config = cvpr_resnet101_config.copy({
+    'name': 'cvpr_resnet50',
+
+    'backbone': resnet50_backbone.copy({
+        'selected_layers': list(range(2, 8)),
+
+        'pred_scales': [[1.68, 2.91],
+                        [2.95, 2.22, 0.84],
+                        [2.23, 2.17, 3.12],
+                        [0.76, 1.94, 2.72],
+                        [2.10, 2.65],
+                        [1.80, 1.92]],
+
+        'pred_aspect_ratios': [[[0.72, 0.96], [0.68, 1.17]],
+                               [[1.28, 0.66], [0.63, 1.23], [0.89, 1.40]],
+                               [[2.05, 1.24], [0.57, 0.83], [0.61, 1.15]],
+                               [[1.00, 2.21], [0.47, 1.60], [1.44, 0.79]],
+                               [[1.00, 1.41, 0.71, 1.73, 0.58], [1.08]],
+                               [[1.00, 1.41, 0.71, 1.73, 0.58], [1.00]]]
+    }),
+})
+
+
+cvpr_darknet53_config = coco_base_config.copy({
+    'name': 'cvpr_darknet53',
+    
+    'dataset': coco2017_dataset,
+
+    'backbone': darknet53_backbone.copy({
+        'selected_layers': list(range(3, 9)),
+
+        'pred_scales': [[1.68, 2.91],
+                        [2.95, 2.22, 0.84],
+                        [2.23, 2.17, 3.12],
+                        [0.76, 1.94, 2.72],
+                        [2.10, 2.65],
+                        [1.80, 1.92]],
+
+        'pred_aspect_ratios': [[[0.72, 0.96], [0.68, 1.17]],
+                               [[1.28, 0.66], [0.63, 1.23], [0.89, 1.40]],
+                               [[2.05, 1.24], [0.57, 0.83], [0.61, 1.15]],
+                               [[1.00, 2.21], [0.47, 1.60], [1.44, 0.79]],
+                               [[1.00, 1.41, 0.71, 1.73, 0.58], [1.08]],
+                               [[1.00, 1.41, 0.71, 1.73, 0.58], [1.00]]]
+    }),
+
+    'max_size': 550,
+
+    'train_masks': True,
+    'preserve_aspect_ratio': False,
+    'use_prediction_module': False,
+    'use_yolo_regressors': False,
+
+    'mask_type': mask_type.lincomb,
+    'masks_to_train': 100,
+    'mask_proto_src': 3,
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 3 + [(None, -2, {}), (256, 3, {'padding': 1})] * 2 + [(128, 1, {})],
+    'mask_proto_crop': False,
+    'mask_proto_coeff_diversity_loss': True,
+
+    'use_coeff_nms': False,
+
+    'use_instance_coeff': True,
+    'num_instance_coeffs': 64,
+
+    'crowd_iou_threshold': 0.7,
+    
+    'decay': 1e-4,
+    'gamma': 0.3, # approx sqrt(0.1)
+    'max_iter': 800000,
+    'lr_steps': (100000, 200000, 300000, 400000, 500000, 600000, 700000, 800000),
+})
+
+
+cvpr300_darknet53_config = cvpr_darknet53_config.copy({
+    'name': 'cvpr300_darknet53',
+
+    'backbone': cvpr_darknet53_config.backbone.copy({ 'selected_layers': list(range(2, 8)) }),
+
+    'max_size': 300,
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 2 + [(None, -2, {}), (256, 3, {'padding': 1})] * 3 + [(128, 1, {})],
+})
+
+
+
+
+cvpr2_resnet101_config = coco_base_config.copy({
+    'name': 'cvpr2_resnet101',
+    
+    'dataset': coco2017_dataset,
+
+    'backbone': resnet101_backbone.copy({
+        'selected_layers': list(range(2, 8)),
+        'pred_scales': [[2.62, 3.71], [2.70, 3.68], [2.47, 3.01], [2.03, 2.33], [1.58, 1.78], [1.8, 1.92]],
+        'pred_aspect_ratios': [ [[1, sqrt(2), 1/sqrt(2), sqrt(3), 1/sqrt(3)][:n], [1]] for n in [3, 5, 5, 5, 3, 3] ],
+    }),
+
+    'max_size': 600,
+
+    'train_masks': True,
+    'preserve_aspect_ratio': False,
+    'use_prediction_module': False,
+    'use_yolo_regressors': False,
+
+    'mask_type': mask_type.lincomb,
+    'masks_to_train': 100,
+    'mask_proto_src': 2,
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(None, -2, {}), (256, 3, {'padding': 1})] * 2 + [(128, 1, {})],
+    'mask_proto_crop': False,
+    'mask_proto_coeff_diversity_loss': True,
+
+    'use_coeff_nms': False,
+
+    'use_instance_coeff': True,
+    'num_instance_coeffs': 64,
+
+    'crowd_iou_threshold': 0.7,
+    
+    'decay': 1e-4,
+    'gamma': 0.3, # approx sqrt(0.1)
+    'max_iter': 800000,
+    'lr_steps': (120000, 240000, 360000, 480000, 600000, 700000, 800000),
+})
+
+cvpr2_300_resnet101_config = cvpr2_resnet101_config.copy({
+    'name': 'cvpr2_300_resnet101',
+    'backbone': cvpr2_resnet101_config.backbone.copy({ 'selected_layers': list(range(1, 7)), }),
+    'max_size': 300,
+    'mask_proto_src': 2,
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 3 + [(None, -2, {}), (256, 3, {'padding': 1})] * 3 + [(128, 1, {})],
+})
+
+cvpr2_300_resnet50_config = cvpr2_300_resnet101_config.copy({
+    'name': 'cvpr2_300_resnet50',
+    'backbone': resnet50_backbone.copy({
+        'selected_layers': list(range(1, 7)),
+        'pred_scales': [[2.62, 3.71], [2.70, 3.68], [2.47, 3.01], [2.03, 2.33], [1.58, 1.78], [1.8, 1.92]],
+        'pred_aspect_ratios': [ [[1, sqrt(2), 1/sqrt(2), sqrt(3), 1/sqrt(3)][:n], [1]] for n in [3, 5, 5, 5, 3, 3] ],
+    }),
+})
+
+cvpr2_darknet53_config = cvpr2_resnet101_config.copy({
+    'name': 'cvpr2_darknet53',
+    'backbone': darknet53_backbone.copy({
+        'selected_layers': list(range(3, 9)),
+        'pred_scales': [[2.62, 3.71], [2.70, 3.68], [2.47, 3.01], [2.03, 2.33], [1.58, 1.78], [1.8, 1.92]],
+        'pred_aspect_ratios': [ [[1, sqrt(2), 1/sqrt(2), sqrt(3), 1/sqrt(3)][:n], [1]] for n in [3, 5, 5, 5, 3, 3] ],
+    }),
+    'mask_proto_src': 3,
+})
+
+cvpr2_300_darknet53_config = cvpr2_darknet53_config.copy({
+    'name': 'cvpr2_300_darknet53',
+    'backbone': cvpr2_darknet53_config.backbone.copy({ 'selected_layers': list(range(2, 8)) }),
+    'max_size': 300,
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 3 + [(None, -2, {}), (256, 3, {'padding': 1})] * 3 + [(128, 1, {})],
+})
+
+
+yrm22_fcis_config = yrm22_config.copy({
+    'name': 'yrm22_fcis',
+
+    'backbone': yrm22_config.backbone.copy({
+        # Second argument here is a trous on conv 5
+        'args': (yrm22_config.backbone.args[0], [3]),
+
+        'selected_layers': [3],
+        'pred_scales': [[4, 8, 16, 32]],
+        'pred_aspect_ratios': [[[sqrt(0.5), 1, sqrt(2)]] * 4],
+    }),
+    
+    'crowd_iou_threshold': 0.7,
+    'max_size': 600,
+
+    'mask_proto_src': 3,
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 4 + [(None, -2, {}), (256, 3, {'padding': 1})] * 2 + [(128, 1, {})],
+
+    'extra_head_net': [(1024, 1, {})],
+})
+
+
 # Default config
-cfg = yrm22_config.copy()
+cfg = yrm36_softmax_config.copy()
 
 def set_cfg(config_name):
     """ Sets the active config. Works even if cfg is already imported! """
@@ -673,4 +1688,7 @@ def set_cfg(config_name):
     # be used like ssd300_config.copy({'max_size': 400}) for extreme fine-tuning
     cfg.replace(eval(config_name))
 
+def set_dataset(dataset_name:str):
+    """ Sets the dataset of the current config. """
+    cfg.dataset = eval(dataset_name)
     

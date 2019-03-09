@@ -170,7 +170,7 @@ def display_lincomb(proto_data, masks):
     out_masks = torch.matmul(proto_data, masks.t())
     # out_masks = cfg.mask_proto_mask_activation(out_masks)
 
-    for kdx in range(5):
+    for kdx in range(1):
         jdx = kdx + 0
         import matplotlib.pyplot as plt
         coeffs = masks[jdx, :].cpu().numpy()
@@ -202,8 +202,8 @@ def display_lincomb(proto_data, masks):
                 arr_run[y*proto_h:(y+1)*proto_h, x*proto_w:(x+1)*proto_w] = (running_total_nonlin > 0.5).astype(np.float)
         plt.imshow(arr_img)
         plt.show()
-        plt.imshow(arr_run)
-        plt.show()
+        # plt.imshow(arr_run)
+        # plt.show()
         # plt.imshow(test)
         # plt.show()
         plt.imshow(out_masks[:, :, jdx].cpu().numpy())

@@ -9,8 +9,7 @@ class MovingAverage():
 
     def __init__(self, max_window_size=1000):
         self.max_window_size = max_window_size
-        self.window = []
-        self.sum = 0
+        self.reset()
 
     def add(self, elem):
         """ Adds an element to the window, removing the earliest element if necessary. """
@@ -27,6 +26,11 @@ class MovingAverage():
     def append(self, elem):
         """ Same as add just more pythonic. """
         self.add(elem)
+
+    def reset(self):
+        """ Resets the MovingAverage to its initial state. """
+        self.window = []
+        self.sum = 0
 
     def get_avg(self):
         """ Returns the average of the elements in the window. """

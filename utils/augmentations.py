@@ -566,6 +566,8 @@ class BackboneTransform(object):
             img = (img - self.mean) / self.std
         elif self.transform.subtract_means:
             img = (img - self.mean)
+        elif self.transform.to_float:
+            img = img / 255
 
         img = img[:, :, self.channel_permutation]
 
@@ -588,6 +590,49 @@ class BaseTransform(object):
     def __call__(self, img, masks=None, boxes=None, labels=None):
         return self.augment(img, masks, boxes, labels)
 
+import torch.nn.functional as F
+
+class FastBaseTransform(object):
+    """
+    Transform that does all operations on the GPU for super speed.
+    This doesn't suppport a lot of config settings and should only be used for production.
+    Maintain this as necessary.
+    """
+
+    def __init__(self, ):
+        self.mean = torch.Tensor(MEANS).float().cuda()[None, :, None, None]
+        self.std  = torch.Tensor( STD ).float().cuda()[None, :, None, None]
+        self.transform = cfg.backbone.transform
+
+    def __call__(self, img):
+        # img assumed to be a pytorch BGR image with channel order [n, h, w, c]
+        if cfg.preserve_aspect_ratio:
+            raise NotImplementedError
+
+        img = img.permute(0, 3, 1, 2).contiguous()
+        img = F.interpolate(img, (cfg.max_size, cfg.max_size), mode='bilinear', align_corners=False)
+
+        if self.transform.normalize:
+            img = (img - self.mean) / self.std
+        elif self.transform.subtract_means:
+            img = (img - self.mean)
+        elif self.transform.to_float:
+            img = img / 255
+        
+        if self.transform.channel_order != 'RGB':
+            raise NotImplementedError
+        
+        img = img[:, (2, 1, 0), :, :].contiguous()
+
+        # Return value is in channel order [n, c, h, w] and RGB
+        return img
+
+def do_nothing(img=None, masks=None, boxes=None, labels=None):
+    return img, masks, boxes, labels
+
+
+def enable_if(condition, obj):
+    return obj if condition else do_nothing
 
 class SSDAugmentation(object):
     """ Transform to be used when training. """
@@ -596,10 +641,10 @@ class SSDAugmentation(object):
         self.augment = Compose([
             ConvertFromInts(),
             ToAbsoluteCoords(),
-            PhotometricDistort(),
-            Expand(mean),
-            RandomSampleCrop(),
-            RandomMirror(),
+            enable_if(cfg.augment_photometric_distort, PhotometricDistort()),
+            enable_if(cfg.augment_expand, Expand(mean)),
+            enable_if(cfg.augment_random_sample_crop, RandomSampleCrop()),
+            enable_if(cfg.augment_random_mirror, RandomMirror()),
             Resize(),
             Pad(cfg.max_size, cfg.max_size, mean),
             ToPercentCoords(),

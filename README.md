@@ -8,23 +8,20 @@
        ╚═╝    ╚═════╝ ╚══════╝╚═╝  ╚═╝ ╚═════╝   ╚═╝ 
 ```
 
-# Disclaimer
+A model for realtime instance segmentation. Yolact is still in development, so all of this is still subject to change.
+Here's a look at our current results (20fps on a Titan Xp):
 
-This README is in progress. Nothing is final. Read at your own risk. The following sections are more for our own bookkeeping than for your eyes.
+![Example 1](data/yolact_example_1.png)
 
-## Modifications to [SSD](https://www.cs.unc.edu/~wliu/papers/ssd.pdf) so far
- - Use [ResNet101](https://arxiv.org/pdf/1512.03385.pdf) as a backbone
- - ~~Choose anchor boxes that better cover smaller objects~~
- - ~~Choose prediction layers that make more sense (compared to [SSD 321/513](https://arxiv.org/pdf/1701.06659.pdf))~~
- - ~~Use Prediction Modules (type c) from [DSSD](https://arxiv.org/pdf/1701.06659.pdf)~~
- - ~~Use [YOLOv2](https://arxiv.org/pdf/1612.08242.pdf)-style coordinate regressions (which better fits our tiling scheme)~~
- - ~~*Upsample* images to between 600-1000px while maintaining aspect ratio (no fixed input sizes)~~
+![Example 2](data/yolact_example_2.png)
 
-These changes really worked, didn't they? :/
+
+Because the acronym YOLACT doesn't fit our method anymore, the current name for our model is "Single Shot Segmenter". This, however, is also subject to change.
+
 
 # Installation
  - Set up a Python3 environment.
- - Install [Pytorch](http://pytorch.org/) 0.4.1 and TorchVision.
+ - Install [Pytorch](http://pytorch.org/) 1.0.0 and TorchVision.
  - Install some other packages:
    ```Shell
    # Cython needs to be installed before pycocotools
@@ -46,11 +43,12 @@ These changes really worked, didn't they? :/
  - To train, grab a pretrained VGG16 or Resnet101 model and put it in `./weights`.
    * For VGG16, download `vgg16_reducedfc.pth` from [here](https://github.com/amdegroot/ssd.pytorch).
    * For Resnet101, download `resnet101_reducedfc.pth` from [here](http://vision5.idav.ucdavis.edu:6337/resnet101_reducedfc.pth).
+   * For Resnet101 with Group Norm, download `R-101-GN.pkl` from [here](https://s3-us-west-2.amazonaws.com/detectron/ImageNetPretrained/47592356/R-101-GN.pkl).
  - Run one of the training commands below.
    * Note that you can press ctrl+c while training and it will save an `*_interrupt.pth` file at the current iteration.
    * All weights are saved in the `./weights` directory by default with the file name `<config>_<epoch>_<iter>.pth`.
 ```Shell
-# Trains using the default config (whatever it is at the moment) and with batch size 32 (not advisable!)
+# Trains using the default config (whatever it is at the moment) and with batch size 8 (the default).
 python3 train.py
 
 # Trains yrm10_config with a batch_size of 5 (suprise). For the 550px models, 1 batch takes up around 1.8 gigs of VRAM, so specify accordingly.

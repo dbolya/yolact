@@ -27,7 +27,7 @@ for ann in annotations:
 	w,h = (image['width'], image['height'])
 	
 	if 'bbox' in ann:
-		bboxes.append([w, h] + ann['bbox'][2:])
+		bboxes.append([w, h] + ann['bbox'])
 
 with open(dump_file, 'wb') as f:
 	pickle.dump(bboxes, f)

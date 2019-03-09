@@ -28,9 +28,7 @@ def str2bool(v):
 
 parser = argparse.ArgumentParser(
     description='Yolact Training Script')
-parser.add_argument('--dataset_root', default=COCO_ROOT,
-                    help='Dataset root directory path')
-parser.add_argument('--batch_size', default=32, type=int,
+parser.add_argument('--batch_size', default=8, type=int,
                     help='Batch size for training')
 parser.add_argument('--resume', default=None, type=str,
                     help='Checkpoint state_dict file to resume training from. If this is "interrupt"'\
@@ -42,16 +40,14 @@ parser.add_argument('--num_workers', default=4, type=int,
                     help='Number of workers used in dataloading')
 parser.add_argument('--cuda', default=True, type=str2bool,
                     help='Use CUDA to train model')
-parser.add_argument('--lr', '--learning_rate', default=1e-3, type=float,
-                    help='initial learning rate')
-parser.add_argument('--momentum', default=0.9, type=float,
-                    help='Momentum value for optim')
-parser.add_argument('--weight_decay', default=5e-4, type=float,
-                    help='Weight decay for SGD')
-parser.add_argument('--gamma', default=0.1, type=float,
-                    help='Gamma update for SGD')
-parser.add_argument('--visdom', default=False, type=str2bool,
-                    help='Use visdom for loss visualization')
+parser.add_argument('--lr', '--learning_rate', default=None, type=float,
+                    help='Initial learning rate. Leave as None to read this from the config.')
+parser.add_argument('--momentum', default=None, type=float,
+                    help='Momentum for SGD. Leave as None to read this from the config.')
+parser.add_argument('--decay', '--weight_decay', default=None, type=float,
+                    help='Weight decay for SGD. Leave as None to read this from the config.')
+parser.add_argument('--gamma', default=None, type=float,
+                    help='For each lr step, what to multiply the lr by. Leave as None to read this from the config.')
 parser.add_argument('--save_folder', default='weights/',
                     help='Directory for saving checkpoint models')
 parser.add_argument('--config', default=None,
@@ -62,6 +58,14 @@ parser.add_argument('--validation_size', default=5000, type=int,
                     help='The number of images to use for validation.')
 parser.add_argument('--validation_epoch', default=2, type=int,
                     help='Output validation information every n iterations. If -1, do no validation.')
+parser.add_argument('--no_jit', dest='no_jit', action='store_true',
+                    help='Don\'t use Pytorch 1.0 tracing functionality.')
+parser.add_argument('--keep_latest', dest='keep_latest', action='store_true',
+                    help='Only keep the latest checkpoint instead of each one.')
+parser.add_argument('--dataset', default=None, type=str,
+                    help='If specified, override the dataset specified in the config with this one (example: coco2017_dataset).')
+
+parser.set_defaults(no_jit=False, keep_latest=False)
 args = parser.parse_args()
 
 # FYXTODO
@@ -70,6 +74,20 @@ args.num_workers = 0
 
 if args.config is not None:
     set_cfg(args.config)
+
+cfg.no_jit = args.no_jit
+
+if args.dataset is not None:
+    set_dataset(args.dataset)
+
+# Update training parameters from the config if necessary
+def replace(name):
+    if getattr(args, name) == None: setattr(args, name, getattr(cfg, name))
+replace('lr')
+replace('decay')
+replace('gamma')
+replace('momentum')
+
 
 if torch.cuda.is_available():
     if args.cuda:
@@ -81,24 +99,49 @@ if torch.cuda.is_available():
 else:
     torch.set_default_tensor_type('torch.FloatTensor')
 
+class ScatterWrapper:
+    """ Input is any number of lists. This will preserve them through a dataparallel scatter. """
+    def __init__(self, *args):
+        for arg in args:
+            if not isinstance(arg, list):
+                print('Warning: ScatterWrapper got input of non-list type.')
+        self.args = args
+        self.batch_size = len(args[0])
+    
+    def make_mask(self):
+        out = torch.Tensor(list(range(self.batch_size))).long()
+        if args.cuda: return out.cuda()
+        else: return out
+    
+    def get_args(self, mask):
+        device = mask.device
+        mask = [int(x) for x in mask]
+        out_args = [[] for _ in self.args]
+
+        for out, arg in zip(out_args, self.args):
+            for idx in mask:
+                x = arg[idx]
+                if isinstance(x, torch.Tensor):
+                    x = x.to(device)
+                out.append(x)
+        
+        return out_args
+
+        
+
 def train():
     if not os.path.exists(args.save_folder):
         os.mkdir(args.save_folder)
 
-    dataset = COCODetection(root=args.dataset_root,
-                            image_set=cfg.dataset.train,
+    dataset = COCODetection(image_path=cfg.dataset.train_images,
+                            info_file=cfg.dataset.train_info,
                             transform=SSDAugmentation(MEANS))
     
     if args.validation_epoch > 0:
         setup_eval()
-        val_dataset = COCODetection(root=args.dataset_root,
-                                image_set=cfg.dataset.valid,
-                                transform=BaseTransform(MEANS))
-
-    if args.visdom:
-        import visdom
-        global viz
-        viz = visdom.Visdom(port=8091)
+        val_dataset = COCODetection(image_path=cfg.dataset.valid_images,
+                                    info_file=cfg.dataset.valid_info,
+                                    transform=BaseTransform(MEANS))
 
     # Parallel wraps the underlying module, but when saving and loading we don't want that
     yolact_net = Yolact()
@@ -122,7 +165,7 @@ def train():
         yolact_net.init_weights(backbone_path=args.save_folder + cfg.backbone.path)
 
     optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=args.momentum,
-                          weight_decay=args.weight_decay)
+                          weight_decay=args.decay)
     criterion = MultiBoxLoss(num_classes=cfg.num_classes,
                              pos_threshold=cfg.positive_iou_threshold,
                              neg_threshold=cfg.negative_iou_threshold,
@@ -145,12 +188,6 @@ def train():
     # Which learning rate adjustment step are we on? lr' = lr * gamma ^ step_index
     step_index = 0
 
-    if args.visdom:
-        vis_title = 'Training yolact with config %s' % cfg.name
-        vis_legend = ['Loc Loss', 'Conf Loss', 'Total Loss']
-        iter_plot = create_vis_plot('Iteration', 'Loss', vis_title, vis_legend)
-        epoch_plot = create_vis_plot('Epoch', 'Loss', vis_title, vis_legend)
-
     data_loader = data.DataLoader(dataset, args.batch_size,
                                   num_workers=args.num_workers,
                                   shuffle=True, collate_fn=detection_collate,
@@ -159,13 +196,9 @@ def train():
     
     save_path = lambda epoch, iteration: SavePath(cfg.name, epoch, iteration).get_path(root=args.save_folder)
     time_avg = MovingAverage()
-    avg_window = 100
-    loss_m_avg, loss_l_avg, loss_c_avg = (MovingAverage(avg_window), MovingAverage(avg_window), MovingAverage(avg_window))
 
-    # Wait until the specified iteration to turn on prediction matching, if the setting is on in the first place
-    use_prediction_matching = cfg.use_prediction_matching
-    if cfg.use_prediction_matching:
-        cfg.use_prediction_matching = False
+    loss_types = ['B', 'C', 'M', 'P', 'D', 'E', 'S'] # Forms the print order
+    loss_avgs  = { k: MovingAverage(100) for k in loss_types }
 
     print('Begin training!')
     print()
@@ -185,16 +218,32 @@ def train():
                 if iteration == cfg.max_iter:
                     break
 
-                # Adjust the learning rate at the given iterations, but also if we resume from past that iteration
-                if step_index < len(cfg.lr_steps) and iteration >= cfg.lr_steps[step_index]:
-                    step_index += 1
-                    adjust_learning_rate(optimizer, args.gamma, step_index)
+                # Change a config setting if we've reached the specified iteration
+                changed = False
+                for change in cfg.delayed_settings:
+                    if iteration >= change[0]:
+                        changed = True
+                        cfg.replace(change[1])
 
-                # Nothing to see here--just the implementation of a setting we'll never use
-                if use_prediction_matching and iteration > cfg.prediction_matching_delay:
-                    cfg.use_prediction_matching = True
+                        # Reset the loss averages because things might have changed
+                        for avg in loss_avgs:
+                            avg.reset()
+                
+                # If a config setting was changed, remove it from the list so we don't keep checking
+                if changed:
+                    cfg.delayed_settings = [x for x in cfg.delayed_settings if x[0] > iteration]
+
+                # Warm up by linearly interpolating the learning rate from some smaller value
+                if cfg.lr_warmup_until > 0 and iteration <= cfg.lr_warmup_until:
+                    set_lr(optimizer, (args.lr - cfg.lr_warmup_init) * (iteration / cfg.lr_warmup_until) + cfg.lr_warmup_init)
+
+                # Adjust the learning rate at the given iterations, but also if we resume from past that iteration
+                while step_index < len(cfg.lr_steps) and iteration >= cfg.lr_steps[step_index]:
+                    step_index += 1
+                    set_lr(optimizer, args.lr * (args.gamma ** step_index))
 
                 # Load training data
+                # Note, for training on multiple gpus this will use the custom replicate and gather I wrote up there
                 images, targets, masks, num_crowds = prepare_data(datum)
                 
                 # Forward Pass (bbox_coords, class_confs, mask_output, prior_boxes, prototypes)
@@ -202,18 +251,21 @@ def train():
                 
                 # Compute Loss
                 optimizer.zero_grad()
-                losses = criterion(out, targets, masks, num_crowds)
-                loss_l, loss_c, loss_m = [x.sum() for x in losses] # Sum here because Dataparallel
-                loss = loss_l + loss_c + loss_m
+                
+                wrapper = ScatterWrapper(targets, masks, num_crowds)
+                losses = criterion(out, wrapper, wrapper.make_mask())
+                
+                losses = { k: v.mean() for k,v in losses.items() } # Mean here because Dataparallel
+                loss = sum([losses[k] for k in losses])
                 
                 # Backprop
                 loss.backward() # Do this to free up vram even if loss is not finite
                 if torch.isfinite(loss).item():
                     optimizer.step()
                 
-                loss_c_avg.add(loss_c.item())
-                loss_l_avg.add(loss_l.item())
-                loss_m_avg.add(loss_m.item())
+                # Add the loss to the moving average for bookkeeping
+                for k in losses:
+                    loss_avgs[k].add(losses[k].item())
 
                 cur_time  = time.time()
                 elapsed   = cur_time - last_time
@@ -224,31 +276,30 @@ def train():
                     time_avg.add(elapsed)
 
                 if iteration % 10 == 0:
-                    eta_str = datetime.timedelta(seconds=(cfg.max_iter-iteration) * time_avg.get_avg())
-                    l = loss_l_avg.get_avg()
-                    c = loss_c_avg.get_avg()
-                    m = loss_m_avg.get_avg()
-                    t = l + c + m
-                    print('[%3d] %7d || B: %.3f | C: %.3f | M: %.3f | T: %.3f || ETA: %s || timer: %.3f'
-                            % (epoch, iteration, l,c,m,t, eta_str, elapsed))
+                    eta_str = str(datetime.timedelta(seconds=(cfg.max_iter-iteration) * time_avg.get_avg())).split('.')[0]
+                    total = sum([loss_avgs[k].get_avg() for k in losses])
+                    loss_labels = sum([[k, loss_avgs[k].get_avg()] for k in loss_types if k in losses], [])
                     
-
-                if args.visdom:
-                    update_vis_plot(iteration, loss_l_avg.get_avg(), loss_c_avg.get_avg(), iter_plot, epoch_plot, 'append')
+                    print(('[%3d] %7d ||' + (' %s: %.3f |' * len(losses)) + ' T: %.3f || ETA: %s || timer: %.3f')
+                            % tuple([epoch, iteration] + loss_labels + [total, eta_str, elapsed]), flush=True)
                 
                 iteration += 1
 
                 if iteration % args.save_interval == 0 and iteration != args.start_iter:
+                    if args.keep_latest:
+                        latest = SavePath.get_latest(args.save_folder, cfg.name)
+
                     print('Saving state, iter:', iteration)
                     yolact_net.save_weights(save_path(epoch, iteration))
+
+                    if args.keep_latest and latest is not None:
+                        print('Deleting old save...')
+                        os.remove(latest)
             
             # This is done per epoch
             if args.validation_epoch > 0:
                 if epoch % args.validation_epoch == 0 and epoch > 0:
                     compute_validation_map(yolact_net, val_dataset)
-
-            if args.visdom:
-                    update_vis_plot(epoch, loss_l_avg.get_avg(), loss_c_avg.get_avg(), epoch_plot, None, 'append', epoch_size)
     except KeyboardInterrupt:
         print('Stopping early. Saving network...')
         
@@ -261,46 +312,10 @@ def train():
     yolact_net.save_weights(save_path(epoch, iteration))
 
 
-def adjust_learning_rate(optimizer, gamma, step):
-    """Sets the learning rate to the initial LR decayed by 10 at every
-        specified step
-    # Adapted from PyTorch Imagenet example:
-    # https://github.com/pytorch/examples/blob/master/imagenet/main.py
-    """
-    lr = args.lr * (gamma ** (step))
+def set_lr(optimizer, new_lr):
     for param_group in optimizer.param_groups:
-        param_group['lr'] = lr
+        param_group['lr'] = new_lr
 
-
-def create_vis_plot(_xlabel, _ylabel, _title, _legend):
-    return viz.line(
-        X=torch.zeros((1,)).cpu(),
-        Y=torch.zeros((1, 3)).cpu(),
-        opts=dict(
-            xlabel=_xlabel,
-            ylabel=_ylabel,
-            title=_title,
-            legend=_legend
-        )
-    )
-
-
-def update_vis_plot(iteration, loc, conf, window1, window2, update_type,
-                    epoch_size=1):
-    viz.line(
-        X=torch.ones((1, 3)).cpu() * iteration,
-        Y=torch.Tensor([loc, conf, loc + conf]).unsqueeze(0).cpu() / epoch_size,
-        win=window1,
-        update=update_type
-    )
-    # initialize epoch plot on first iteration
-    if iteration == 0:
-        viz.line(
-            X=torch.zeros((1, 3)).cpu(),
-            Y=torch.Tensor([loc, conf, loc + conf]).unsqueeze(0).cpu(),
-            win=window2,
-            update=True
-        )
 
 def prepare_data(datum):
     images, (targets, masks, num_crowds) = datum
