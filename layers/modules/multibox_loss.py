@@ -83,7 +83,7 @@ class MultiBoxLoss(nn.Module):
         targets, masks, num_crowds = wrapper.get_args(wrapper_mask)
         labels = [None] * len(targets) # Used in sem segm loss
 
-        num = loc_data.size(0)
+        batch_size = loc_data.size(0)
         # This is necessary for training on multiple GPUs because
         # DataParallel will cat the priors from each GPU together
         priors = priors[:loc_data.size(1), :]
@@ -92,17 +92,17 @@ class MultiBoxLoss(nn.Module):
 
         # Match priors (default boxes) and ground truth boxes
         # These tensors will be created with the same device as loc_data
-        loc_t = loc_data.new(num, num_priors, 4)
-        gt_box_t = loc_data.new(num, num_priors, 4)
-        conf_t = loc_data.new(num, num_priors).long()
-        idx_t = loc_data.new(num, num_priors).long()
+        loc_t = loc_data.new(batch_size, num_priors, 4)
+        gt_box_t = loc_data.new(batch_size, num_priors, 4)
+        conf_t = loc_data.new(batch_size, num_priors).long()
+        idx_t = loc_data.new(batch_size, num_priors).long()
 
         defaults = priors.data
 
         if cfg.use_class_existence_loss:
-            class_existence_t = loc_data.new(num, num_classes-1)
+            class_existence_t = loc_data.new(batch_size, num_classes-1)
 
-        for idx in range(num):
+        for idx in range(batch_size):
             truths      = targets[idx][:, :-1].data
             labels[idx] = targets[idx][:, -1].data.long()
 
@@ -153,7 +153,7 @@ class MultiBoxLoss(nn.Module):
             if cfg.mask_type == mask_type.direct:
                 if cfg.use_gt_bboxes:
                     pos_masks = []
-                    for idx in range(num):
+                    for idx in range(batch_size):
                         pos_masks.append(masks[idx][idx_t[idx, pos[idx]]])
                     masks_t = torch.cat(pos_masks, 0)
                     masks_p = mask_data[pos, :].view(-1, cfg.mask_dim)
@@ -178,7 +178,7 @@ class MultiBoxLoss(nn.Module):
             else:
                 losses['C'] = self.focal_conf_loss(conf_data, conf_t)
         else:
-            losses['C'] = self.ohem_conf_loss(conf_data, conf_t, pos, num)
+            losses['C'] = self.ohem_conf_loss(conf_data, conf_t, pos, batch_size)
 
         # These losses also don't depend on anchors
         if cfg.use_class_existence_loss:
@@ -193,7 +193,7 @@ class MultiBoxLoss(nn.Module):
             if k not in ('P', 'E', 'S'):
                 losses[k] /= N
             else:
-                losses[k] /= num # Divide by batch size otherwise
+                losses[k] /= batch_size
 
         # Loss Key:
         #  - B: Box Localization Loss
