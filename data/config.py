@@ -1078,7 +1078,7 @@ yrm35_256proto_config = yrm35_moredata_config.copy({
 })
 
 yrm35_tweakedscales_config = yrm35_moredata_config.copy({
-    'name': 'yrm35_tweakedscales_config',
+    'name': 'yrm35_tweakedscales',
 
     'backbone': yrm35_moredata_config.backbone.copy({
         'pred_aspect_ratios': [ [[1, 1/sqrt(2), sqrt(2)]] ]*6,
