@@ -1065,6 +1065,18 @@ yrm35_moredata_config = yrm35_retina_config.copy({
     'dataset': coco2017_dataset,
 })
 
+yrm35_64proto_config = yrm35_moredata_config.copy({
+    'name': 'yrm35_64proto',
+
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 3 + [(None, -2, {}), (256, 3, {'padding': 1})] + [(64, 1, {})],
+})
+
+yrm35_256proto_config = yrm35_moredata_config.copy({
+    'name': 'yrm35_256proto',
+
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 3 + [(None, -2, {}), (256, 3, {'padding': 1})] + [(256, 1, {})],
+})
+
 yrm35_tweakedscales_config = yrm35_moredata_config.copy({
     'name': 'yrm35_tweakedscales_config',
 
