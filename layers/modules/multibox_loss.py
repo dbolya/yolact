@@ -188,10 +188,10 @@ class MultiBoxLoss(nn.Module):
 
         # Divide all losses by the number of positives.
         # Don't do it for loss[P] because that doesn't depend on the anchors.
-        N = num_pos.data.sum().float()
+        total_num_pos = num_pos.data.sum().float()
         for k in losses:
             if k not in ('P', 'E', 'S'):
-                losses[k] /= N
+                losses[k] /= total_num_pos
             else:
                 losses[k] /= batch_size
 
@@ -416,7 +416,7 @@ class MultiBoxLoss(nn.Module):
         coeffs_norm = F.normalize(coeffs, dim=1)
         cos_sim = coeffs_norm @ coeffs_norm.t()
 
-        inst_eq = (instance_t[: None].expand_as(cos_sim) == instance_t[None, :].expand_as(cos_sim)).float()
+        inst_eq = (instance_t[:, None].expand_as(cos_sim) == instance_t[None, :].expand_as(cos_sim)).float()
 
         # Rescale to be between 0 and 1
         cos_sim = (cos_sim + 1) / 2
