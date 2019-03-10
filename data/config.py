@@ -1078,6 +1078,8 @@ yrm35_tweakedscales_config = yrm35_moredata_config.copy({
     'fpn': yrm35_moredata_config.fpn.copy({
         'num_downsample': 3,
     }),
+
+    'mask_alpha': yrm35_moredata_config.mask_alpha * 2,
 })
 
 yrm35_noaug_config = yrm35_moredata_config.copy({
