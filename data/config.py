@@ -1084,14 +1084,12 @@ yrm35_tweakedscales_config = yrm35_moredata_config.copy({
         'pred_aspect_ratios': [ [[1, 1/sqrt(2), sqrt(2)]] ]*6,
         'pred_scales': [[16], [32], [64], [128], [256], [512]],
 
-        'use_pixel_scales': False,
+        'use_pixel_scales': True,
     }),
 
     'fpn': yrm35_moredata_config.fpn.copy({
         'num_downsample': 3,
     }),
-
-    'mask_alpha': yrm35_moredata_config.mask_alpha * 2,
 })
 
 yrm35_noaug_config = yrm35_moredata_config.copy({
@@ -1257,7 +1255,7 @@ yrm36_tweakedscales_config = yrm35_tweakedscales_config.copy({
     'use_sigmoid_focal_loss': True,
 
     'lr_warmup_init': yrm35_moredata_config.lr / 3,
-    'conf_alpha': 10,
+    'conf_alpha': 1.5,
 })
 
 yrm36_semantic_segmentation_config = yrm36_sigmoid_config.copy({
