@@ -24,15 +24,10 @@ import os
 from collections import OrderedDict
 from PIL import Image
 
-import matplotlib
-matplotlib.use('Agg')
+# import matplotlib
+# matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import cv2
-
-if cfg.dataset.name == 'CityScapes':
-    CLASSES = CITYSCAPES_CLASSES
-else:
-    CLASSES = COCO_CLASSES
     
 
 def str2bool(v):
@@ -117,7 +112,14 @@ def parse_args(argv=None):
 
     global args
     args = parser.parse_args(argv)
-
+    
+    # FYXTODO
+    # args.config = 'yrm35_cityscapes_config'
+    # args.trained_model = 'weights/yrm35_cityscapes/yrm35_cityscapes_54_20000.pth'
+    # args.web_det_path = './data/cityscapes/web/'
+    # args.display = True
+    # args.output_web_json = False
+    
     if args.output_web_json:
         args.output_coco_json = True
     
@@ -798,10 +800,10 @@ def print_maps(all_maps):
 
 if __name__ == '__main__':
     parse_args()
-
+    
     if args.config is not None:
         set_cfg(args.config)
-
+    
     if args.trained_model == 'interrupt':
         args.trained_model = SavePath.get_interrupt('weights/')
     elif args.trained_model == 'latest':
@@ -816,7 +818,12 @@ if __name__ == '__main__':
 
     if args.dataset is not None:
         set_dataset(args.dataset)
-
+    
+    if cfg.dataset.name == 'CityScapes':
+        CLASSES = CITYSCAPES_CLASSES
+    else:
+        CLASSES = COCO_CLASSES
+        
     with torch.no_grad():
         if not os.path.exists('results'):
             os.makedirs('results')
@@ -835,7 +842,8 @@ if __name__ == '__main__':
             exit()
 
         if args.image is None and args.video is None:
-            dataset = COCODetection(cfg.dataset.valid_images, cfg.dataset.valid_info, transform=BaseTransform())
+            dataset = COCODetection(cfg.dataset.valid_images, cfg.dataset.valid_info, 
+                                    transform=BaseTransform(), dataset_name=cfg.dataset.name)
             prep_coco_cats(dataset.coco.cats)
         else:
             dataset = None        

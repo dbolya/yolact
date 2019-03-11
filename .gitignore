@@ -6,8 +6,7 @@
 .pydevproject
 weights
 data/cityscapes
-data/coco/annotations
-data/coco/images
+data/coco
 
 # external/*
 

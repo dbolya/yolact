@@ -10,7 +10,7 @@ import numpy as np
 from pycocotools import mask as maskUtils
 
 
-CITYSCAPES_CLASSES = ('person', 'rider', 'car', 'truck', 'bus', 'train', 'motorcycle', 'bicycle')
+CITYSCAPES_CLASSES = ('person', 'rider', 'car', 'bicycle', 'bus', 'truck', 'motorcycle', 'train')
 
 COCO_CLASSES = ('person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus',
                 'train', 'truck', 'boat', 'traffic light', 'fire hydrant',
@@ -150,9 +150,7 @@ class COCODetection(data.Dataset):
             path = osp.join(self.root, city_name, filename)
         else:
             path = osp.join(self.root, self.coco.loadImgs(img_id)[0]['file_name'].split('_')[-1])
-        
-        
-        
+                
         assert osp.exists(path), 'Image path does not exist: {}'.format(path)
         img = cv2.imread(path)
         height, width, _ = img.shape
