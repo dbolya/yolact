@@ -161,7 +161,8 @@ def prep_display(dets_out, img, gt, gt_masks, h, w, undo_transform=True, class_c
                         + img_gpu * mask * (1-mask_alpha) + mask_color * mask_alpha
         
     # Then draw the stuff that needs to be done on the cpu
-    img_numpy = img_gpu.cpu().numpy()
+    # Note, make sure this is a uint8 tensor or opencv will not anti alias text for whatever reason
+    img_numpy = (img_gpu * 255).byte().cpu().numpy()
     
     if args.display_text or args.display_bboxes:
         for j in reversed(range(min(args.top_k, classes.shape[0]))):
@@ -169,16 +170,26 @@ def prep_display(dets_out, img, gt, gt_masks, h, w, undo_transform=True, class_c
 
             if scores[j] >= args.score_threshold:
                 x1, y1, x2, y2 = boxes[j, :]
-                text_pt = (x1, y2 - 5)
-                color = [x / 255 for x in get_color(j)]
-                _class = COCO_CLASSES[classes[j]]
+                color = get_color(j)
 
                 if args.display_bboxes:
-                    cv2.rectangle(img_numpy, (x1, y1), (x2, y2), color, 2)
+                    cv2.rectangle(img_numpy, (x1, y1), (x2, y2), color, 1)
 
                 if args.display_text:
-                    text_str = '%s (%.2f)' % (_class, score) if args.display_scores else _class
-                    cv2.putText(img_numpy, text_str, text_pt, cv2.FONT_HERSHEY_PLAIN, 1.5, color, 2, cv2.LINE_AA)
+                    _class = COCO_CLASSES[classes[j]]
+                    text_str = '%s: %.2f' % (_class, score) if args.display_scores else _class
+
+                    font_face = cv2.FONT_HERSHEY_DUPLEX
+                    font_scale = 0.6
+                    font_thickness = 1
+
+                    text_w, text_h = cv2.getTextSize(text_str, font_face, font_scale, font_thickness)[0]
+
+                    text_pt = (x1, y1 - 3)
+                    text_color = [255, 255, 255]
+
+                    cv2.rectangle(img_numpy, (x1, y1), (x1 + text_w, y1 - text_h - 4), color, -1)
+                    cv2.putText(img_numpy, text_str, text_pt, font_face, font_scale, text_color, font_thickness, cv2.LINE_AA)
     
     return img_numpy
 
@@ -511,18 +522,11 @@ def badhash(x):
     return x
 
 def evalimage(net:Yolact, path:str):
-    img = np.array(Image.open(path).convert('RGB')).transpose(1, 0, 2)[:, :, (2,1,0)]
-    w, h, _ = img.shape
-    img = torch.Tensor(BaseTransform()(img)[0]).cuda()
-    img = img.permute(2, 1, 0).contiguous()
-
-    batch = Variable(img.unsqueeze(0))
-    if args.cuda:
-        batch = batch.cuda()
-
-    # Meat of the operation here
+    frame = torch.Tensor(cv2.imread(path)).cuda().float()
+    batch = FastBaseTransform()(frame.unsqueeze(0))
     preds = net(batch)
-    img_numpy = prep_display(preds, img, None, None, h, w)
+
+    img_numpy = prep_display(preds, frame[:, :, (2, 1, 0)], None, None, None, None, undo_transform=False)
     
     plt.imshow(img_numpy)
     plt.title(path)
