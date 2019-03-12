@@ -148,9 +148,9 @@ def prep_display(dets_out, img, gt, gt_masks, h, w, undo_transform=True, class_c
         return img_numpy
 
     def get_color(j):
-        color = COLORS[(classes[j] if class_color else j) % len(COLORS)]
+        color = COLORS[(classes[j] * 5 if class_color else j * 5) % len(COLORS)]
         if not undo_transform:
-            color = (color[2], color[1], color[0], color[3])
+            color = (color[2], color[1], color[0])
         return color
 
     # Draw masks first on the gpu
@@ -160,8 +160,8 @@ def prep_display(dets_out, img, gt, gt_masks, h, w, undo_transform=True, class_c
                 color = get_color(j)
 
                 mask = masks[j, :, :, None]
-                mask_color = mask @ (torch.Tensor(color[:3]).view(1, 3) / 255.0)
-                mask_alpha = 0.35
+                mask_color = mask @ (torch.Tensor(color).view(1, 3) / 255.0)
+                mask_alpha = 0.45
 
                 # Alpha only the region of the image that contains the mask
                 img_gpu = img_gpu * (1 - mask) \
@@ -555,8 +555,8 @@ def evalimages(net:Yolact, input_folder:str, output_folder:str):
         name = os.path.basename(path)
         out_path = os.path.join(output_folder, name)
 
-        print(path)
         evalimage(net, path, out_path)
+        print(path + ' -> ' + out_path)
     print('Done.')
 
 from multiprocessing.pool import ThreadPool
