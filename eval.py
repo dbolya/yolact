@@ -21,6 +21,7 @@ import cProfile
 import pickle
 import json
 import os
+from pathlib import Path
 from collections import OrderedDict
 from PIL import Image
 
@@ -95,6 +96,8 @@ def parse_args(argv=None):
                         help='Do not crop output masks with the predicted bounding box.')
     parser.add_argument('--image', default=None, type=str,
                         help='A path to an image to use for display.')
+    parser.add_argument('--images', default=None, type=str,
+                        help='An input folder of images and output folder to save detected images. Should be in the format input->output.')
     parser.add_argument('--video', default=None, type=str,
                         help='A path to a video to evaluate on.')
     parser.add_argument('--video_multiframe', default=1, type=int,
@@ -144,7 +147,11 @@ def prep_display(dets_out, img, gt, gt_masks, h, w, undo_transform=True, class_c
         print('Warning: No detections found.')
         return img_numpy
 
-    get_color = lambda j: COLORS[(classes[j] if class_color else j) % len(COLORS)]
+    def get_color(j):
+        color = COLORS[(classes[j] if class_color else j) % len(COLORS)]
+        if not undo_transform:
+            color = (color[2], color[1], color[0], color[3])
+        return color
 
     # Draw masks first on the gpu
     if args.display_masks:
@@ -521,16 +528,36 @@ def badhash(x):
     x = ((x >> 16) ^ x) & 0xFFFFFFFF
     return x
 
-def evalimage(net:Yolact, path:str):
+def evalimage(net:Yolact, path:str, save_path:str=None):
     frame = torch.Tensor(cv2.imread(path)).cuda().float()
     batch = FastBaseTransform()(frame.unsqueeze(0))
     preds = net(batch)
 
-    img_numpy = prep_display(preds, frame[:, :, (2, 1, 0)], None, None, None, None, undo_transform=False)
+    if save_path is None:
+        frame = frame[:, :, (2, 1, 0)]
+
+    img_numpy = prep_display(preds, frame, None, None, None, None, undo_transform=False)
     
-    plt.imshow(img_numpy)
-    plt.title(path)
-    plt.show()
+    if save_path is None:
+        plt.imshow(img_numpy)
+        plt.title(path)
+        plt.show()
+    else:
+        cv2.imwrite(save_path, img_numpy)
+
+def evalimages(net:Yolact, input_folder:str, output_folder:str):
+    if not os.path.exists(output_folder):
+        os.mkdir(output_folder)
+
+    print()
+    for p in Path(input_folder).glob('*'): 
+        path = str(p)
+        name = os.path.basename(path)
+        out_path = os.path.join(output_folder, name)
+
+        print(path)
+        evalimage(net, path, out_path)
+    print('Done.')
 
 from multiprocessing.pool import ThreadPool
 
@@ -635,6 +662,10 @@ def evaluate(net:Yolact, dataset, train_mode=False):
 
     if args.image is not None:
         evalimage(net, args.image)
+        return
+    elif args.images is not None:
+        inp, out = args.images.split('->')
+        evalimages(net, inp, out)
         return
     elif args.video is not None:
         evalvideo(net, args.video)
@@ -830,7 +861,7 @@ if __name__ == '__main__':
             calc_map(ap_data)
             exit()
 
-        if args.image is None and args.video is None:
+        if args.image is None and args.video is None and args.images is None:
             dataset = COCODetection(cfg.dataset.valid_images, cfg.dataset.valid_info, transform=BaseTransform())
             prep_coco_cats(dataset.coco.cats)
         else:
