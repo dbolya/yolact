@@ -1110,6 +1110,73 @@ yrm35_tweakedscales_config = yrm35_moredata_config.copy({
     }),
 })
 
+yrm35_tweakedscales2_config = yrm35_tweakedscales_config.copy({
+    'name': 'yrm35_tweakedscales2',
+
+    'backbone': yrm35_moredata_config.backbone.copy({
+        'pred_aspect_ratios': [ [[1, 1/sqrt(2), sqrt(2)]] ]*6,
+        'pred_scales': [[24], [48], [96], [192], [384], [768]],
+    }),
+
+    'fpn': yrm35_moredata_config.fpn.copy({
+        'num_downsample': 3,
+    }),
+})
+
+yrm35_tweakedscales3_config = yrm35_tweakedscales_config.copy({
+    'name': 'yrm35_tweakedscales3',
+
+    'backbone': yrm35_moredata_config.backbone.copy({
+        'pred_aspect_ratios': [ [[1, 1/sqrt(2), sqrt(2)]] ]*5,
+        'pred_scales': [[24], [52], [116], [255], [562]],
+    }),
+
+    'fpn': yrm35_moredata_config.fpn.copy({
+        'num_downsample': 2,
+    }),
+})
+
+yrm35_resnet101_SIN_config = yrm35_moredata_config.copy({
+    'name': 'yrm35_resnet101_SIN',
+
+    'backbone': yrm35_moredata_config.backbone.copy({
+        'path': 'resnet101_SIN_IN_reduced_fc.pth',
+    })
+})
+
+yrm35_im300_config = yrm35_moredata_config.copy({
+    'name': 'yrm35_im300',
+    'max_size': 300,
+
+    'backbone': yrm35_moredata_config.backbone.copy({
+        'pred_scales': [[int(x[0] / 600 * 300)] for x in yrm35_moredata_config.backbone.pred_scales],
+    }),
+})
+
+yrm35_im450_config = yrm35_moredata_config.copy({
+    'name': 'yrm35_im450',
+    'max_size': 450,
+
+    'backbone': yrm35_moredata_config.backbone.copy({
+        'pred_scales': [[int(x[0] / 600 * 450)] for x in yrm35_moredata_config.backbone.pred_scales],
+    }),
+})
+
+yrm35_im600_config = yrm35_moredata_config.copy({
+    'name': 'yrm35_im600',
+    'max_size': 600,
+})
+
+yrm35_im900_config = yrm35_moredata_config.copy({
+    'name': 'yrm35_im900',
+    'max_size': 900,
+
+    'backbone': yrm35_moredata_config.backbone.copy({
+        'pred_scales': [[int(x[0] / 600 * 900)] for x in yrm35_moredata_config.backbone.pred_scales],
+    }),
+})
+
+
 yrm35_noaug_config = yrm35_moredata_config.copy({
     'name': 'yrm35_noaug',
 
@@ -1269,11 +1336,12 @@ yrm36_sigmoid_config = yrm36_softmax_config.copy({
 yrm36_tweakedscales_config = yrm35_tweakedscales_config.copy({
     'name': 'yrm36_tweakedscales',
     
+    'use_focal_loss': True,
     'focal_loss_init_pi': 0.01,
     'use_sigmoid_focal_loss': True,
 
     'lr_warmup_init': yrm35_moredata_config.lr / 3,
-    'conf_alpha': 1.5,
+    'conf_alpha': 10,
 })
 
 yrm36_semantic_segmentation_config = yrm36_sigmoid_config.copy({
