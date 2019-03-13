@@ -9,7 +9,7 @@
 ```
 
 A model for realtime instance segmentation. Yolact is still in development, so all of this is still subject to change.
-Here's a look at our current results (20fps on a Titan Xp):
+Here's a look at our current results (31.5 fps on a Titan Xp):
 
 ![Example 1](data/yolact_example_1.png)
 
