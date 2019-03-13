@@ -1167,12 +1167,12 @@ yrm35_im600_config = yrm35_moredata_config.copy({
     'max_size': 600,
 })
 
-yrm35_im900_config = yrm35_moredata_config.copy({
-    'name': 'yrm35_im900',
-    'max_size': 900,
+yrm35_im750_config = yrm35_moredata_config.copy({
+    'name': 'yrm35_im700',
+    'max_size': 700,
 
     'backbone': yrm35_moredata_config.backbone.copy({
-        'pred_scales': [[int(x[0] / 600 * 900)] for x in yrm35_moredata_config.backbone.pred_scales],
+        'pred_scales': [[int(x[0] / 600 * 700)] for x in yrm35_moredata_config.backbone.pred_scales],
     }),
 })
 
