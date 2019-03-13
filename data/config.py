@@ -1167,7 +1167,7 @@ yrm35_im600_config = yrm35_moredata_config.copy({
     'max_size': 600,
 })
 
-yrm35_im750_config = yrm35_moredata_config.copy({
+yrm35_im700_config = yrm35_moredata_config.copy({
     'name': 'yrm35_im700',
     'max_size': 700,
 
