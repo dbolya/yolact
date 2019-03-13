@@ -1107,6 +1107,11 @@ yrm35_512proto_config = yrm35_moredata_config.copy({
     'mask_proto_net': [(256, 3, {'padding': 1})] * 3 + [(None, -2, {}), (256, 3, {'padding': 1})] + [(512, 1, {})],
 })
 
+yrm35_noprotononlin_config = yrm35_moredata_config.copy({
+    'name': 'yrm35_noprotononlin',
+    'mask_proto_prototype_activation': activation_func.none,
+})
+
 yrm35_tweakedscales_config = yrm35_moredata_config.copy({
     'name': 'yrm35_tweakedscales',
 
