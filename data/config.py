@@ -1606,6 +1606,17 @@ yrm22_fcis_config = yrm22_config.copy({
 })
 
 
+yolact_base_config = yrm35_tweakedscales3_config.copy({
+    'name': 'yolact_base',
+
+    'max_size': 600,
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 3 + [(None, -2, {}), (256, 3, {'padding': 1})] + [(64, 1, {})],
+
+    'lr_steps': (280000, 500000, 600000, 700000, 750000),
+    'max_iter': 800000,
+})
+
+
 # Default config
 cfg = yrm36_softmax_config.copy()
 

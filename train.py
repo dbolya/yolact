@@ -290,7 +290,7 @@ def train():
                     print('Saving state, iter:', iteration)
                     yolact_net.save_weights(save_path(epoch, iteration))
 
-                    if args.keep_latest and latest is not None:
+                    if args.keep_latest and latest is not None and iteration % 100000 != args.save_interval:
                         print('Deleting old save...')
                         os.remove(latest)
             
