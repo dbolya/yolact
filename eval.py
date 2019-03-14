@@ -533,11 +533,11 @@ def evalimage(net:Yolact, path:str, save_path:str=None):
     batch = FastBaseTransform()(frame.unsqueeze(0))
     preds = net(batch)
 
-    if save_path is None:
-        frame = frame[:, :, (2, 1, 0)]
-
     img_numpy = prep_display(preds, frame, None, None, None, None, undo_transform=False)
     
+    if save_path is None:
+        img_numpy = img_numpy[:, :, (2, 1, 0)]
+
     if save_path is None:
         plt.imshow(img_numpy)
         plt.title(path)
@@ -662,10 +662,14 @@ def evaluate(net:Yolact, dataset, train_mode=False):
     cfg.mask_proto_debug = args.mask_proto_debug
 
     if args.image is not None:
-        evalimage(net, args.image)
+        if ':' in args.image:
+            inp, out = args.image.split(':')
+            evalimage(net, inp, out)
+        else:
+            evalimage(net, args.image)
         return
     elif args.images is not None:
-        inp, out = args.images.split('->')
+        inp, out = args.images.split(':')
         evalimages(net, inp, out)
         return
     elif args.video is not None:
