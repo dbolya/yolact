@@ -1112,6 +1112,13 @@ yrm35_noprotononlin_config = yrm35_moredata_config.copy({
     'mask_proto_prototype_activation': activation_func.none,
 })
 
+yrm35_baseline_config = yrm35_moredata_config.copy({
+    'name': 'yrm35_baseline',
+
+    'mask_type': mask_type.direct,
+    'mask_alpha': 0.05,
+})
+
 yrm35_tweakedscales_config = yrm35_moredata_config.copy({
     'name': 'yrm35_tweakedscales',
 
