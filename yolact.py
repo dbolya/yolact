@@ -416,7 +416,7 @@ class Yolact(nn.Module):
             self.class_existence_fc = nn.Linear(src_channels[-1], cfg.num_classes - 1)
         
         if cfg.use_semantic_segmentation_loss:
-            self.semantic_seg_conv = nn.Conv2d(src_channels[0], cfg.num_classes-1, kernel_size=1)
+            self.semantic_seg_conv = nn.Conv2d(cfg.mask_dim, cfg.num_classes-1, kernel_size=1)
 
         # For use in evaluation
         self.detect = Detect(cfg.num_classes, bkg_label=0, top_k=200, conf_thresh=0.05, nms_thresh=0.5)
@@ -566,7 +566,7 @@ class Yolact(nn.Module):
                 pred_outs['classes'] = self.class_existence_fc(outs[-1].mean(dim=(2, 3)))
 
             if cfg.use_semantic_segmentation_loss:
-                pred_outs['segm'] = self.semantic_seg_conv(outs[0])
+                pred_outs['segm'] = self.semantic_seg_conv(proto_out.permute(0, 3, 1, 2).contiguous())
 
             return pred_outs
         else:
