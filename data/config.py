@@ -1635,6 +1635,30 @@ yolact_im700_config = yolact_base_config.copy({
     }),
 })
 
+yolact_darknet53_config = yolact_base_config.copy({
+    'name': 'yolact_darknet53',
+
+    'backbone': darknet53_backbone.copy({
+        'selected_layers': list(range(2, 5)),
+        
+        'pred_scales': yolact_base_config.backbone.pred_scales,
+        'pred_aspect_ratios': yolact_base_config.backbone.pred_aspect_ratios,
+        'use_pixel_scales': True,
+    }),
+})
+
+yolact_resnet50_config = yolact_base_config.copy({
+    'name': 'yolact_resnet50',
+
+    'backbone': resnet50_backbone.copy({
+        'selected_layers': list(range(1, 4)),
+        
+        'pred_scales': yolact_base_config.backbone.pred_scales,
+        'pred_aspect_ratios': yolact_base_config.backbone.pred_aspect_ratios,
+        'use_pixel_scales': True,
+    }),
+})
+
 
 # Default config
 cfg = yrm36_softmax_config.copy()
