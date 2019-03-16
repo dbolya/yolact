@@ -1617,6 +1617,24 @@ yolact_base_config = yrm35_tweakedscales2_config.copy({
     'max_iter': 800000,
 })
 
+yolact_im400_config = yolact_base_config.copy({
+    'name': 'yolact_im400',
+
+    'max_size': 400,
+    'backbone': yolact_base_config.backbone.copy({
+        'pred_scales': [[int(x[0] / yolact_base_config.max_size * 400)] for x in yolact_base_config.backbone.pred_scales],
+    }),
+})
+
+yolact_im700_config = yolact_base_config.copy({
+    'name': 'yolact_im700',
+
+    'max_size': 700,
+    'backbone': yolact_base_config.backbone.copy({
+        'pred_scales': [[int(x[0] / yolact_base_config.max_size * 700)] for x in yolact_base_config.backbone.pred_scales],
+    }),
+})
+
 
 # Default config
 cfg = yrm36_softmax_config.copy()
