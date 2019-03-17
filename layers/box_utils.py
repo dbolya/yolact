@@ -73,6 +73,28 @@ def jaccard(box_a, box_b, iscrowd=False):
     else:
         return inter / union  # [A,B]
 
+def change(gt, priors):
+    """
+    Compute the d_change metric proposed in Box2Pix.
+    Input should be in point form (xmin, ymin, xmax, ymax).
+
+    Output is of shape [num_gt, num_priors]
+    Note this returns -change so it can be a drop in replacement for 
+    """
+    num_priors = priors.size(0)
+    num_gt     = gt.size(0)
+
+    gt_w = (gt[:, 2] - gt[:, 0])[:, None].expand(num_gt, num_priors)
+    gt_h = (gt[:, 3] - gt[:, 1])[:, None].expand(num_gt, num_priors)
+    gt_size_mat = torch.stack([gt_w, gt_h, gt_w, gt_h], dim=2)
+
+    gt_mat =     gt[:, None, :].expand(num_gt, num_priors, 4)
+    pr_mat = priors[None, :, :].expand(num_gt, num_priors, 4)
+
+    return -torch.sqrt( (((gt_mat - pr_mat) / gt_size_mat) ** 2).sum(dim=2) )
+
+
+
 
 def match(pos_thresh, neg_thresh, truths, priors, labels, crowd_boxes, loc_t, conf_t, idx_t, idx, loc_data):
     """Match each prior box with the ground truth box of the highest jaccard
@@ -96,7 +118,7 @@ def match(pos_thresh, neg_thresh, truths, priors, labels, crowd_boxes, loc_t, co
     decoded_priors = decode(loc_data, priors) if cfg.use_prediction_matching else point_form(priors)
     
     # Size [num_objects, num_priors]
-    overlaps = jaccard(truths, decoded_priors)
+    overlaps = jaccard(truths, decoded_priors) if not cfg.use_change_matching else change(truths, decoded_priors)
 
     # Size [num_objects] best prior for each ground truth
     best_prior_overlap, best_prior_idx = overlaps.max(1)

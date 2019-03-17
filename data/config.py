@@ -397,6 +397,10 @@ coco_base_config = Config({
     'use_semantic_segmentation_loss': False,
     'semantic_segmentation_alpha': 1,
 
+    # Match gt boxes using the Box2Pix change metric instead of the standard IoU metric.
+    # Note that the threshold you set for iou_threshold should be negative with this setting on.
+    'use_change_matching': False,
+
     # Uses the same network format as mask_proto_net, except this time it's for adding extra head layers before the final
     # prediction in prediction modules. If this is none, no extra layers will be added.
     'extra_head_net': None,
@@ -1624,6 +1628,27 @@ yolact_im400_config = yolact_base_config.copy({
     'backbone': yolact_base_config.backbone.copy({
         'pred_scales': [[int(x[0] / yolact_base_config.max_size * 400)] for x in yolact_base_config.backbone.pred_scales],
     }),
+})
+
+yolact_im400_change_config = yolact_im400_config.copy({
+    'name': 'yolact_im400_change',
+
+    'use_change_matching': True,
+    'masks_to_train': 200,
+
+    'positive_iou_threshold': -0.7,
+    'negative_iou_threshold': -0.7,
+})
+
+yolact_im400_change_focal_config = yolact_im400_change_config.copy({
+    'name': 'yolact_im400_change_focal',
+
+    'use_focal_loss': True,
+    'focal_loss_init_pi': 0.01,
+    'use_sigmoid_focal_loss': True,
+
+    'lr_warmup_init': yrm35_moredata_config.lr / 3,
+    'conf_alpha': 10,
 })
 
 yolact_im700_config = yolact_base_config.copy({
