@@ -88,12 +88,17 @@ def change(gt, priors):
 
     gt_w = (gt[:, 2] - gt[:, 0])[:, None].expand(num_gt, num_priors)
     gt_h = (gt[:, 3] - gt[:, 1])[:, None].expand(num_gt, num_priors)
-    gt_size_mat = torch.stack([gt_w, gt_h, gt_w, gt_h], dim=2)
 
     gt_mat =     gt[:, None, :].expand(num_gt, num_priors, 4)
     pr_mat = priors[None, :, :].expand(num_gt, num_priors, 4)
 
-    return -torch.sqrt( (((gt_mat - pr_mat) / gt_size_mat) ** 2).sum(dim=2) )
+    diff = gt_mat - pr_mat
+    diff[:, :, 0] /= gt_w
+    diff[:, :, 2] /= gt_w
+    diff[:, :, 1] /= gt_h
+    diff[:, :, 3] /= gt_h
+
+    return -torch.sqrt( (diff ** 2).sum(dim=2) )
 
 
 
