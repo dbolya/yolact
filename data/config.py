@@ -1621,7 +1621,7 @@ yolact_base_config = yrm35_tweakedscales2_config.copy({
     'masks_to_train': 500,
 
     'positive_iou_threshold': -0.7,
-    'negative_iou_threshold': -1,
+    'negative_iou_threshold': -0.7,
 
     'lr_steps': (280000, 500000, 600000, 700000, 750000),
     'max_iter': 800000,
