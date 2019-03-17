@@ -1616,6 +1616,12 @@ yolact_base_config = yrm35_tweakedscales2_config.copy({
     'max_size': 550,
     'mask_proto_net': [(256, 3, {'padding': 1})] * 3 + [(None, -2, {}), (256, 3, {'padding': 1})] + [(32, 1, {})],
     'use_semantic_segmentation_loss': True,
+    
+    'use_change_matching': True,
+    'masks_to_train': 500,
+
+    'positive_iou_threshold': -0.7,
+    'negative_iou_threshold': -1,
 
     'lr_steps': (280000, 500000, 600000, 700000, 750000),
     'max_iter': 800000,
@@ -1628,27 +1634,6 @@ yolact_im400_config = yolact_base_config.copy({
     'backbone': yolact_base_config.backbone.copy({
         'pred_scales': [[int(x[0] / yolact_base_config.max_size * 400)] for x in yolact_base_config.backbone.pred_scales],
     }),
-})
-
-yolact_im400_change_config = yolact_im400_config.copy({
-    'name': 'yolact_im400_change',
-
-    'use_change_matching': True,
-    'masks_to_train': 200,
-
-    'positive_iou_threshold': -0.7,
-    'negative_iou_threshold': -0.7,
-})
-
-yolact_im400_change_focal_config = yolact_im400_change_config.copy({
-    'name': 'yolact_im400_change_focal',
-
-    'use_focal_loss': True,
-    'focal_loss_init_pi': 0.01,
-    'use_sigmoid_focal_loss': True,
-
-    'lr_warmup_init': yrm35_moredata_config.lr / 3,
-    'conf_alpha': 10,
 })
 
 yolact_im700_config = yolact_base_config.copy({

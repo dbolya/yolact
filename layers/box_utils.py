@@ -75,7 +75,9 @@ def jaccard(box_a, box_b, iscrowd=False):
 
 def change(gt, priors):
     """
-    Compute the d_change metric proposed in Box2Pix.
+    Compute the d_change metric proposed in Box2Pix:
+    https://lmb.informatik.uni-freiburg.de/Publications/2018/UB18/paper-box2pix.pdf
+    
     Input should be in point form (xmin, ymin, xmax, ymax).
 
     Output is of shape [num_gt, num_priors]
