@@ -493,7 +493,8 @@ class MultiBoxLoss(nn.Module):
                 loss_d += self.coeff_diversity_loss(div_coeffs, pos_idx_t)
             
             # If we have over the allowed number of masks, select a random sample
-            if proto_coef.size(0) > cfg.masks_to_train:
+            old_num_pos = proto_coef.size(0)
+            if old_num_pos > cfg.masks_to_train:
                 perm = torch.randperm(proto_coef.size(0))
                 select = perm[:cfg.masks_to_train]
 
@@ -553,6 +554,10 @@ class MultiBoxLoss(nn.Module):
                 gt_box_height = pos_get_csize[:, 3]
                 pre_loss = pre_loss.sum(dim=(0, 1)) / gt_box_width / gt_box_height * weight
 
+
+            # If the number of masks were limited scale the loss accordingly
+            if old_num_pos > num_pos:
+                pre_loss *= old_num_pos / num_pos
 
             loss_m += torch.sum(pre_loss)
         

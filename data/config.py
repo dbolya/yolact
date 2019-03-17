@@ -1639,6 +1639,7 @@ yolact_im400_config = yolact_base_config.copy({
 yolact_im700_config = yolact_base_config.copy({
     'name': 'yolact_im700',
 
+    'masks_to_train': 300,
     'max_size': 700,
     'backbone': yolact_base_config.backbone.copy({
         'pred_scales': [[int(x[0] / yolact_base_config.max_size * 700)] for x in yolact_base_config.backbone.pred_scales],
