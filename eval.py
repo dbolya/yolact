@@ -4,7 +4,7 @@ from utils.augmentations import BaseTransform, FastBaseTransform, Resize
 from utils.functions import MovingAverage, ProgressBar
 from layers.box_utils import jaccard, center_size
 from utils import timer
-from utils.functions import sanitize_coordinates, SavePath
+from utils.functions import SavePath
 from layers.output_utils import postprocess, undo_image_transformation
 import pycocotools
 

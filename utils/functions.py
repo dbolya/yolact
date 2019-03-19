@@ -80,25 +80,6 @@ class ProgressBar():
     def __str__(self):
         return self.string
 
-def sanitize_coordinates(_x1, _x2, img_size, cast=True):
-    """
-    Sanitizes the input coordinates so that x1 < x2, x1 != x2, x1 >= 0, and x2 <= image_size.
-    Also converts from relative to absolute coordinates and casts the results to long tensors.
-
-    If cast is false, the result won't be cast to longs.
-    """
-    _x1 *= img_size
-    _x2 *= img_size
-    if cast:
-        _x1 = _x1.long()
-        _x2 = _x2.long()
-    x1 = torch.min(_x1, _x2)
-    x2 = torch.max(_x1, _x2)
-    x1 = torch.clamp(x1-1, min=0)
-    x2 = torch.clamp(x2+1, max=img_size)
-
-    return x1, x2
-
 
 def init_console():
     """

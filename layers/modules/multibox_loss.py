@@ -3,8 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
-from ..box_utils import match, log_sum_exp, decode, center_size
-from utils.functions import sanitize_coordinates
+from ..box_utils import match, log_sum_exp, decode, center_size, crop
 
 from data import cfg, mask_type, activation_func
 
@@ -520,20 +519,7 @@ class MultiBoxLoss(nn.Module):
                 loss_m += cfg.mask_proto_double_loss_alpha * pre_loss
 
             if cfg.mask_proto_crop:
-                # Shortening the variable name here
-                expnd = cfg.mask_proto_crop_expand
-
-                # Take care of all the bad behavior that can be caused by out of bounds coordinates
-                # Note I tried to put expand here but the loss exploded for some reason
-                x1, x2 = sanitize_coordinates(pos_gt_box_t[:, 0], pos_gt_box_t[:, 2], mask_w)
-                y1, y2 = sanitize_coordinates(pos_gt_box_t[:, 1], pos_gt_box_t[:, 3], mask_h)
-
-                # "Crop" predicted masks by zeroing out everything not in the predicted bbox
-                # TODO: Write a cuda implementation of this to get rid of the loop
-                crop_mask = torch.zeros(mask_h, mask_w, num_pos)
-                for jdx in range(num_pos):
-                    crop_mask[y1[jdx]*(1-expnd):y2[jdx]*(1+expnd), x1[jdx]*(1-expnd):x2[jdx]*(1+expnd), jdx] = 1
-                pred_masks = pred_masks * crop_mask
+                pred_masks = crop(pred_masks, pos_gt_box_t)
             
             if cfg.mask_proto_mask_activation == activation_func.sigmoid:
                 pre_loss = F.binary_cross_entropy(pred_masks, mask_t, reduction='none')
@@ -550,8 +536,8 @@ class MultiBoxLoss(nn.Module):
             if cfg.mask_proto_normalize_emulate_roi_pooling:
                 weight = mask_h * mask_w if cfg.mask_proto_crop else 1
                 pos_get_csize = center_size(pos_gt_box_t)
-                gt_box_width  = pos_get_csize[:, 2]
-                gt_box_height = pos_get_csize[:, 3]
+                gt_box_width  = pos_get_csize[:, 2] * mask_w
+                gt_box_height = pos_get_csize[:, 3] * mask_h
                 pre_loss = pre_loss.sum(dim=(0, 1)) / gt_box_width / gt_box_height * weight
 
 

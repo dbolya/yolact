@@ -9,8 +9,8 @@ import cv2
 
 from data import cfg, mask_type, MEANS, STD, activation_func
 from utils.augmentations import Resize
-from utils.functions import sanitize_coordinates
 from utils import timer
+from .box_utils import crop, sanitize_coordinates
 
 def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear',
                 visualize_lincomb=False, crop_masks=True):
@@ -69,9 +69,6 @@ def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear',
     # Actually extract everything from dets now
     classes = dets[:, 0].int()
     boxes   = dets[:, 2:6]
-    x1, x2  = sanitize_coordinates(boxes[:, 0], boxes[:, 2], b_w, cast=True)
-    y1, y2  = sanitize_coordinates(boxes[:, 1], boxes[:, 3], b_h, cast=True)
-    boxes   = torch.stack((x1, y1, x2, y2), dim=1)
     scores  = dets[:, 1]
     masks   = dets[:, 6:]
 
@@ -87,25 +84,20 @@ def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear',
             display_lincomb(proto_data, masks)
 
         masks = torch.matmul(proto_data, masks.t())
-    
+        masks = cfg.mask_proto_mask_activation(masks)
+
+        # Crop masks before upsampling because you know why
+        if crop_masks:
+            masks = crop(masks, boxes)
+
         # Permute into the correct output shape [num_dets, proto_h, proto_w]
         masks = masks.permute(2, 0, 1).contiguous()
-        masks = cfg.mask_proto_mask_activation(masks)
 
         # Scale masks up to the full image
         if cfg.preserve_aspect_ratio:
             # Undo padding
             masks = masks[:, :int(r_h/cfg.max_size*proto_data.size(1)), :int(r_w/cfg.max_size*proto_data.size(2))]
         masks = F.interpolate(masks.unsqueeze(0), (h, w), mode=interpolation_mode, align_corners=False).squeeze(0)
-
-        # "Crop" predicted masks by zeroing out everything not in the predicted bbox
-        # TODO: Write a cuda implementation of this to get rid of the loop
-        if crop_masks:
-            num_dets = boxes.size(0)
-            crop_mask = torch.zeros(num_dets, h, w, device=masks.device)
-            for jdx in range(num_dets):
-                crop_mask[jdx, y1[jdx]:y2[jdx], x1[jdx]:x2[jdx]] = 1
-            masks = masks * crop_mask
 
         # Binarize the masks
         masks = masks.gt(0.5).float()
@@ -131,6 +123,10 @@ def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear',
             full_masks[jdx, y1:y2, x1:x2] = mask
         
         masks = full_masks
+        
+    boxes[:, 0], boxes[:, 2] = sanitize_coordinates(boxes[:, 0], boxes[:, 2], b_w, cast=False)
+    boxes[:, 1], boxes[:, 3] = sanitize_coordinates(boxes[:, 1], boxes[:, 3], b_h, cast=False)
+    boxes = boxes.long()
 
     return classes, scores, boxes, masks
 
