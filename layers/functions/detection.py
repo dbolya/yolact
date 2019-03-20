@@ -56,59 +56,45 @@ class Detect(object):
         proto_data = predictions['proto'] if 'proto' in predictions else None
         inst_data  = predictions['inst']  if 'inst'  in predictions else None
 
+        out = []
+
         with timer.env('Detect'):
-            num = loc_data.size(0)  # batch size
-            output = torch.zeros(num, self.top_k, 1 + 1 + 4 + mask_data.size(2))
-
+            batch_size = loc_data.size(0)
             num_priors = prior_data.size(0)
-            conf_preds = conf_data.view(num, num_priors,
-                                        self.num_classes).transpose(2, 1)
 
-            # Decode predictions into bboxes.
-            for i in range(num):
-                decoded_boxes = decode(loc_data[i], prior_data)
+            conf_preds = conf_data.view(batch_size, num_priors, self.num_classes).transpose(2, 1).contiguous()
+
+            for batch_idx in range(batch_size):
+                decoded_boxes = decode(loc_data[batch_idx], prior_data)
+                result = self.detect_cross_class(batch_idx, conf_preds, decoded_boxes, mask_data, inst_data)
+
+                if result is not None and proto_data is not None:
+                    result['proto'] = proto_data[batch_idx]
                 
-                if self.cross_class_nms:
-                    self.detect_cross_class(i, conf_preds, decoded_boxes, mask_data, inst_data, output)
-                else:
-                    self.detect_per_class(i, conf_preds, decoded_boxes, mask_data, inst_data, output)
+                out.append(result)
         
-        return {'output': output, 'proto_data': proto_data}
+        return out
 
 
-    def detect_cross_class(self, batch_idx, conf_preds, decoded_boxes, mask_data, inst_data, output):
+    def detect_cross_class(self, batch_idx, conf_preds, decoded_boxes, mask_data, inst_data):
         """ Perform nms for only the max scoring class that isn't background (class 0) """
-        conf_scores, class_labels = torch.max(conf_preds[batch_idx, 1:], dim=0)
+        cur_scores = conf_preds[batch_idx, 1:, :]
+        conf_scores, _ = torch.max(cur_scores, dim=0)
 
-        c_mask = conf_scores.gt(self.conf_thresh)
-        scores = conf_scores[c_mask]
-        classes = class_labels[c_mask]
+        keep = (conf_scores > self.conf_thresh)
+        scores = cur_scores[:, keep]
+        boxes = decoded_boxes[keep, :]
+        masks = mask_data[batch_idx, keep, :]
+
+        if inst_data is not None:
+            inst = inst_data[batch_idx, keep, :]
     
         if scores.size(0) == 0:
-            return
-    
-        l_mask = c_mask.unsqueeze(1).expand_as(decoded_boxes)
-        boxes = decoded_boxes[l_mask].view(-1, 4)
-        masks = mask_data[batch_idx, l_mask[:, 0], :]
-        scores = conf_preds[batch_idx, 1:, l_mask[:, 0]]
-        if inst_data is not None:
-            inst = inst_data[batch_idx, l_mask[:, 0], :]
+            return None
         
-        # idx of highest scoring and non-overlapping boxes per classif cfg.use_coeff_nms:
-        if cfg.use_coeff_nms:
-            if inst_data is not None:
-                ids, count = self.coefficient_nms(inst, scores, top_k=self.top_k)
-            else:
-                ids, count = self.coefficient_nms(masks, scores, top_k=self.top_k)
-        else:
-            if self.fast_nms:
-                ids, classes, scores = self.box_nms(boxes, scores, self.nms_thresh, self.top_k)
-            else:
-                ids, count = nms(boxes, scores, self.nms_thresh, self.top_k, force_cpu=cfg.force_cpu_nms)
-                ids = ids[:count]
+        idx, classes, scores = self.box_nms(boxes, scores, self.nms_thresh, self.top_k)
+        return {'box': boxes[idx], 'mask': masks[idx], 'class': classes, 'score': scores}
 
-        output[batch_idx, :ids.size(0)] = \
-            torch.cat((classes.unsqueeze(1).float(), scores.unsqueeze(1), boxes[ids], masks[ids]), 1)
 
     def detect_per_class(self, batch_idx, conf_preds, decoded_boxes, mask_data, inst_data, output):
         """ Perform nms for each non-background class predicted. """
@@ -175,7 +161,7 @@ class Detect(object):
         
         return idx_out, idx_out.size(0)
 
-    def box_nms(self, boxes, scores, iou_threshold=0.5, top_k=400):
+    def box_nms(self, boxes, scores, iou_threshold=0.5, top_k=400, output_top_k=100):
         scores, idx = scores.sort(1, descending=True)
 
         idx = idx[:, :top_k].contiguous()
@@ -199,12 +185,12 @@ class Detect(object):
         idx = idx[keep]
         scores = scores[keep]
         
-        # Only keep the top_k highest scores
+        # Only keep the top cfg.max_num_detections highest scores across all classes
         scores, idx2 = scores.sort(0, descending=True)
-        idx2 = idx2[:top_k]
+        idx2 = idx2[:cfg.max_num_detections]
 
         idx = idx[idx2]
-        scores = scores[:top_k]
+        scores = scores[:cfg.max_num_detections]
         classes = classes[idx2]
 
         return idx, classes, scores

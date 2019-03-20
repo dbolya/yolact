@@ -19,7 +19,7 @@ def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear',
     accounting for all the possible configuration settings.
 
     Args:
-        - det_output: The dict that Detect outputs.
+        - det_output: The lost of dicts that Detect outputs.
         - w: The real with of the image.
         - h: The real height of the image.
         - batch_idx: If you have multiple images for this batch, the image's index in the batch.
@@ -32,22 +32,10 @@ def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear',
         - masks   [num_det, h, w]: Full image masks for each detection.
     """
     
-    dets = det_output['output'].data[batch_idx, :, :]
-
-    # Select only detections with score > 0
-    non_zero_score_mask = dets[:, 1].gt(0.0).expand(dets.size(1), dets.size(0)).t()
-    dets = torch.masked_select(dets, non_zero_score_mask).view(-1, dets.size(1))
+    dets = det_output[batch_idx]
     
-    if dets.size(0) == 0:
+    if dets is None:
         return [torch.Tensor()] * 4 # Warning, this is 4 copies of the same thing
-
-    # This doesn't actually do much most of the time since #detections is usually under 100
-    if dets.size(0) > cfg.max_num_detections:
-        dets = dets[:cfg.max_num_detections]
-    
-    # Sort descending by score
-    _, sort_idx = dets[:, 1].sort(0, descending=True)
-    dets = dets[sort_idx, :]
 
     # im_w and im_h when it concerns bboxes. This is a workaround hack for preserve_aspect_ratio
     b_w, b_h = (w, h)
@@ -57,24 +45,27 @@ def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear',
         r_w, r_h = Resize.faster_rcnn_scale(w, h, cfg.min_size, cfg.max_size)
 
         # Get rid of any detections whose centers are outside the image
-        boxes = dets[:, 2:6]
+        boxes = dets['box']
         boxes = center_size(boxes)
         s_w, s_h = (r_w/cfg.max_size, r_h/cfg.max_size)
+        
         not_outside = ((boxes[:, 0] > s_w) + (boxes[:, 1] > s_h)) < 1 # not (a or b)
-        dets = dets[not_outside]
+        for k in dets:
+            if k != 'proto':
+                dets[k] = dets[k][not_outside]
 
         # A hack to scale the bboxes to the right size
         b_w, b_h = (cfg.max_size / r_w * w, cfg.max_size / r_h * h)
     
     # Actually extract everything from dets now
-    classes = dets[:, 0].int()
-    boxes   = dets[:, 2:6]
-    scores  = dets[:, 1]
-    masks   = dets[:, 6:]
+    classes = dets['class']
+    boxes   = dets['box']
+    scores  = dets['score']
+    masks   = dets['mask']
 
     if cfg.mask_type == mask_type.lincomb:
         # At this points masks is only the coefficients
-        proto_data = det_output['proto_data'][batch_idx]
+        proto_data = dets['proto']
         
         # Test flag, do not upvote
         if cfg.mask_proto_debug:
