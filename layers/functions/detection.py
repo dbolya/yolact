@@ -1,6 +1,6 @@
 import torch
 import torch.nn.functional as F
-from ..box_utils import decode, nms, jaccard
+from ..box_utils import decode, nms, jaccard, index2d
 from utils import timer
 
 from data import cfg, mask_type
@@ -90,6 +90,7 @@ class Detect(object):
         l_mask = c_mask.unsqueeze(1).expand_as(decoded_boxes)
         boxes = decoded_boxes[l_mask].view(-1, 4)
         masks = mask_data[batch_idx, l_mask[:, 0], :]
+        scores = conf_preds[batch_idx, 1:, l_mask[:, 0]]
         if inst_data is not None:
             inst = inst_data[batch_idx, l_mask[:, 0], :]
         
@@ -100,15 +101,14 @@ class Detect(object):
             else:
                 ids, count = self.coefficient_nms(masks, scores, top_k=self.top_k)
         else:
-            # Use this function instead for not 100% correct nms but 4ms faster
             if self.fast_nms:
-                ids, count = self.box_nms(boxes, classes, scores, self.nms_thresh, self.top_k)
+                ids, classes, scores = self.box_nms(boxes, scores, self.nms_thresh, self.top_k)
             else:
                 ids, count = nms(boxes, scores, self.nms_thresh, self.top_k, force_cpu=cfg.force_cpu_nms)
                 ids = ids[:count]
-        
-        output[batch_idx, :count] = \
-            torch.cat((classes[ids].unsqueeze(1).float(), scores[ids].unsqueeze(1), boxes[ids], masks[ids]), 1)
+
+        output[batch_idx, :ids.size(0)] = \
+            torch.cat((classes.unsqueeze(1).float(), scores.unsqueeze(1), boxes[ids], masks[ids]), 1)
 
     def detect_per_class(self, batch_idx, conf_preds, decoded_boxes, mask_data, inst_data, output):
         """ Perform nms for each non-background class predicted. """
@@ -174,25 +174,41 @@ class Detect(object):
         # print(new_mask_norm[:5] @ new_mask_norm[:5].t())
         
         return idx_out, idx_out.size(0)
+
+    def box_nms(self, boxes, scores, iou_threshold=0.5, top_k=400):
+        scores, idx = scores.sort(1, descending=True)
+
+        idx = idx[:, :top_k].contiguous()
+        scores = scores[:, :top_k]
     
-    def box_nms(self, boxes, classes, scores, iou_threshold=0.5, top_k=400):
-        # TODO: separate this class-aware fast box nms into two functions (one class aware, one not)
-        _, idx = scores.sort(0, descending=True)
-        idx = idx[:top_k]
-        boxes = boxes[idx]
-        classes = classes[idx]
+        boxes = boxes[idx.view(-1), :].view(idx.size(0), idx.size(1), 4)
 
         iou = jaccard(boxes, boxes)
-        class_eq = (classes.unsqueeze(1).expand_as(iou) == classes.unsqueeze(0).expand_as(iou)).float()
-        iou *= class_eq # Mmm class-awareness
-        
+    
         iou.triu_(diagonal=1)
-        iou_max, _ = torch.max(iou, dim=0)
+    
+        iou_max, _ = torch.max(iou, dim=1)
 
         # Now just filter out the ones higher than the threshold
-        idx_out = idx[iou_max <= iou_threshold]
         
-        return idx_out, idx_out.size(0)
+        keep = iou_max <= iou_threshold
+        idx_out = idx[keep]
+
+        classes = torch.arange(scores.size(0), device=boxes.device)[:, None].expand_as(keep)
+        classes = classes[keep]
+
+        idx = idx[keep]
+        scores = scores[keep]
+        
+        # Only keep the top_k highest scores
+        scores, idx2 = scores.sort(0, descending=True)
+        idx2 = idx2[:top_k]
+
+        idx = idx[idx2]
+        scores = scores[:top_k]
+        classes = classes[idx2]
+
+        return idx, classes, scores
 
         
                 
