@@ -192,7 +192,6 @@ class Detect(object):
         # Now just filter out the ones higher than the threshold
         
         keep = iou_max <= iou_threshold
-        idx_out = idx[keep]
 
         classes = torch.arange(scores.size(0), device=boxes.device)[:, None].expand_as(keep)
         classes = classes[keep]
