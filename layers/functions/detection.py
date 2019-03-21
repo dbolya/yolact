@@ -102,7 +102,7 @@ class Detect(object):
         if self.use_fast_nms:
             idx, classes, scores = self.fast_nms(boxes, scores, self.nms_thresh, self.top_k)
         else:
-            idx, classes, scores = self.traditional_nms(boxes, scores, self.nms_thresh)
+            idx, classes, scores = self.traditional_nms(boxes, scores, self.nms_thresh, self.conf_thresh)
 
         return {'box': boxes[idx], 'mask': masks[idx], 'class': classes, 'score': scores}
     
@@ -167,22 +167,34 @@ class Detect(object):
 
         return idx, classes, scores
 
-    def traditional_nms(self, boxes, scores, iou_threshold=0.5):
+    def traditional_nms(self, boxes, scores, iou_threshold=0.5, conf_thresh=0.05):
         num_classes = scores.size(0)
 
         idx_lst = []
         cls_lst = []
         scr_lst = []
 
+        # Multiplying by max_size is necessary because of how cnms computes its area and intersections
+        boxes = boxes * cfg.mask_size
+
         for _cls in range(num_classes):
-            # Multiplying by max_size is necessary because of how cnms computes its area and intersections
-            preds = torch.cat([boxes * cfg.max_size, scores[_cls, :, None]], dim=1).cpu().numpy()
+            cls_scores = scores[_cls, :]
+            conf_mask = cls_scores > conf_thresh
+            idx = torch.arange(cls_scores.size(0), device=boxes.device)
+
+            cls_scores = cls_scores[conf_mask]
+            idx = idx[conf_mask]
+
+            if cls_scores.size(0) == 0:
+                continue
+            
+            preds = torch.cat([boxes[conf_mask], cls_scores[:, None]], dim=1).cpu().numpy()
             keep = cnms(preds, iou_threshold)
             keep = torch.Tensor(keep, device=boxes.device).long()
 
-            idx_lst.append(keep)
+            idx_lst.append(idx[keep])
             cls_lst.append(keep * 0 + _cls)
-            scr_lst.append(scores[_cls, keep])
+            scr_lst.append(cls_scores[keep])
         
         idx     = torch.cat(idx_lst, dim=0)
         classes = torch.cat(cls_lst, dim=0)
