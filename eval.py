@@ -102,7 +102,7 @@ def parse_args(argv=None):
                         help='A path to a video to evaluate on.')
     parser.add_argument('--video_multiframe', default=1, type=int,
                         help='The number of frames to evaluate in parallel to make videos play at higher fps.')
-    parser.add_argument('--score_threshold', default=0, type=float ,
+    parser.add_argument('--score_threshold', default=0, type=float,
                         help='Detections with a score under this threshold will not be considered. This currently only works in display mode.')
     parser.add_argument('--dataset', default=None, type=str,
                         help='If specified, override the dataset specified in the config with this one (example: coco2017_dataset).')
@@ -136,7 +136,7 @@ def prep_display(dets_out, img, gt, gt_masks, h, w, undo_transform=True, class_c
         h, w, _ = img.shape
     
     with timer.env('Postprocess'):
-        t = postprocess(dets_out, w, h, visualize_lincomb=args.display_lincomb, crop_masks=args.crop)
+        t = postprocess(dets_out, w, h, visualize_lincomb=args.display_lincomb, crop_masks=args.crop, score_threshold=args.score_threshold)
         torch.cuda.synchronize()
 
     with timer.env('Copy'):
@@ -202,7 +202,7 @@ def prep_display(dets_out, img, gt, gt_masks, h, w, undo_transform=True, class_c
 
 def prep_benchmark(dets_out, h, w):
     with timer.env('Postprocess'):
-        t = postprocess(dets_out, w, h, crop_masks=args.crop)
+        t = postprocess(dets_out, w, h, crop_masks=args.crop, score_threshold=args.score_threshold)
 
     with timer.env('Copy'):
         classes, scores, boxes, masks = [x[:args.top_k].cpu().numpy() for x in t]
@@ -351,7 +351,7 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, num_crowd, image_id, de
                 crowd_classes, gt_classes = split(gt_classes)
 
     with timer.env('Postprocess'):
-        classes, scores, boxes, masks = postprocess(dets, w, h, crop_masks=args.crop)
+        classes, scores, boxes, masks = postprocess(dets, w, h, crop_masks=args.crop, score_threshold=args.score_threshold)
 
         if classes.size(0) == 0:
             return
@@ -596,7 +596,7 @@ def evalvideo(net:Yolact, path:str):
             frame, preds = inp
             return prep_display(preds, frame, None, None, None, None, undo_transform=False, class_color=True)
 
-    extract_frame = lambda x, i: (x[0][i], {k: v[i].unsqueeze(0) for k, v in x[1].items()})
+    extract_frame = lambda x, i: (x[0][i], [x[1][i]])
 
     # Prime the network on the first frame because I do some thread unsafe things otherwise
     print('Initializing model... ', end='')

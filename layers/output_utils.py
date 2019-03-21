@@ -13,7 +13,7 @@ from utils import timer
 from .box_utils import crop, sanitize_coordinates
 
 def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear',
-                visualize_lincomb=False, crop_masks=True):
+                visualize_lincomb=False, crop_masks=True, score_threshold=0):
     """
     Postprocesses the output of Yolact on testing mode into a format that makes sense,
     accounting for all the possible configuration settings.
@@ -36,6 +36,16 @@ def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear',
     
     if dets is None:
         return [torch.Tensor()] * 4 # Warning, this is 4 copies of the same thing
+
+    if score_threshold > 0:
+        keep = dets['score'] > score_threshold
+
+        for k in dets:
+            if k != 'proto':
+                dets[k] = dets[k][keep]
+        
+        if dets['score'].size(0) == 0:
+            return [torch.Tensor()] * 4
 
     # im_w and im_h when it concerns bboxes. This is a workaround hack for preserve_aspect_ratio
     b_w, b_h = (w, h)
