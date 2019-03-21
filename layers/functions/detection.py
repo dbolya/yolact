@@ -92,7 +92,7 @@ class Detect(object):
         if scores.size(1) == 0:
             return None
             
-        idx, classes, scores = self.box_nms(boxes, scores, self.nms_thresh, self.conf_thresh, self.top_k)
+        idx, classes, scores = self.box_nms(boxes, scores, self.nms_thresh, self.top_k)
         return {'box': boxes[idx], 'mask': masks[idx], 'class': classes, 'score': scores}
     
 
@@ -122,7 +122,7 @@ class Detect(object):
         
         return idx_out, idx_out.size(0)
 
-    def box_nms(self, boxes, scores, iou_threshold=0.5, conf_threshold=0.05, top_k=200):
+    def box_nms(self, boxes, scores, iou_threshold=0.5, top_k=200):
         scores, idx = scores.sort(1, descending=True)
 
         idx = idx[:, :top_k].contiguous()
@@ -138,7 +138,7 @@ class Detect(object):
 
         # Now just filter out the ones higher than the threshold
         
-        keep = (iou_max <= iou_threshold) * (scores > conf_threshold)
+        keep = iou_max <= iou_threshold
 
         classes = torch.arange(scores.size(0), device=boxes.device)[:, None].expand_as(keep)
         classes = classes[keep]
