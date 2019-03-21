@@ -94,45 +94,6 @@ class Detect(object):
         
         idx, classes, scores = self.box_nms(boxes, scores, self.nms_thresh, self.top_k)
         return {'box': boxes[idx], 'mask': masks[idx], 'class': classes, 'score': scores}
-
-
-    def detect_per_class(self, batch_idx, conf_preds, decoded_boxes, mask_data, inst_data, output):
-        """ Perform nms for each non-background class predicted. """
-        conf_scores = conf_preds[batch_idx].clone()
-        tmp_output = torch.zeros(self.num_classes-1, self.top_k, output.size(2))
-
-        for cl in range(1, self.num_classes):
-            c_mask = conf_scores[cl].gt(self.conf_thresh)
-            scores = conf_scores[cl][c_mask]
-            if scores.size(0) == 0:
-                continue
-            l_mask = c_mask.unsqueeze(1).expand_as(decoded_boxes)
-            boxes = decoded_boxes[l_mask].view(-1, 4)
-            masks = mask_data[batch_idx, l_mask[:, 0], :]
-            if inst_data is not None:
-                inst = inst_data[batch_idx, l_mask[:, 0], :]
-            
-            if cfg.use_coeff_nms:
-                if inst_data is not None:
-                    ids, count = self.coefficient_nms(inst, scores, top_k=self.top_k)
-                else:
-                    ids, count = self.coefficient_nms(masks, scores, top_k=self.top_k)
-            else:
-                # Use this function instead for not 100% correct nms but 4ms faster
-                if self.fast_nms:
-                    ids, count = self.box_nms(boxes, scores, self.nms_thresh, self.top_k)
-                else:
-                    ids, count = nms(boxes, scores, self.nms_thresh, self.top_k, force_cpu=cfg.force_cpu_nms)
-                    ids = ids[:count]
-            
-            classes = torch.ones(count, 1).float()*(cl-1)
-            tmp_output[cl-1, :count] = \
-                torch.cat((classes, scores[ids].unsqueeze(1), boxes[ids], masks[ids]), 1)
-
-        # Pool all the outputs together regardless of class and pick the top_k
-        tmp_output = tmp_output.view(-1, output.size(2))
-        _, idx = tmp_output[:, 1].sort(0, descending=True)
-        output[batch_idx, :, :] = tmp_output[idx[:self.top_k], :]
     
 
     def coefficient_nms(self, coeffs, scores, cos_threshold=0.9, top_k=400):
@@ -161,7 +122,7 @@ class Detect(object):
         
         return idx_out, idx_out.size(0)
 
-    def box_nms(self, boxes, scores, iou_threshold=0.5, top_k=400, output_top_k=100):
+    def box_nms(self, boxes, scores, iou_threshold=0.5, top_k=200):
         scores, idx = scores.sort(1, descending=True)
 
         idx = idx[:, :top_k].contiguous()

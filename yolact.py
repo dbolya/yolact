@@ -439,7 +439,7 @@ class Yolact(nn.Module):
             if key.startswith('backbone.layer') and not key.startswith('backbone.layers'):
                 del state_dict[key]
 
-        self.load_state_dict(state_dict)
+        self.load_state_dict(state_dict, strict=False)
 
     def init_weights(self, backbone_path):
         """ Initialize weights for training. """

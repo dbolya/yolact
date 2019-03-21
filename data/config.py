@@ -1143,11 +1143,11 @@ yrm35_tweakedscales2_config = yrm35_tweakedscales_config.copy({
 
     'backbone': yrm35_moredata_config.backbone.copy({
         'pred_aspect_ratios': [ [[1, 1/sqrt(2), sqrt(2)]] ]*6,
-        'pred_scales': [[24], [48], [96], [192], [384], [768]],
+        'pred_scales': [[24], [48], [96], [192], [384]],
     }),
 
     'fpn': yrm35_moredata_config.fpn.copy({
-        'num_downsample': 3,
+        'num_downsample': 2,
     }),
 })
 
