@@ -5,6 +5,13 @@ from utils import timer
 
 from data import cfg, mask_type
 
+import numpy as np
+
+import pyximport
+pyximport.install(setup_args={"include_dirs":np.get_include()}, reload_support=True)
+
+from utils.cython_nms import nms as cnms
+
 
 class Detect(object):
     """At test time, Detect is the final layer of SSD.  Decode location preds,
@@ -25,7 +32,7 @@ class Detect(object):
         self.conf_thresh = conf_thresh
         
         self.cross_class_nms = False
-        self.fast_nms = False
+        self.use_fast_nms = False
 
     def __call__(self, predictions):
         """
@@ -91,8 +98,12 @@ class Detect(object):
     
         if scores.size(1) == 0:
             return None
-            
-        idx, classes, scores = self.box_nms(boxes, scores, self.nms_thresh, self.top_k)
+        
+        if self.use_fast_nms:
+            idx, classes, scores = self.fast_nms(boxes, scores, self.nms_thresh, self.top_k)
+        else:
+            idx, classes, scores = self.traditional_nms(boxes, scores, self.nms_thresh)
+
         return {'box': boxes[idx], 'mask': masks[idx], 'class': classes, 'score': scores}
     
 
@@ -122,13 +133,13 @@ class Detect(object):
         
         return idx_out, idx_out.size(0)
 
-    def box_nms(self, boxes, scores, iou_threshold=0.5, top_k=200):
+    def fast_nms(self, boxes, scores, iou_threshold=0.5, top_k=200):
         scores, idx = scores.sort(1, descending=True)
 
         idx = idx[:, :top_k].contiguous()
         scores = scores[:, :top_k]
     
-        boxes = boxes[idx.view(-1), :].view(idx.size(0), idx.size(1), 4)
+        boxes = boxes[idx.view(-1), :].view(idx.size(0), idx.size(1), 4) * cfg.max_size
 
         iou = jaccard(boxes, boxes)
     
@@ -149,12 +160,39 @@ class Detect(object):
         # Only keep the top cfg.max_num_detections highest scores across all classes
         scores, idx2 = scores.sort(0, descending=True)
         idx2 = idx2[:cfg.max_num_detections]
+        scores = scores[:cfg.max_num_detections]
 
         idx = idx[idx2]
-        scores = scores[:cfg.max_num_detections]
         classes = classes[idx2]
 
         return idx, classes, scores
 
+    def traditional_nms(self, boxes, scores, iou_threshold=0.5):
+        num_classes = scores.size(0)
+
+        idx_lst = []
+        cls_lst = []
+        scr_lst = []
+
+        for _cls in range(num_classes):
+            # Multiplying by max_size is necessary because of how cnms computes its area and intersections
+            preds = torch.cat([boxes * cfg.max_size, scores[_cls, :, None]], dim=1).cpu().numpy()
+            keep = cnms(preds, iou_threshold)
+            keep = torch.Tensor(keep, device=boxes.device).long()
+
+            idx_lst.append(keep)
+            cls_lst.append(keep * 0 + _cls)
+            scr_lst.append(scores[_cls, keep])
         
-                
+        idx     = torch.cat(idx_lst, dim=0)
+        classes = torch.cat(cls_lst, dim=0)
+        scores  = torch.cat(scr_lst, dim=0)
+
+        scores, idx2 = scores.sort(0, descending=True)
+        idx2 = idx2[:cfg.max_num_detections]
+        scores = scores[:cfg.max_num_detections]
+
+        idx = idx[idx2]
+        classes = classes[idx2]
+
+        return idx, classes, scores
