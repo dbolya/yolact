@@ -93,8 +93,12 @@ def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear',
         # Binarize the masks
         masks = masks.gt(0.5).float()
 
+    
+    boxes[:, 0], boxes[:, 2] = sanitize_coordinates(boxes[:, 0], boxes[:, 2], b_w, cast=False)
+    boxes[:, 1], boxes[:, 3] = sanitize_coordinates(boxes[:, 1], boxes[:, 3], b_h, cast=False)
+    boxes = boxes.long()
 
-    elif cfg.mask_type == mask_type.direct:
+    if cfg.mask_type == mask_type.direct:
         # Upscale masks
         full_masks = torch.zeros(masks.size(0), h, w)
 
@@ -114,10 +118,6 @@ def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear',
             full_masks[jdx, y1:y2, x1:x2] = mask
         
         masks = full_masks
-        
-    boxes[:, 0], boxes[:, 2] = sanitize_coordinates(boxes[:, 0], boxes[:, 2], b_w, cast=False)
-    boxes[:, 1], boxes[:, 3] = sanitize_coordinates(boxes[:, 1], boxes[:, 3], b_h, cast=False)
-    boxes = boxes.long()
 
     return classes, scores, boxes, masks
 
