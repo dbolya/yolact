@@ -363,32 +363,34 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, num_crowd, image_id, de
 
 
     if args.output_coco_json:
-        boxes = boxes.cpu().numpy()
-        masks = masks.view(-1, h, w).cpu().numpy()
-        for i in range(masks.shape[0]):
-            # Make sure that the bounding box actually makes sense and a mask was produced
-            if (boxes[i, 3] - boxes[i, 1]) * (boxes[i, 2] - boxes[i, 0]) > 0:
-                detections.add_bbox(image_id, classes[i], boxes[i,:],   scores[i])
-                detections.add_mask(image_id, classes[i], masks[i,:,:], scores[i])
-        return
+        with timer.env('JSON Output'):
+            boxes = boxes.cpu().numpy()
+            masks = masks.view(-1, h, w).cpu().numpy()
+            for i in range(masks.shape[0]):
+                # Make sure that the bounding box actually makes sense and a mask was produced
+                if (boxes[i, 3] - boxes[i, 1]) * (boxes[i, 2] - boxes[i, 0]) > 0:
+                    detections.add_bbox(image_id, classes[i], boxes[i,:],   scores[i])
+                    detections.add_mask(image_id, classes[i], masks[i,:,:], scores[i])
+            return
     
-    num_pred = len(classes)
-    num_gt   = len(gt_classes)
+    with timer.env('Eval Setup'):
+        num_pred = len(classes)
+        num_gt   = len(gt_classes)
 
-    mask_iou_cache = mask_iou(masks, gt_masks)
-    bbox_iou_cache = bbox_iou(boxes.float(), gt_boxes.float())
+        mask_iou_cache = mask_iou(masks, gt_masks)
+        bbox_iou_cache = bbox_iou(boxes.float(), gt_boxes.float())
 
-    if num_crowd > 0:
-        crowd_mask_iou_cache = mask_iou(masks, crowd_masks, iscrowd=True)
-        crowd_bbox_iou_cache = bbox_iou(boxes.float(), crowd_boxes.float(), iscrowd=True)
-    else:
-        crowd_mask_iou_cache = None
-        crowd_bbox_iou_cache = None
+        if num_crowd > 0:
+            crowd_mask_iou_cache = mask_iou(masks, crowd_masks, iscrowd=True)
+            crowd_bbox_iou_cache = bbox_iou(boxes.float(), crowd_boxes.float(), iscrowd=True)
+        else:
+            crowd_mask_iou_cache = None
+            crowd_bbox_iou_cache = None
 
-    iou_types = [
-        ('box',  lambda i,j: bbox_iou_cache[i, j].item(), lambda i,j: crowd_bbox_iou_cache[i,j].item()),
-        ('mask', lambda i,j: mask_iou_cache[i, j].item(), lambda i,j: crowd_mask_iou_cache[i,j].item())
-    ]
+        iou_types = [
+            ('box',  lambda i,j: bbox_iou_cache[i, j].item(), lambda i,j: crowd_bbox_iou_cache[i,j].item()),
+            ('mask', lambda i,j: mask_iou_cache[i, j].item(), lambda i,j: crowd_mask_iou_cache[i,j].item())
+        ]
 
     timer.start('Main loop')
     for _class in set(classes + gt_classes):
