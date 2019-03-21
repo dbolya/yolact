@@ -89,9 +89,9 @@ class Detect(object):
         if inst_data is not None:
             inst = inst_data[batch_idx, keep, :]
     
-        if scores.size(0) == 0:
+        if scores.size(1) == 0:
             return None
-        
+            
         idx, classes, scores = self.box_nms(boxes, scores, self.nms_thresh, self.top_k)
         return {'box': boxes[idx], 'mask': masks[idx], 'class': classes, 'score': scores}
     
