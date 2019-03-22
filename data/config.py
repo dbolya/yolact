@@ -319,6 +319,9 @@ coco_base_config = Config({
     'bbox_alpha': 1.5,
     'mask_alpha': 0.4 / 256 * 140 * 140, # Some funky equation. Don't worry about it.
 
+    # Eval.py sets this if you just want to run YOLACT as a detector
+    'eval_mask_branch': True,
+
     # See mask_type for details.
     'mask_type': mask_type.direct,
     'mask_size': 16,

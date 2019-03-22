@@ -199,7 +199,10 @@ class PredictionModule(nn.Module):
 
         bbox = src.bbox_layer(bbox_x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, 4)
         conf = src.conf_layer(conf_x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, self.num_classes)
-        mask = src.mask_layer(mask_x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, self.mask_dim)
+        if cfg.eval_mask_branch:
+            mask = src.mask_layer(mask_x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, self.mask_dim)
+        else:
+            mask = torch.zeros(x.size(0), bbox.size(1), self.mask_dim, device=bbox.device)
 
         if cfg.use_instance_coeff:
             inst = src.inst_layer(x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, cfg.num_instance_coeffs)
@@ -210,14 +213,15 @@ class PredictionModule(nn.Module):
             bbox[:, :, 0] /= conv_w
             bbox[:, :, 1] /= conv_h
 
-        if cfg.mask_type == mask_type.direct:
-            mask = torch.sigmoid(mask)
-        elif cfg.mask_type == mask_type.lincomb:
-            mask = cfg.mask_proto_coeff_activation(mask)
+        if cfg.eval_mask_branch:
+            if cfg.mask_type == mask_type.direct:
+                mask = torch.sigmoid(mask)
+            elif cfg.mask_type == mask_type.lincomb:
+                mask = cfg.mask_proto_coeff_activation(mask)
 
-            if cfg.mask_proto_coeff_gate:
-                gate = src.gate_layer(x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, self.mask_dim)
-                mask = mask * torch.sigmoid(gate)
+                if cfg.mask_proto_coeff_gate:
+                    gate = src.gate_layer(x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, self.mask_dim)
+                    mask = mask * torch.sigmoid(gate)
         
         priors = self.make_priors(conv_h, conv_w)
 
@@ -503,7 +507,8 @@ class Yolact(nn.Module):
                 outs = [outs[i] for i in cfg.backbone.selected_layers]
                 outs = self.fpn(outs)
 
-        if cfg.mask_type == mask_type.lincomb:
+        proto_out = None
+        if cfg.mask_type == mask_type.lincomb and cfg.eval_mask_branch:
             with timer.env('proto'):
                 proto_x = x if self.proto_src is None else outs[self.proto_src]
                 
@@ -556,7 +561,7 @@ class Yolact(nn.Module):
         for k, v in pred_outs.items():
             pred_outs[k] = torch.cat(v, -2)
 
-        if cfg.mask_type == mask_type.lincomb:
+        if proto_out is not None:
             pred_outs['proto'] = proto_out
 
         if self.training:

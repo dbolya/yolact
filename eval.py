@@ -56,7 +56,7 @@ def parse_args(argv=None):
                         help='Whether or not to display bboxes around masks')
     parser.add_argument('--display_text', default=True, type=str2bool,
                         help='Whether or not to display text (class [score])')
-    parser.add_argument('--display_scores', default=False, type=str2bool,
+    parser.add_argument('--display_scores', default=True, type=str2bool,
                         help='Whether or not to display scores in addition to classes')
     parser.add_argument('--display', dest='display', action='store_true',
                         help='Display qualitative results instead of quantitative ones.')
@@ -106,9 +106,11 @@ def parse_args(argv=None):
                         help='Detections with a score under this threshold will not be considered. This currently only works in display mode.')
     parser.add_argument('--dataset', default=None, type=str,
                         help='If specified, override the dataset specified in the config with this one (example: coco2017_dataset).')
+    parser.add_argument('--detect', default=False, dest='detect', action='store_true',
+                        help='Don\'t evauluate the mask branch at all and only do object detection. This only works for --display and --benchmark.')
 
     parser.set_defaults(no_bar=False, display=False, resume=False, output_coco_json=False, output_web_json=False, shuffle=False,
-                        benchmark=False, no_sort=False, no_hash=False, mask_proto_debug=False, crop=True)
+                        benchmark=False, no_sort=False, no_hash=False, mask_proto_debug=False, crop=True, detect=False)
 
     global args
     args = parser.parse_args(argv)
@@ -140,7 +142,8 @@ def prep_display(dets_out, img, gt, gt_masks, h, w, undo_transform=True, class_c
         torch.cuda.synchronize()
 
     with timer.env('Copy'):
-        masks = t[3][:args.top_k] # We'll need this later
+        if cfg.eval_mask_branch:
+            masks = t[3][:args.top_k] # We'll need this later
         classes, scores, boxes = [x[:args.top_k].cpu().numpy() for x in t[:3]]
     
     if classes.shape[0] == 0:
@@ -154,7 +157,7 @@ def prep_display(dets_out, img, gt, gt_masks, h, w, undo_transform=True, class_c
         return color
 
     # Draw masks first on the gpu
-    if args.display_masks:
+    if args.display_masks and cfg.eval_mask_branch:
         for j in reversed(range(min(args.top_k, classes.shape[0]))):
             if scores[j] >= args.score_threshold:
                 color = get_color(j)
@@ -847,6 +850,9 @@ if __name__ == '__main__':
         args.config = model_path.model_name + '_config'
         print('Config not specified. Parsed %s from the file name.\n' % args.config)
         set_cfg(args.config)
+
+    if args.detect:
+        cfg.eval_mask_branch = False
 
     if args.dataset is not None:
         set_dataset(args.dataset)
