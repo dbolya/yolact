@@ -148,7 +148,7 @@ def prep_display(dets_out, img, gt, gt_masks, h, w, undo_transform=True, class_c
     
     if classes.shape[0] == 0:
         print('Warning: No detections found.')
-        return img_gpu.cpu()
+        return img_gpu.cpu().numpy()
 
     def get_color(j):
         color = COLORS[(classes[j] * 5 if class_color else j * 5) % len(COLORS)]
