@@ -102,7 +102,7 @@ class Detect(object):
         if self.use_fast_nms:
             boxes, masks, classes, scores = self.fast_nms(boxes, masks, scores, self.nms_thresh, self.top_k)
         else:
-            idx, classes, scores = self.traditional_nms(boxes, scores, self.nms_thresh, self.conf_thresh)
+            boxes, masks, classes, scores = self.traditional_nms(boxes, masks, scores, self.nms_thresh, self.conf_thresh)
 
         return {'box': boxes, 'mask': masks, 'class': classes, 'score': scores}
     
@@ -133,7 +133,7 @@ class Detect(object):
         
         return idx_out, idx_out.size(0)
 
-    def fast_nms(self, boxes, masks, scores, iou_threshold=0.5, top_k=200):
+    def fast_nms(self, boxes, masks, scores, iou_threshold=0.5, top_k=200, second_threshold=False):
         scores, idx = scores.sort(1, descending=True)
 
         idx = idx[:, :top_k].contiguous()
@@ -146,24 +146,18 @@ class Detect(object):
 
         iou = jaccard(boxes, boxes)
         iou.triu_(diagonal=1)
-        iou_max, survivor_idx = iou.max(dim=1)
-
-        suppressed = (iou_max > iou_threshold).long()
-        identity_idx = torch.arange(num_dets, device=boxes.device)[None, :].expand_as(survivor_idx)
-        survivor_idx = suppressed * survivor_idx + (1 - suppressed) * identity_idx
-
-        survivor_select = torch.eye(num_dets, device=boxes.device)[:, survivor_idx].permute(1, 0, 2).contiguous().float()
-        survivor_scores = scores[:, None, :].expand_as(survivor_select) * survivor_select
-        
-        survivor_sums = survivor_scores.sum(dim=2)
-        survivor_boxes = (survivor_scores[..., None] * boxes[:, None, :, :]).sum(dim=2)
-        boxes = survivor_boxes / survivor_sums[..., None]
-
-        survivor_masks = (survivor_scores[..., None] * masks[:, None, :, :]).sum(dim=2)
-        masks = survivor_masks / survivor_sums[..., None]
+        iou_max, _ = iou.max(dim=1)
 
         # Now just filter out the ones higher than the threshold
-        keep = (iou_max <= iou_threshold) * (scores > self.conf_thresh)
+        keep = (iou_max <= iou_threshold)
+
+        # We should also only keep detections over the confidence threshold, but at the cost of
+        # maxing out your detection count for every image, you can just not do that. Because we
+        # have such a minimal amount of computation per detection (matrix mulitplication only),
+        # this increase doesn't affect us much (+0.2 mAP for 34 -> 33 fps), so we leave it out.
+        # However, when you implement this in your method, you should do this second threshold.
+        if second_threshold:
+            keep *= (scores > self.conf_thresh)
 
         # Assign each kept detection to its corresponding class
         classes = torch.arange(num_classes, device=boxes.device)[:, None].expand_as(keep)
@@ -224,4 +218,4 @@ class Detect(object):
         idx = idx[idx2]
         classes = classes[idx2]
 
-        return idx, classes, scores
+        return boxes[idx], masks[idx], classes, scores
