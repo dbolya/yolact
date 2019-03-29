@@ -73,7 +73,7 @@ class Detect(object):
 
             for batch_idx in range(batch_size):
                 decoded_boxes = decode(loc_data[batch_idx], prior_data)
-                result = self.detect_cross_class(batch_idx, conf_preds, decoded_boxes, mask_data, inst_data)
+                result = self.detect(batch_idx, conf_preds, decoded_boxes, mask_data, inst_data)
 
                 if result is not None and proto_data is not None:
                     result['proto'] = proto_data[batch_idx]
@@ -83,7 +83,7 @@ class Detect(object):
         return out
 
 
-    def detect_cross_class(self, batch_idx, conf_preds, decoded_boxes, mask_data, inst_data):
+    def detect(self, batch_idx, conf_preds, decoded_boxes, mask_data, inst_data):
         """ Perform nms for only the max scoring class that isn't background (class 0) """
         cur_scores = conf_preds[batch_idx, 1:, :]
         conf_scores, _ = torch.max(cur_scores, dim=0)
@@ -100,11 +100,11 @@ class Detect(object):
             return None
         
         if self.use_fast_nms:
-            idx, classes, scores = self.fast_nms(boxes, scores, self.nms_thresh, self.top_k)
+            boxes, masks, classes, scores = self.fast_nms(boxes, masks, scores, self.nms_thresh, self.top_k)
         else:
             idx, classes, scores = self.traditional_nms(boxes, scores, self.nms_thresh, self.conf_thresh)
 
-        return {'box': boxes[idx], 'mask': masks[idx], 'class': classes, 'score': scores}
+        return {'box': boxes, 'mask': masks, 'class': classes, 'score': scores}
     
 
     def coefficient_nms(self, coeffs, scores, cos_threshold=0.9, top_k=400):
@@ -133,39 +133,56 @@ class Detect(object):
         
         return idx_out, idx_out.size(0)
 
-    def fast_nms(self, boxes, scores, iou_threshold=0.5, top_k=200):
+    def fast_nms(self, boxes, masks, scores, iou_threshold=0.5, top_k=200):
         scores, idx = scores.sort(1, descending=True)
 
         idx = idx[:, :top_k].contiguous()
         scores = scores[:, :top_k]
     
-        boxes = boxes[idx.view(-1), :].view(idx.size(0), idx.size(1), 4) * cfg.max_size
+        num_classes, num_dets = idx.size()
+
+        boxes = boxes[idx.view(-1), :].view(num_classes, num_dets, 4)
+        masks = masks[idx.view(-1), :].view(num_classes, num_dets, -1)
 
         iou = jaccard(boxes, boxes)
-    
         iou.triu_(diagonal=1)
-    
-        iou_max, _ = torch.max(iou, dim=1)
+        iou_max, survivor_idx = iou.max(dim=1)
+
+        suppressed = (iou_max > iou_threshold).long()
+        identity_idx = torch.arange(num_dets, device=boxes.device)[None, :].expand_as(survivor_idx)
+        survivor_idx = suppressed * survivor_idx + (1 - suppressed) * identity_idx
+
+        survivor_select = torch.eye(num_dets, device=boxes.device)[:, survivor_idx].permute(1, 0, 2).contiguous().float()
+        survivor_scores = scores[:, None, :].expand_as(survivor_select) * survivor_select
+        
+        survivor_sums = survivor_scores.sum(dim=2)
+        survivor_boxes = (survivor_scores[..., None] * boxes[:, None, :, :]).sum(dim=2)
+        boxes = survivor_boxes / survivor_sums[..., None]
+
+        survivor_masks = (survivor_scores[..., None] * masks[:, None, :, :]).sum(dim=2)
+        masks = survivor_masks / survivor_sums[..., None]
 
         # Now just filter out the ones higher than the threshold
-        
-        keep = iou_max <= iou_threshold
+        keep = (iou_max <= iou_threshold) * (scores > self.conf_thresh)
 
-        classes = torch.arange(scores.size(0), device=boxes.device)[:, None].expand_as(keep)
+        # Assign each kept detection to its corresponding class
+        classes = torch.arange(num_classes, device=boxes.device)[:, None].expand_as(keep)
         classes = classes[keep]
 
-        idx = idx[keep]
+        boxes = boxes[keep]
+        masks = masks[keep]
         scores = scores[keep]
         
         # Only keep the top cfg.max_num_detections highest scores across all classes
-        scores, idx2 = scores.sort(0, descending=True)
-        idx2 = idx2[:cfg.max_num_detections]
+        scores, idx = scores.sort(0, descending=True)
+        idx = idx[:cfg.max_num_detections]
         scores = scores[:cfg.max_num_detections]
 
-        idx = idx[idx2]
-        classes = classes[idx2]
+        classes = classes[idx]
+        boxes = boxes[idx]
+        masks = masks[idx]
 
-        return idx, classes, scores
+        return boxes, masks, classes, scores
 
     def traditional_nms(self, boxes, scores, iou_threshold=0.5, conf_thresh=0.05):
         num_classes = scores.size(0)
