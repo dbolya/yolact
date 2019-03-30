@@ -147,7 +147,6 @@ def prep_display(dets_out, img, gt, gt_masks, h, w, undo_transform=True, class_c
         classes, scores, boxes = [x[:args.top_k].cpu().numpy() for x in t[:3]]
     
     if classes.shape[0] == 0:
-        print('Warning: No detections found.')
         return (img_gpu * 255).byte().cpu().numpy()
 
     def get_color(j):
@@ -698,6 +697,7 @@ def savevideo(net:Yolact, in_path:str, out_path:str):
     
     vid.release()
     out.release()
+    print()
 
 
 def evaluate(net:Yolact, dataset, train_mode=False):
