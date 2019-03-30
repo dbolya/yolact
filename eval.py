@@ -148,7 +148,7 @@ def prep_display(dets_out, img, gt, gt_masks, h, w, undo_transform=True, class_c
     
     if classes.shape[0] == 0:
         print('Warning: No detections found.')
-        return img_gpu.cpu().numpy()
+        return (img_gpu * 255).byte().cpu().numpy()
 
     def get_color(j):
         color = COLORS[(classes[j] * 5 if class_color else j * 5) % len(COLORS)]
@@ -658,7 +658,46 @@ def evalvideo(net:Yolact, path:str):
         print('\rAvg FPS: %.2f     ' % fps, end='')
     
     cleanup_and_exit()
+
+def savevideo(net:Yolact, in_path:str, out_path:str):
+
+    vid = cv2.VideoCapture(in_path)
+
+    target_fps   = round(vid.get(cv2.CAP_PROP_FPS))
+    frame_width  = round(vid.get(cv2.CAP_PROP_FRAME_WIDTH))
+    frame_height = round(vid.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    num_frames   = round(vid.get(cv2.CAP_PROP_FRAME_COUNT))
     
+    out = cv2.VideoWriter(out_path, cv2.VideoWriter_fourcc('X', '2', '6', '4'), target_fps, (frame_width, frame_height))
+
+    transform = FastBaseTransform()
+    frame_times = MovingAverage()
+    progress_bar = ProgressBar(30, num_frames)
+
+    try:
+        for i in range(num_frames):
+            timer.reset()
+            with timer.env('Video'):
+                frame = torch.Tensor(vid.read()[1]).float().cuda()
+                batch = transform(frame.unsqueeze(0))
+                preds = net(batch)
+                processed = prep_display(preds, frame, None, None, None, None, undo_transform=False, class_color=True)
+
+                out.write(processed)
+            
+            if i > 1:
+                frame_times.add(timer.total_time())
+                fps = 1 / frame_times.get_avg()
+                progress = (i+1) / num_frames * 100
+                progress_bar.set_val(i+1)
+
+                print('\rProcessing Frames  %s %6d / %6d (%5.2f%%)    %5.2f fps        '
+                    % (repr(progress_bar), i+1, num_frames, progress, fps), end='')
+    except KeyboardInterrupt:
+        print('Stopping early.')
+    
+    vid.release()
+    out.release()
 
 
 def evaluate(net:Yolact, dataset, train_mode=False):
@@ -678,7 +717,11 @@ def evaluate(net:Yolact, dataset, train_mode=False):
         evalimages(net, inp, out)
         return
     elif args.video is not None:
-        evalvideo(net, args.video)
+        if ':' in args.video:
+            inp, out = args.video.split(':')
+            savevideo(net, inp, out)
+        else:
+            evalvideo(net, args.video)
         return
 
     frame_times = MovingAverage()
