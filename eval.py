@@ -668,7 +668,7 @@ def savevideo(net:Yolact, in_path:str, out_path:str):
     frame_height = round(vid.get(cv2.CAP_PROP_FRAME_HEIGHT))
     num_frames   = round(vid.get(cv2.CAP_PROP_FRAME_COUNT))
     
-    out = cv2.VideoWriter(out_path, cv2.VideoWriter_fourcc('X', '2', '6', '4'), target_fps, (frame_width, frame_height))
+    out = cv2.VideoWriter(out_path, cv2.VideoWriter_fourcc(*"mp4v"), target_fps, (frame_width, frame_height))
 
     transform = FastBaseTransform()
     frame_times = MovingAverage()
