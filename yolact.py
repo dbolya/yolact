@@ -15,6 +15,19 @@ import torch.backends.cudnn as cudnn
 from utils import timer
 from utils.functions import MovingAverage
 
+class Concat(nn.Module):
+    def __init__(self, nets, extra_params):
+        super().__init__()
+
+        self.nets = nn.ModuleList(nets)
+        self.extra_params = extra_params
+    
+    def forward(self, x):
+        # Concat each along the channel dimension
+        return torch.cat([net(x) for net in self.nets], dim=1, **self.extra_params)
+
+
+
 
 def make_net(in_channels, conf, include_last_relu=True):
     """
@@ -23,23 +36,33 @@ def make_net(in_channels, conf, include_last_relu=True):
     """
     def make_layer(layer_cfg):
         nonlocal in_channels
-        num_channels = layer_cfg[0]
-        kernel_size = layer_cfg[1]
         
         # Possible patterns:
         # ( 256, 3, {}) -> conv
         # ( 256,-2, {}) -> deconv
         # (None,-2, {}) -> bilinear interpolate
+        # ('cat',[],{}) -> concat the subnetworks in the list
         #
         # You know it would have probably been simpler just to adopt a 'c' 'd' 'u' naming scheme.
         # Whatever, it's too late now.
-        if kernel_size > 0:
-            layer = nn.Conv2d(in_channels, num_channels, kernel_size, **layer_cfg[2])
+        if isinstance(layer_cfg[0], str):
+            layer_name = layer_cfg[0]
+
+            if layer_name == 'cat':
+                nets = [make_net(in_channels, x) for x in layer_cfg[1]]
+                layer = Concat([net[0] for net in nets], layer_cfg[2])
+                num_channels = sum([net[1] for net in nets])
         else:
-            if num_channels is None:
-                layer = InterpolateModule(scale_factor=-kernel_size, mode='bilinear', align_corners=False, **layer_cfg[2])
+            num_channels = layer_cfg[0]
+            kernel_size = layer_cfg[1]
+
+            if kernel_size > 0:
+                layer = nn.Conv2d(in_channels, num_channels, kernel_size, **layer_cfg[2])
             else:
-                layer = nn.ConvTranspose2d(in_channels, num_channels, -kernel_size, **layer_cfg[2])
+                if num_channels is None:
+                    layer = InterpolateModule(scale_factor=-kernel_size, mode='bilinear', align_corners=False, **layer_cfg[2])
+                else:
+                    layer = nn.ConvTranspose2d(in_channels, num_channels, -kernel_size, **layer_cfg[2])
         
         in_channels = num_channels if num_channels is not None else in_channels
 

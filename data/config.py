@@ -1667,6 +1667,21 @@ yolact_resnet50_config = yolact_base_config.copy({
     }),
 })
 
+yrm37_base_config = yolact_base_config.copy({
+    'name': 'yrm37_base',
+
+    'mask_proto_net': [('cat', [
+        [(64, 3, {'padding': 1})],
+        [(64, 3, {'padding': 1})] * 2,
+        [(64, 3, {'padding': 1})] * 3,
+        [(64, 3, {'padding': 1})] * 4,
+    ], {}), (None, -2, {}), (256, 3, {'padding': 1}), (32, 1, {})],
+
+    'lr_steps': (280000, 360000, 400000),
+    'max_iter': 400000,
+    
+})
+
 
 # Default config
 cfg = yrm36_softmax_config.copy()
