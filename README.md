@@ -44,6 +44,7 @@ Here's a look at our current results for our base model (33 fps on a Titan Xp an
 
 # Evaluation
 As of April 5th, 2019 here are our latest models along with their FPS on a Titan Xp and mAP on `test-dev`:
+
 | Image Size | Backbone      | FPS  | mAP  | Weights                                                                                                        |
 |:----------:|:-------------:|:----:|:----:|----------------------------------------------------------------------------------------------------------------|
 | 550        | Resnet50-FPN  | 42.5 | 28.2 | [yolact_resnet50_54_800000.pth](http://vision5.idav.ucdavis.edu:6337/weights/yolact_resnet50_54_800000.pth )   |
