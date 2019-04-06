@@ -79,7 +79,7 @@ python eval.py --trained_model=weights/yolact_base_54_800000.pth --score_thresho
 # Run just the raw model on the first 1k images of the validation set
 python eval.py --trained_model=weights/yolact_base_54_800000.pth --benchmark --max_images=1000
 ```
-## Your Own Images
+## Images
 ```Shell
 # Display qualitative results on the specified image.
 python eval.py --trained_model=weights/yolact_base_54_800000.pth --score_threshold=0.3 --top_k=100 --image=my_image.png

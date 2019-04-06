@@ -1622,6 +1622,16 @@ dev_nophotoaug_config = dev_base_config.copy({
     'augment_photometric_distort': False,
 })
 
+dev_nocrop_config = dev_base_config.copy({
+    'name': 'dev_nocrop',
+    'mask_proto_crop': False,
+    
+    'lr_warmup_until': 500,
+    'lr_warmup_init': dev_base_config.lr / 100,
+
+    'mask_alpha': dev_base_config.mask_alpha * 2000,
+})
+
 
 
 
