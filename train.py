@@ -62,6 +62,8 @@ parser.add_argument('--no_jit', dest='no_jit', action='store_true',
                     help='Don\'t use Pytorch 1.0 tracing functionality.')
 parser.add_argument('--keep_latest', dest='keep_latest', action='store_true',
                     help='Only keep the latest checkpoint instead of each one.')
+parser.add_argument('--keep_latest_interval', default=100000, type=int,
+                    help='When --keep_latest is on, don\'t delete the latest file at these intervals. This should be a multiple of save_interval or 0.')
 parser.add_argument('--dataset', default=None, type=str,
                     help='If specified, override the dataset specified in the config with this one (example: coco2017_dataset).')
 
@@ -290,9 +292,10 @@ def train():
                     print('Saving state, iter:', iteration)
                     yolact_net.save_weights(save_path(epoch, iteration))
 
-                    if args.keep_latest and latest is not None and iteration % 100000 != args.save_interval:
-                        print('Deleting old save...')
-                        os.remove(latest)
+                    if args.keep_latest and latest is not None:
+                        if args.keep_latest_interval <= 0 or iteration % args.keep_latest_interval != args.save_interval:
+                            print('Deleting old save...')
+                            os.remove(latest)
             
             # This is done per epoch
             if args.validation_epoch > 0:
