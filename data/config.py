@@ -1613,6 +1613,18 @@ yrm22_fcis_config = yrm22_config.copy({
 })
 
 
+dev_base_config = yrm35_tweakedscales2_config.copy({
+    'name': 'dev_base',
+})
+
+dev_nophotoaug_config = dev_base_config.copy({
+    'name': 'dev_nophotoaug',
+    'augment_photometric_distort': False,
+})
+
+
+
+
 yolact_base_config = yrm35_tweakedscales2_config.copy({
     'name': 'yolact_base',
 
@@ -1667,24 +1679,9 @@ yolact_resnet50_config = yolact_base_config.copy({
     }),
 })
 
-yrm37_base_config = yolact_base_config.copy({
-    'name': 'yrm37_base',
-
-    'mask_proto_net': [('cat', [
-        [(64, 3, {'padding': 1})],
-        [(64, 3, {'padding': 1})] * 2,
-        [(64, 3, {'padding': 1})] * 3,
-        [(64, 3, {'padding': 1})] * 4,
-    ], {}), (None, -2, {}), (256, 3, {'padding': 1}), (32, 1, {})],
-
-    'lr_steps': (280000, 360000, 400000),
-    'max_iter': 400000,
-    
-})
-
 
 # Default config
-cfg = yrm36_softmax_config.copy()
+cfg = yolact_base_config.copy()
 
 def set_cfg(config_name:str):
     """ Sets the active config. Works even if cfg is already imported! """
