@@ -47,10 +47,10 @@ As of April 5th, 2019 here are our latest models along with their FPS on a Titan
 
 | Image Size | Backbone      | FPS  | mAP  | Weights                                                                                                        |
 |:----------:|:-------------:|:----:|:----:|----------------------------------------------------------------------------------------------------------------|
-| 550        | Resnet50-FPN  | 42.5 | 28.2 | [yolact_resnet50_54_800000.pth](http://vision5.idav.ucdavis.edu:6337/weights/yolact_resnet50_54_800000.pth )   |
-| 550        | Darknet53-FPN | 40.0 | 28.7 | [yolact_darknet53_54_800000.pth](http://vision5.idav.ucdavis.edu:6337/weights/yolact_darknet53_54_800000.pth ) |
-| 550        | Resnet101-FPN | 33.0 | 29.8 | [yolact_base_54_800000.pth](http://vision5.idav.ucdavis.edu:6337/weights/yolact_base_54_800000.pth )           |
-| 700        | Resnet101-FPN | 23.6 | 31.2 | [yolact_im700_54_800000.pth](http://vision5.idav.ucdavis.edu:6337/weights/yolact_im700_54_800000.pth )         |
+| 550        | Resnet50-FPN  | 42.5 | 28.2 | [yolact_resnet50_54_800000.pth](https://drive.google.com/file/d/1yp7ZbbDwvMiFJEq4ptVKTYTI2VeRDXl0/view?usp=sharing)   |
+| 550        | Darknet53-FPN | 40.0 | 28.7 | [yolact_darknet53_54_800000.pth](https://drive.google.com/file/d/1dukLrTzZQEuhzitGkHaGjphlmRJOjVnP/view?usp=sharing) |
+| 550        | Resnet101-FPN | 33.0 | 29.8 | [yolact_base_54_800000.pth](https://drive.google.com/file/d/1UYy3dMapbH1BnmtZU4WH1zbYgOzzHHf_/view?usp=sharing)           |
+| 700        | Resnet101-FPN | 23.6 | 31.2 | [yolact_im700_54_800000.pth](https://drive.google.com/file/d/1lE4Lz5p25teiXV-6HdTiOJSnS7u7GBzg/view?usp=sharing)         |
 
 To evalute the model, put the corresponding weights file in the `./weights` directory and run one of the following commands.
 ## Quantitative Results on COCO
@@ -107,9 +107,9 @@ python eval.py --help
 
 # Training
  - To train, grab an imagenet-pretrained model and put it in `./weights`.
-   * For Resnet101, download `resnet101_reducedfc.pth` from [here](http://vision5.idav.ucdavis.edu:6337/resnet101_reducedfc.pth).
-   * For Resnet50, download `resnet50-19c8e357.pth` from [here](http://vision5.idav.ucdavis.edu:6337/resnet50-19c8e357.pth).
-   * For Darknet53, download `darknet53.pth` from [here](http://vision5.idav.ucdavis.edu:6337/darknet53.pth).
+   * For Resnet101, download `resnet101_reducedfc.pth` from [here](https://drive.google.com/file/d/1tvqFPd4bJtakOlmn-uIA492g2qurRChj/view?usp=sharing).
+   * For Resnet50, download `resnet50-19c8e357.pth` from [here](https://drive.google.com/file/d/1Jy3yCdbatgXa5YYIdTCRrSV0S9V5g1rn/view?usp=sharing).
+   * For Darknet53, download `darknet53.pth` from [here](https://drive.google.com/file/d/17Y431j4sagFpSReuPNoFcj9h7azDTZFf/view?usp=sharing).
  - Run one of the training commands below.
    * Note that you can press ctrl+c while training and it will save an `*_interrupt.pth` file at the current iteration.
    * All weights are saved in the `./weights` directory by default with the file name `<config>_<epoch>_<iter>.pth`.
