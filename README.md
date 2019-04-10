@@ -117,7 +117,7 @@ python eval.py --help
 # Trains using the base config with a batch size of 8 (the default).
 python train.py --config=yolact_base_config
 
-# Trains yolact_base_config with a batch_size of 5 (suprise). For the 550px models, 1 batch takes up around 1.8 gigs of VRAM, so specify accordingly.
+# Trains yolact_base_config with a batch_size of 5. For the 550px models, 1 batch takes up around 1.5 gigs of VRAM, so specify accordingly.
 python train.py --config=yolact_base_config --batch_size=5
 
 # Resume training yolact_base with a specific weight file and start from the iteration specified in the weight file's name.
@@ -126,3 +126,21 @@ python train.py --config=yolact_base_config --resume=weights/yolact_base_10_3210
 # Use the help option to see a description of all available command line arguments
 python train.py --help
 ```
+
+
+
+# Citation
+If you use YOLACT or this code base in your work, please cite
+```
+@article{bolya-arxiv2019,
+  author    = {Daniel Bolya and Chong Zhou and Fanyi Xiao and Yong Jae Lee},
+  title     = {YOLACT: {Real-time} Instance Segmentation},
+  journal   = {arXiv},
+  year      = {2019},
+}
+```
+
+
+
+# Contact
+For questions about our paper or code, please contact [Daniel Bolya](mailto:dbolya@ucdavis.edu).
