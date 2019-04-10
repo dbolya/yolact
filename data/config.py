@@ -400,6 +400,10 @@ coco_base_config = Config({
     'use_semantic_segmentation_loss': False,
     'semantic_segmentation_alpha': 1,
 
+    # Adds another branch to the netwok to predict Mask IoU.
+    'use_mask_scoring': False,
+    'mask_scoring_alpha': 1,
+
     # Match gt boxes using the Box2Pix change metric instead of the standard IoU metric.
     # Note that the threshold you set for iou_threshold should be negative with this setting on.
     'use_change_matching': False,
@@ -1630,6 +1634,13 @@ dev_nocrop_config = dev_base_config.copy({
     'lr_warmup_init': dev_base_config.lr / 100,
 
     'mask_alpha': dev_base_config.mask_alpha * 2000,
+})
+
+dev_mask_scoring_config = dev_base_config.copy({
+    'name': 'dev_mask_scoring',
+
+    'use_mask_scoring': True,
+    'mask_scoring_alpha': 2,
 })
 
 

@@ -2,7 +2,7 @@ from data import COCODetection, MEANS, COLORS, COCO_CLASSES
 from yolact import Yolact
 from utils.augmentations import BaseTransform, FastBaseTransform, Resize
 from utils.functions import MovingAverage, ProgressBar
-from layers.box_utils import jaccard, center_size
+from layers.box_utils import jaccard, center_size, mask_iou
 from utils import timer
 from utils.functions import SavePath
 from layers.output_utils import postprocess, undo_image_transformation
@@ -311,27 +311,12 @@ class Detections:
 
         
 
-def mask_iou(mask1, mask2, iscrowd=False):
-    """
-    Inputs inputs are matricies of size _ x N. Output is size _1 x _2.
-    Note: if iscrowd is True, then mask2 should be the crowd.
-    """
-    timer.start('Mask IoU')
-
-    intersection = torch.matmul(mask1, mask2.t())
-    area1 = torch.sum(mask1, dim=1).view(1, -1)
-    area2 = torch.sum(mask2, dim=1).view(1, -1)
-    union = (area1.t() + area2) - intersection
-
-    if iscrowd:
-        # Make sure to brodcast to the right dimension
-        ret = intersection / area1.t()
-    else:
-        ret = intersection / union
-    timer.stop('Mask IoU')
+def _mask_iou(mask1, mask2, iscrowd=False):
+    with timer.env('Mask IoU'):
+        ret = mask_iou(mask1, mask2, iscrowd)
     return ret.cpu()
 
-def bbox_iou(bbox1, bbox2, iscrowd=False):
+def _bbox_iou(bbox1, bbox2, iscrowd=False):
     with timer.env('BBox IoU'):
         ret = jaccard(bbox1, bbox2, iscrowd)
     return ret.cpu()
@@ -379,12 +364,12 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, num_crowd, image_id, de
         num_pred = len(classes)
         num_gt   = len(gt_classes)
 
-        mask_iou_cache = mask_iou(masks, gt_masks)
-        bbox_iou_cache = bbox_iou(boxes.float(), gt_boxes.float())
+        mask_iou_cache = _mask_iou(masks, gt_masks)
+        bbox_iou_cache = _bbox_iou(boxes.float(), gt_boxes.float())
 
         if num_crowd > 0:
-            crowd_mask_iou_cache = mask_iou(masks, crowd_masks, iscrowd=True)
-            crowd_bbox_iou_cache = bbox_iou(boxes.float(), crowd_boxes.float(), iscrowd=True)
+            crowd_mask_iou_cache = _mask_iou(masks, crowd_masks, iscrowd=True)
+            crowd_bbox_iou_cache = _bbox_iou(boxes.float(), crowd_boxes.float(), iscrowd=True)
         else:
             crowd_mask_iou_cache = None
             crowd_bbox_iou_cache = None

@@ -158,6 +158,9 @@ class PredictionModule(nn.Module):
             self.bbox_layer = nn.Conv2d(out_channels, self.num_priors * 4,                **cfg.head_layer_params)
             self.conf_layer = nn.Conv2d(out_channels, self.num_priors * self.num_classes, **cfg.head_layer_params)
             self.mask_layer = nn.Conv2d(out_channels, self.num_priors * self.mask_dim,    **cfg.head_layer_params)
+            
+            if cfg.use_mask_scoring:
+                self.score_layer = nn.Conv2d(out_channels, self.num_priors, **cfg.head_layer_params)
 
             if cfg.use_instance_coeff:
                 self.inst_layer = nn.Conv2d(out_channels, self.num_priors * cfg.num_instance_coeffs, **cfg.head_layer_params)
@@ -222,13 +225,17 @@ class PredictionModule(nn.Module):
 
         bbox = src.bbox_layer(bbox_x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, 4)
         conf = src.conf_layer(conf_x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, self.num_classes)
+        
         if cfg.eval_mask_branch:
             mask = src.mask_layer(mask_x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, self.mask_dim)
         else:
             mask = torch.zeros(x.size(0), bbox.size(1), self.mask_dim, device=bbox.device)
 
+        if cfg.use_mask_scoring:
+            score = src.score_layer(x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, 1)
+
         if cfg.use_instance_coeff:
-            inst = src.inst_layer(x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, cfg.num_instance_coeffs)
+            inst = src.inst_layer(x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, cfg.num_instance_coeffs)    
 
         # See box_utils.decode for an explanation of this
         if cfg.use_yolo_regressors:
@@ -249,6 +256,9 @@ class PredictionModule(nn.Module):
         priors = self.make_priors(conv_h, conv_w)
 
         preds = { 'loc': bbox, 'conf': conf, 'mask': mask, 'priors': priors }
+
+        if cfg.use_mask_scoring:
+            preds['score'] = score
 
         if cfg.use_instance_coeff:
             preds['inst'] = inst
@@ -561,6 +571,9 @@ class Yolact(nn.Module):
         with timer.env('pred_heads'):
             pred_outs = { 'loc': [], 'conf': [], 'mask': [], 'priors': [] }
 
+            if cfg.use_mask_scoring:
+                pred_outs['score'] = []
+
             if cfg.use_instance_coeff:
                 pred_outs['inst'] = []
             
@@ -588,7 +601,6 @@ class Yolact(nn.Module):
             pred_outs['proto'] = proto_out
 
         if self.training:
-
             # For the extra loss functions
             if cfg.use_class_existence_loss:
                 pred_outs['classes'] = self.class_existence_fc(outs[-1].mean(dim=(2, 3)))
@@ -598,15 +610,22 @@ class Yolact(nn.Module):
 
             return pred_outs
         else:
+            if cfg.use_mask_scoring:
+                pred_outs['score'] = torch.sigmoid(pred_outs['score'])
+
             if cfg.use_sigmoid_focal_loss:
                 # Note: even though conf[0] exists, this mode doesn't train it so don't use it
                 pred_outs['conf'] = torch.sigmoid(pred_outs['conf'])
+                if cfg.use_mask_scoring:
+                    pred_outs['conf'] *= pred_outs['score']
             elif cfg.use_objectness_score:
                 # See focal_loss_sigmoid in multibox_loss.py for details
                 objectness = torch.sigmoid(pred_outs['conf'][:, :, 0])
                 pred_outs['conf'][:, :, 1:] = objectness[:, :, None] * F.softmax(pred_outs['conf'][:, :, 1:], -1)
                 pred_outs['conf'][:, :, 0 ] = 1 - objectness
             else:
+                if cfg.use_mask_scoring:
+                    pred_outs['conf'][:, :, 0] *= 1 - pred_outs['score'][:, :, 0]
                 pred_outs['conf'] = F.softmax(pred_outs['conf'], -1)
 
             return self.detect(pred_outs)

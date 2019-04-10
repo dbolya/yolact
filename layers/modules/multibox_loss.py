@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
-from ..box_utils import match, log_sum_exp, decode, center_size, crop
+from ..box_utils import match, log_sum_exp, decode, center_size, crop, elemwise_mask_iou
 
 from data import cfg, mask_type, activation_func
 
@@ -73,11 +73,9 @@ class MultiBoxLoss(nn.Module):
 
         if cfg.mask_type == mask_type.lincomb:
             proto_data = predictions['proto']
-        
-        if cfg.use_instance_coeff:
-            inst_data = predictions['inst']
-        else:
-            inst_data = None
+
+        score_data = predictions['score'] if cfg.use_mask_scoring   else None   
+        inst_data  = predictions['inst']  if cfg.use_instance_coeff else None
         
         targets, masks, num_crowds = wrapper.get_args(wrapper_mask)
         labels = [None] * len(targets) # Used in sem segm loss
@@ -95,8 +93,6 @@ class MultiBoxLoss(nn.Module):
         gt_box_t = loc_data.new(batch_size, num_priors, 4)
         conf_t = loc_data.new(batch_size, num_priors).long()
         idx_t = loc_data.new(batch_size, num_priors).long()
-
-        defaults = priors.data
 
         if cfg.use_class_existence_loss:
             class_existence_t = loc_data.new(batch_size, num_classes-1)
@@ -124,7 +120,7 @@ class MultiBoxLoss(nn.Module):
 
             
             match(self.pos_threshold, self.neg_threshold,
-                  truths, defaults, labels[idx], crowd_boxes,
+                  truths, priors.data, labels[idx], crowd_boxes,
                   loc_t, conf_t, idx_t, idx, loc_data[idx])
                   
             gt_box_t[idx, :, :] = truths[idx_t[idx]]
@@ -160,7 +156,7 @@ class MultiBoxLoss(nn.Module):
                 else:
                     losses['M'] = self.direct_mask_loss(pos_idx, idx_t, loc_data, mask_data, priors, masks)
             elif cfg.mask_type == mask_type.lincomb:
-                losses.update(self.lincomb_mask_loss(pos, idx_t, loc_data, mask_data, priors, proto_data, masks, gt_box_t, inst_data))
+                losses.update(self.lincomb_mask_loss(pos, idx_t, loc_data, mask_data, priors, proto_data, masks, gt_box_t, score_data, inst_data))
                 
                 if cfg.mask_proto_loss is not None:
                     if cfg.mask_proto_loss == 'l1':
@@ -202,6 +198,7 @@ class MultiBoxLoss(nn.Module):
         #  - D: Coefficient Diversity Loss
         #  - E: Class Existence Loss
         #  - S: Semantic Segmentation Loss
+        #  - R: Mask Rescoring loss
         return losses
 
     def class_existence_loss(self, class_data, class_existence_t):
@@ -428,7 +425,7 @@ class MultiBoxLoss(nn.Module):
         return cfg.mask_proto_coeff_diversity_alpha * loss.sum() / num_pos
 
 
-    def lincomb_mask_loss(self, pos, idx_t, loc_data, mask_data, priors, proto_data, masks, gt_box_t, inst_data, interpolation_mode='bilinear'):
+    def lincomb_mask_loss(self, pos, idx_t, loc_data, mask_data, priors, proto_data, masks, gt_box_t, score_data, inst_data, interpolation_mode='bilinear'):
         mask_h = proto_data.size(1)
         mask_w = proto_data.size(2)
 
@@ -440,6 +437,7 @@ class MultiBoxLoss(nn.Module):
 
         loss_m = 0
         loss_d = 0 # Coefficient diversity loss
+        loss_r = 0 # Mask Rescoring Loss
 
         for idx in range(mask_data.size(0)):
             with torch.no_grad():
@@ -482,6 +480,8 @@ class MultiBoxLoss(nn.Module):
 
             proto_masks = proto_data[idx]
             proto_coef  = mask_data[idx, cur_pos, :]
+            if cfg.use_mask_scoring:
+                mask_scores = score_data[idx, cur_pos, :]
 
             if cfg.mask_proto_coeff_diversity_loss:
                 if inst_data is not None:
@@ -502,6 +502,8 @@ class MultiBoxLoss(nn.Module):
                 
                 if process_gt_bboxes:
                     pos_gt_box_t = pos_gt_box_t[select, :]
+                if cfg.use_mask_scoring:
+                    mask_scores = mask_scores[select, :]
 
             num_pos = proto_coef.size(0)
             mask_t = downsampled_masks[:, :, pos_idx_t]          
@@ -546,10 +548,27 @@ class MultiBoxLoss(nn.Module):
                 pre_loss *= old_num_pos / num_pos
 
             loss_m += torch.sum(pre_loss)
+
+            
+            if cfg.use_mask_scoring:
+                ious = elemwise_mask_iou((pred_masks > 0.5).float(), mask_t)
+                r_loss = F.binary_cross_entropy_with_logits(mask_scores, ious[:, None], reduction='sum')
+
+                if not torch.isfinite(r_loss):
+                    import code
+                    code.interact(local=locals())
+
+                if old_num_pos > num_pos:
+                    r_loss *= old_num_pos / num_pos
+                
+                loss_r += r_loss * cfg.mask_scoring_alpha
         
         losses = {'M': loss_m * cfg.mask_alpha / mask_h / mask_w}
         
         if cfg.mask_proto_coeff_diversity_loss:
             losses['D'] = loss_d
+        
+        if cfg.use_mask_scoring:
+            losses['R'] = loss_r
 
         return losses

@@ -195,7 +195,7 @@ def train():
     save_path = lambda epoch, iteration: SavePath(cfg.name, epoch, iteration).get_path(root=args.save_folder)
     time_avg = MovingAverage()
 
-    loss_types = ['B', 'C', 'M', 'P', 'D', 'E', 'S'] # Forms the print order
+    loss_types = ['B', 'C', 'M', 'P', 'D', 'E', 'S', 'R'] # Forms the print order
     loss_avgs  = { k: MovingAverage(100) for k in loss_types }
 
     print('Begin training!')
