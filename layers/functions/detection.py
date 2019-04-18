@@ -178,7 +178,7 @@ class Detect(object):
 
         return boxes, masks, classes, scores
 
-    def traditional_nms(self, boxes, scores, iou_threshold=0.5, conf_thresh=0.05):
+    def traditional_nms(self, boxes, masks, scores, iou_threshold=0.5, conf_thresh=0.05):
         num_classes = scores.size(0)
 
         idx_lst = []
