@@ -46,8 +46,6 @@ def parse_args(argv=None):
                         help='Further restrict the number of predictions to parse')
     parser.add_argument('--cuda', default=True, type=str2bool,
                         help='Use cuda to evaulate model')
-    parser.add_argument('--cross_class_nms', default=True, type=str2bool,
-                        help='Whether to use cross-class nms (faster) or do nms per class')
     parser.add_argument('--fast_nms', default=True, type=str2bool,
                         help='Whether to use a faster, but not entirely correct version of NMS.')
     parser.add_argument('--display_masks', default=True, type=str2bool,
@@ -701,7 +699,6 @@ def savevideo(net:Yolact, in_path:str, out_path:str):
 
 
 def evaluate(net:Yolact, dataset, train_mode=False):
-    net.detect.cross_class_nms = args.cross_class_nms
     net.detect.use_fast_nms = args.fast_nms
     cfg.mask_proto_debug = args.mask_proto_debug
 

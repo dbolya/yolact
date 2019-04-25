@@ -1,6 +1,6 @@
 import torch
 import torch.nn.functional as F
-from ..box_utils import decode, nms, jaccard, index2d
+from ..box_utils import decode, jaccard, index2d
 from utils import timer
 
 from data import cfg, mask_type
@@ -77,7 +77,7 @@ class Detect(object):
 
                 if result is not None and proto_data is not None:
                     result['proto'] = proto_data[batch_idx]
-                
+                result = {'proto': proto_data[batch_idx]}
                 out.append(result)
         
         return out
