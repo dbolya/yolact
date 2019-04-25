@@ -77,7 +77,7 @@ class Detect(object):
 
                 if result is not None and proto_data is not None:
                     result['proto'] = proto_data[batch_idx]
-                result = {'proto': proto_data[batch_idx]}
+                
                 out.append(result)
         
         return out
