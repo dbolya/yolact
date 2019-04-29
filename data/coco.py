@@ -1,4 +1,3 @@
-from .config import HOME
 import os
 import os.path as osp
 import sys

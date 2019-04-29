@@ -149,3 +149,4 @@ train.sh
 img/
 scripts/aws-ohio/
 scripts/aws3/
+data/config_dev.py
