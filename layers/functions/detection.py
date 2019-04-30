@@ -218,4 +218,5 @@ class Detect(object):
         idx = idx[idx2]
         classes = classes[idx2]
 
-        return boxes[idx], masks[idx], classes, scores
+        # Undo the multiplication above
+        return boxes[idx] / cfg.mask_size, masks[idx], classes, scores
