@@ -570,7 +570,8 @@ def evalvideo(net:Yolact, path:str):
         print('Could not open video "%s"' % path)
         exit(-1)
     
-    transform = FastBaseTransform()
+    net = torch.nn.DataParallel(net)
+    transform = torch.nn.DataParallel(FastBaseTransform())
     frame_times = MovingAverage()
     fps = 0
     frame_time_target = 1 / vid.get(cv2.CAP_PROP_FPS)
