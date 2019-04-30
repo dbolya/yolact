@@ -13,7 +13,7 @@ from pycocotools.cocoeval import COCOeval
 parser = argparse.ArgumentParser(description='COCO Detections Evaluator')
 parser.add_argument('--bbox_det_file', default='results/bbox_detections.json', type=str)
 parser.add_argument('--mask_det_file', default='results/mask_detections.json', type=str)
-parser.add_argument('--gt_ann_file',   default='data/coco/annotations/instances_val2014.json', type=str)
+parser.add_argument('--gt_ann_file',   default='data/coco/annotations/instances_val2017.json', type=str)
 parser.add_argument('--eval_type',     default='both', choices=['bbox', 'mask', 'both'], type=str)
 args = parser.parse_args()
 

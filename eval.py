@@ -915,7 +915,8 @@ if __name__ == '__main__':
             exit()
 
         if args.image is None and args.video is None and args.images is None:
-            dataset = COCODetection(cfg.dataset.valid_images, cfg.dataset.valid_info, transform=BaseTransform())
+            dataset = COCODetection(cfg.dataset.valid_images, cfg.dataset.valid_info,
+                                    transform=BaseTransform(), has_gt=cfg.dataset.has_gt)
             prep_coco_cats(dataset.coco.cats)
         else:
             dataset = None        
