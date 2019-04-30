@@ -97,7 +97,7 @@ def parse_args(argv=None):
     parser.add_argument('--images', default=None, type=str,
                         help='An input folder of images and output folder to save detected images. Should be in the format input->output.')
     parser.add_argument('--video', default=None, type=str,
-                        help='A path to a video to evaluate on.')
+                        help='A path to a video to evaluate on. Passing in a number will use that index webcam.')
     parser.add_argument('--video_multiframe', default=1, type=int,
                         help='The number of frames to evaluate in parallel to make videos play at higher fps.')
     parser.add_argument('--score_threshold', default=0, type=float,
@@ -565,7 +565,16 @@ def evalimages(net:Yolact, input_folder:str, output_folder:str):
 from multiprocessing.pool import ThreadPool
 
 def evalvideo(net:Yolact, path:str):
-    vid = cv2.VideoCapture(path)
+    # If the path is a digit, parse it as a webcam index
+    if path.isdigit():
+        vid = cv2.VideoCapture(int(path))
+    else:
+        vid = cv2.VideoCapture(path)
+    
+    if not vid.isOpened():
+        print('Could not open video "%s"' % path)
+        exit(-1)
+    
     transform = FastBaseTransform()
     frame_times = MovingAverage()
     fps = 0
