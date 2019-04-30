@@ -86,7 +86,9 @@ class COCODetection(data.Dataset):
         self.root = image_path
         self.coco = COCO(info_file)
         
-        self.ids = list(self.coco.imgs.keys())
+        self.ids = list(self.coco.imgToAnns.keys())
+        if len(self.ids) == 0 or not has_gt:
+            self.ids = list(self.coco.imgs.keys())
         
         self.transform = transform
         self.target_transform = target_transform
