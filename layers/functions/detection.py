@@ -133,7 +133,7 @@ class Detect(object):
         
         return idx_out, idx_out.size(0)
 
-    def fast_nms(self, boxes, masks, scores, iou_threshold=0.5, top_k=200, second_threshold=False):
+    def fast_nms(self, boxes, masks, scores, iou_threshold:float=0.5, top_k:int=200, second_threshold:bool=False):
         scores, idx = scores.sort(1, descending=True)
 
         idx = idx[:, :top_k].contiguous()

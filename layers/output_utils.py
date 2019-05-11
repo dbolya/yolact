@@ -98,10 +98,11 @@ def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear',
         if cfg.preserve_aspect_ratio:
             # Undo padding
             masks = masks[:, :int(r_h/cfg.max_size*proto_data.size(1)), :int(r_w/cfg.max_size*proto_data.size(2))]
+        
         masks = F.interpolate(masks.unsqueeze(0), (h, w), mode=interpolation_mode, align_corners=False).squeeze(0)
 
         # Binarize the masks
-        masks = masks.gt(0.5).float()
+        masks.gt_(0.5)
 
     
     boxes[:, 0], boxes[:, 2] = sanitize_coordinates(boxes[:, 0], boxes[:, 2], b_w, cast=False)

@@ -21,6 +21,7 @@ import cProfile
 import pickle
 import json
 import os
+from collections import defaultdict
 from pathlib import Path
 from collections import OrderedDict
 from PIL import Image
@@ -122,11 +123,11 @@ def parse_args(argv=None):
 iou_thresholds = [x / 100 for x in range(50, 100, 5)]
 coco_cats = {} # Call prep_coco_cats to fill this
 coco_cats_inv = {}
+color_cache = defaultdict(lambda: {})
 
-def prep_display(dets_out, img, gt, gt_masks, h, w, undo_transform=True, class_color=False):
+def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, mask_alpha=0.45):
     """
     Note: If undo_transform=False then im_h and im_w are allowed to be None.
-    gt and gt_masks are also allowed to be none (until I reimplement that functionality).
     """
     if undo_transform:
         img_numpy = undo_image_transformation(img, w, h)
@@ -136,67 +137,98 @@ def prep_display(dets_out, img, gt, gt_masks, h, w, undo_transform=True, class_c
         h, w, _ = img.shape
     
     with timer.env('Postprocess'):
-        t = postprocess(dets_out, w, h, visualize_lincomb=args.display_lincomb, crop_masks=args.crop, score_threshold=args.score_threshold)
+        t = postprocess(dets_out, w, h, visualize_lincomb = args.display_lincomb,
+                                        crop_masks        = args.crop,
+                                        score_threshold   = args.score_threshold)
         torch.cuda.synchronize()
 
     with timer.env('Copy'):
         if cfg.eval_mask_branch:
-            masks = t[3][:args.top_k] # We'll need this later
+            # Masks are drawn on the GPU, so don't copy
+            masks = t[3][:args.top_k]
         classes, scores, boxes = [x[:args.top_k].cpu().numpy() for x in t[:3]]
+
+    num_dets_to_consider = min(args.top_k, classes.shape[0])
+    for j in range(num_dets_to_consider):
+        if scores[j] < args.score_threshold:
+            num_dets_to_consider = j
+            break
     
-    if classes.shape[0] == 0:
+    if num_dets_to_consider == 0:
+        # No detections found so just output the original image
         return (img_gpu * 255).byte().cpu().numpy()
 
-    def get_color(j):
-        color = COLORS[(classes[j] * 5 if class_color else j * 5) % len(COLORS)]
-        if not undo_transform:
-            color = (color[2], color[1], color[0])
-        return color
+    # Quick and dirty lambda for selecting the color for a particular index
+    # Also keeps track of a per-gpu color cache for maximum speed
+    def get_color(j, on_gpu=None):
+        global color_cache
+        color_idx = (classes[j] * 5 if class_color else j * 5) % len(COLORS)
+        
+        if on_gpu is not None and color_idx in color_cache[on_gpu]:
+            return color_cache[on_gpu][color_idx]
+        else:
+            color = COLORS[color_idx]
+            if not undo_transform:
+                # The image might come in as RGB or BRG, depending
+                color = (color[2], color[1], color[0])
+            if on_gpu is not None:
+                color = torch.Tensor(color).to(on_gpu).float() / 255.
+                color_cache[on_gpu][color_idx] = color
+            return color
 
-    # Draw masks first on the gpu
+    # First, draw the masks on the GPU where we can do it really fast
+    # Beware: very fast but possibly unintelligible mask-drawing code ahead
+    # I wish I had access to OpenGL or Vulkan but alas, I guess Pytorch tensor operations will have to suffice
     if args.display_masks and cfg.eval_mask_branch:
-        for j in reversed(range(min(args.top_k, classes.shape[0]))):
-            if scores[j] >= args.score_threshold:
-                color = get_color(j)
+        # After this, mask is of size [num_dets, h, w, 1]
+        masks = masks[:num_dets_to_consider, :, :, None]
+        
+        # Prepare the RGB images for each mask given their color (size [num_dets, h, w, 1])
+        colors = torch.cat([get_color(j, on_gpu=img.device.index).view(1, 1, 1, 3) for j in range(num_dets_to_consider)], dim=0)
+        masks_color = masks.repeat(1, 1, 1, 3) * colors * mask_alpha
 
-                mask = masks[j, :, :, None]
-                mask_color = mask @ (torch.Tensor(color).view(1, 3) / 255.0)
-                mask_alpha = 0.45
+        # This is 1 everywhere except for 1-mask_alpha where the mask is
+        inv_alph_masks = masks * (-mask_alpha) + 1
+        
+        # I did the math for this on pen and paper. This whole block should be equivalent to:
+        #    for j in range(num_dets_to_consider):
+        #        img_gpu = img_gpu * inv_alph_masks[j] + masks_color[j]
+        masks_color_summand = masks_color[0]
+        if num_dets_to_consider > 1:
+            inv_alph_cumul = inv_alph_masks[:(num_dets_to_consider-1)].cumprod(dim=0)
+            masks_color_cumul = masks_color[1:] * inv_alph_cumul
+            masks_color_summand += masks_color_cumul.sum(dim=0)
 
-                # Alpha only the region of the image that contains the mask
-                img_gpu = img_gpu * (1 - mask) \
-                        + img_gpu * mask * (1-mask_alpha) + mask_color * mask_alpha
+        img_gpu = img_gpu * inv_alph_masks.prod(dim=0) + masks_color_summand
         
     # Then draw the stuff that needs to be done on the cpu
     # Note, make sure this is a uint8 tensor or opencv will not anti alias text for whatever reason
     img_numpy = (img_gpu * 255).byte().cpu().numpy()
     
     if args.display_text or args.display_bboxes:
-        for j in reversed(range(min(args.top_k, classes.shape[0]))):
+        for j in reversed(range(num_dets_to_consider)):
+            x1, y1, x2, y2 = boxes[j, :]
+            color = get_color(j)
             score = scores[j]
 
-            if scores[j] >= args.score_threshold:
-                x1, y1, x2, y2 = boxes[j, :]
-                color = get_color(j)
+            if args.display_bboxes:
+                cv2.rectangle(img_numpy, (x1, y1), (x2, y2), color, 1)
 
-                if args.display_bboxes:
-                    cv2.rectangle(img_numpy, (x1, y1), (x2, y2), color, 1)
+            if args.display_text:
+                _class = cfg.dataset.class_names[classes[j]]
+                text_str = '%s: %.2f' % (_class, score) if args.display_scores else _class
 
-                if args.display_text:
-                    _class = cfg.dataset.class_names[classes[j]]
-                    text_str = '%s: %.2f' % (_class, score) if args.display_scores else _class
+                font_face = cv2.FONT_HERSHEY_DUPLEX
+                font_scale = 0.6
+                font_thickness = 1
 
-                    font_face = cv2.FONT_HERSHEY_DUPLEX
-                    font_scale = 0.6
-                    font_thickness = 1
+                text_w, text_h = cv2.getTextSize(text_str, font_face, font_scale, font_thickness)[0]
 
-                    text_w, text_h = cv2.getTextSize(text_str, font_face, font_scale, font_thickness)[0]
+                text_pt = (x1, y1 - 3)
+                text_color = [255, 255, 255]
 
-                    text_pt = (x1, y1 - 3)
-                    text_color = [255, 255, 255]
-
-                    cv2.rectangle(img_numpy, (x1, y1), (x1 + text_w, y1 - text_h - 4), color, -1)
-                    cv2.putText(img_numpy, text_str, text_pt, font_face, font_scale, text_color, font_thickness, cv2.LINE_AA)
+                cv2.rectangle(img_numpy, (x1, y1), (x1 + text_w, y1 - text_h - 4), color, -1)
+                cv2.putText(img_numpy, text_str, text_pt, font_face, font_scale, text_color, font_thickness, cv2.LINE_AA)
     
     return img_numpy
 
@@ -520,9 +552,9 @@ def badhash(x):
     Source:
     https://stackoverflow.com/questions/664014/what-integer-hash-function-are-good-that-accepts-an-integer-hash-key
     """
-    x = (((x >> 16) ^ x) * 0x45d9f3b) & 0xFFFFFFFF
-    x = (((x >> 16) ^ x) * 0x45d9f3b) & 0xFFFFFFFF
-    x = ((x >> 16) ^ x) & 0xFFFFFFFF
+    x = (((x >> 16) ^ x) * 0x045d9f3b) & 0xFFFFFFFF
+    x = (((x >> 16) ^ x) * 0x045d9f3b) & 0xFFFFFFFF
+    x =  ((x >> 16) ^ x) & 0xFFFFFFFF
     return x
 
 def evalimage(net:Yolact, path:str, save_path:str=None):
@@ -530,7 +562,7 @@ def evalimage(net:Yolact, path:str, save_path:str=None):
     batch = FastBaseTransform()(frame.unsqueeze(0))
     preds = net(batch)
 
-    img_numpy = prep_display(preds, frame, None, None, None, None, undo_transform=False)
+    img_numpy = prep_display(preds, frame, None, None, undo_transform=False)
     
     if save_path is None:
         img_numpy = img_numpy[:, :, (2, 1, 0)]
@@ -559,6 +591,12 @@ def evalimages(net:Yolact, input_folder:str, output_folder:str):
 
 from multiprocessing.pool import ThreadPool
 
+class CustomDataParallel(torch.nn.DataParallel):
+    """ A Custom Data Parallel class that properly gathers lists of dictionaries. """
+    def gather(self, outputs, output_device):
+        # Note that I don't actually want to convert everything to the output_device
+        return sum(outputs, [])
+
 def evalvideo(net:Yolact, path:str):
     # If the path is a digit, parse it as a webcam index
     if path.isdigit():
@@ -570,11 +608,12 @@ def evalvideo(net:Yolact, path:str):
         print('Could not open video "%s"' % path)
         exit(-1)
     
-    net = torch.nn.DataParallel(net)
-    transform = torch.nn.DataParallel(FastBaseTransform())
+    net = CustomDataParallel(net).cuda()
+    transform = torch.nn.DataParallel(FastBaseTransform()).cuda()
     frame_times = MovingAverage()
     fps = 0
-    frame_time_target = 1 / vid.get(cv2.CAP_PROP_FPS)
+    # The 0.8 is to account for the overhead of time.sleep
+    frame_time_target = 0.8 / vid.get(cv2.CAP_PROP_FPS)
 
     def cleanup_and_exit():
         print()
@@ -588,7 +627,7 @@ def evalvideo(net:Yolact, path:str):
 
     def transform_frame(frames):
         with torch.no_grad():
-            frames = [torch.Tensor(frame).float().cuda() for frame in frames]
+            frames = [torch.from_numpy(frame).cuda().float() for frame in frames]
             return frames, transform(torch.stack(frames, 0))
 
     def eval_network(inp):
@@ -599,9 +638,9 @@ def evalvideo(net:Yolact, path:str):
     def prep_frame(inp):
         with torch.no_grad():
             frame, preds = inp
-            return prep_display(preds, frame, None, None, None, None, undo_transform=False, class_color=True)
+            return prep_display(preds, frame, None, None, undo_transform=False, class_color=True)
 
-    extract_frame = lambda x, i: (x[0][i], [x[1][i]])
+    extract_frame = lambda x, i: (x[0][i].to(x[1][i]['box'].device), [x[1][i]])
 
     # Prime the network on the first frame because I do some thread unsafe things otherwise
     print('Initializing model... ', end='')
@@ -683,7 +722,7 @@ def savevideo(net:Yolact, in_path:str, out_path:str):
                 frame = torch.Tensor(vid.read()[1]).float().cuda()
                 batch = transform(frame.unsqueeze(0))
                 preds = net(batch)
-                processed = prep_display(preds, frame, None, None, None, None, undo_transform=False, class_color=True)
+                processed = prep_display(preds, frame, None, None, undo_transform=False, class_color=True)
 
                 out.write(processed)
             
@@ -784,7 +823,7 @@ def evaluate(net:Yolact, dataset, train_mode=False):
 
             # Perform the meat of the operation here depending on our mode.
             if args.display:
-                img_numpy = prep_display(preds, img, gt, gt_masks, h, w)
+                img_numpy = prep_display(preds, img, h, w)
             elif args.benchmark:
                 prep_benchmark(preds, h, w)
             else:

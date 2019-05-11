@@ -369,7 +369,7 @@ class MultiBoxLoss(nn.Module):
                 cur_pos_idx_squeezed = cur_pos_idx[:, 1]
 
                 # Shape: [num_priors, 4], decoded predicted bboxes
-                pos_bboxes = decode(loc_data[idx, :, :], priors.data)
+                pos_bboxes = decode(loc_data[idx, :, :], priors.data, cfg.use_yolo_regressors)
                 pos_bboxes = pos_bboxes[cur_pos_idx].view(-1, 4).clamp(0, 1)
                 pos_lookup = idx_t[idx, cur_pos_idx_squeezed]
 
