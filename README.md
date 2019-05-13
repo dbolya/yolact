@@ -92,15 +92,13 @@ python eval.py --trained_model=weights/yolact_base_54_800000.pth --score_thresho
 ```
 ## Video
 ```Shell
-# Display a video in real-time
-# I have to work out the kinks for this one. Drawing the frame takes more time than executing the network resulting in sub-30 fps :/
-python eval.py --trained_model=weights/yolact_base_54_800000.pth --score_threshold=0.3 --top_k=100 --video=my_video.mp4
+# Display a video in real-time. "--video_multiframe" will process that many frames at once for improved performance.
+python eval.py --trained_model=weights/yolact_base_54_800000.pth --score_threshold=0.3 --top_k=100 --video_multiframe=2 --video=my_video.mp4
 
-# Display a webcam feed in real-time (same disclaimer as above)
-# If you have multiple webcams pass the index of the webcam you want instead of 0.
-python eval.py --trained_model=weights/yolact_base_54_800000.pth --score_threshold=0.3 --top_k=100 --video=0
+# Display a webcam feed in real-time. If you have multiple webcams pass the index of the webcam you want instead of 0.
+python eval.py --trained_model=weights/yolact_base_54_800000.pth --score_threshold=0.3 --top_k=100 --video_multiframe=2 --video=0
 
-# Process a video and save it to another file.
+# Process a video and save it to another file. This is unoptimized.
 python eval.py --trained_model=weights/yolact_base_54_800000.pth --score_threshold=0.3 --top_k=100 --video=input_video.mp4:output_video.mp4
 ```
 As you can tell, `eval.py` can do a ton of stuff. Run the `--help` command to see everything it can do.

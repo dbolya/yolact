@@ -640,7 +640,7 @@ def evalvideo(net:Yolact, path:str):
             frame, preds = inp
             return prep_display(preds, frame, None, None, undo_transform=False, class_color=True)
 
-    extract_frame = lambda x, i: (x[0][i].to(x[1][i]['box'].device), [x[1][i]])
+    extract_frame = lambda x, i: (x[0][i] if x[1][i] is None else x[0][i].to(x[1][i]['box'].device), [x[1][i]])
 
     # Prime the network on the first frame because I do some thread unsafe things otherwise
     print('Initializing model... ', end='')
