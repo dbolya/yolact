@@ -1,6 +1,6 @@
 import torch
 import torch.nn.functional as F
-from ..box_utils import decode, nms, jaccard, index2d
+from ..box_utils import decode, jaccard, index2d
 from utils import timer
 
 from data import cfg, mask_type
@@ -133,7 +133,7 @@ class Detect(object):
         
         return idx_out, idx_out.size(0)
 
-    def fast_nms(self, boxes, masks, scores, iou_threshold=0.5, top_k=200, second_threshold=False):
+    def fast_nms(self, boxes, masks, scores, iou_threshold:float=0.5, top_k:int=200, second_threshold:bool=False):
         scores, idx = scores.sort(1, descending=True)
 
         idx = idx[:, :top_k].contiguous()
@@ -178,7 +178,7 @@ class Detect(object):
 
         return boxes, masks, classes, scores
 
-    def traditional_nms(self, boxes, scores, iou_threshold=0.5, conf_thresh=0.05):
+    def traditional_nms(self, boxes, masks, scores, iou_threshold=0.5, conf_thresh=0.05):
         num_classes = scores.size(0)
 
         idx_lst = []
@@ -218,4 +218,5 @@ class Detect(object):
         idx = idx[idx2]
         classes = classes[idx2]
 
-        return boxes[idx], masks[idx], classes, scores
+        # Undo the multiplication above
+        return boxes[idx] / cfg.mask_size, masks[idx], classes, scores

@@ -1,9 +1,6 @@
-# config.py
-import os.path
-import copy
-
-# gets home dir cross platform
-HOME = os.path.expanduser("~")
+from backbone import ResNetBackbone, VGGBackbone, ResNetBackboneGN, DarkNetBackbone
+from math import sqrt
+import torch
 
 # for making bounding boxes pretty
 COLORS = ((244,  67,  54),
@@ -27,16 +24,47 @@ COLORS = ((244,  67,  54),
           ( 96, 125, 139))
 
 
-# These are in BRG and are for ImageNet
+# These are in BGR and are for ImageNet
 MEANS = (103.94, 116.78, 123.68)
 STD   = (57.38, 57.12, 58.40)
 
+COCO_CLASSES = ('person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus',
+                'train', 'truck', 'boat', 'traffic light', 'fire hydrant',
+                'stop sign', 'parking meter', 'bench', 'bird', 'cat', 'dog',
+                'horse', 'sheep', 'cow', 'elephant', 'bear', 'zebra', 'giraffe',
+                'backpack', 'umbrella', 'handbag', 'tie', 'suitcase', 'frisbee',
+                'skis', 'snowboard', 'sports ball', 'kite', 'baseball bat',
+                'baseball glove', 'skateboard', 'surfboard', 'tennis racket',
+                'bottle', 'wine glass', 'cup', 'fork', 'knife', 'spoon', 'bowl',
+                'banana', 'apple', 'sandwich', 'orange', 'broccoli', 'carrot',
+                'hot dog', 'pizza', 'donut', 'cake', 'chair', 'couch',
+                'potted plant', 'bed', 'dining table', 'toilet', 'tv', 'laptop',
+                'mouse', 'remote', 'keyboard', 'cell phone', 'microwave', 'oven',
+                'toaster', 'sink', 'refrigerator', 'book', 'clock', 'vase',
+                'scissors', 'teddy bear', 'hair drier', 'toothbrush')
+
+COCO_LABEL_MAP = { 1:  1,  2:  2,  3:  3,  4:  4,  5:  5,  6:  6,  7:  7,  8:  8,
+                   9:  9, 10: 10, 11: 11, 13: 12, 14: 13, 15: 14, 16: 15, 17: 16,
+                  18: 17, 19: 18, 20: 19, 21: 20, 22: 21, 23: 22, 24: 23, 25: 24,
+                  27: 25, 28: 26, 31: 27, 32: 28, 33: 29, 34: 30, 35: 31, 36: 32,
+                  37: 33, 38: 34, 39: 35, 40: 36, 41: 37, 42: 38, 43: 39, 44: 40,
+                  46: 41, 47: 42, 48: 43, 49: 44, 50: 45, 51: 46, 52: 47, 53: 48,
+                  54: 49, 55: 50, 56: 51, 57: 52, 58: 53, 59: 54, 60: 55, 61: 56,
+                  62: 57, 63: 58, 64: 59, 65: 60, 67: 61, 70: 62, 72: 63, 73: 64,
+                  74: 65, 75: 66, 76: 67, 77: 68, 78: 69, 79: 70, 80: 71, 81: 72,
+                  82: 73, 84: 74, 85: 75, 86: 76, 87: 77, 88: 78, 89: 79, 90: 80}
+
+
+
+# ----------------------- CONFIG CLASS ----------------------- #
+
 class Config(object):
     """
-    Holds the config for various networks.
+    Holds the configuration for anything you want it to.
     To get the currently active config, call get_cfg().
 
     To use, just do cfg.x instead of cfg['x'].
+    I made this because doing cfg['x'] all the time is dumb.
     """
 
     def __init__(self, config_dict):
@@ -72,17 +100,32 @@ class Config(object):
             print(k, ' = ', v)
 
 
-# Datasets
+
+
+
+# ----------------------- DATASETS ----------------------- #
+
 dataset_base = Config({
     'name': 'Base Dataset',
 
+    # Training images and annotations
     'train_images': './data/coco/images/',
     'train_info':   'path_to_annotation_file',
 
+    # Validation images and annotations.
     'valid_images': './data/coco/images/',
     'valid_info':   'path_to_annotation_file',
 
+    # Whether or not to load GT. If this is False, eval.py quantitative evaluation won't work.
     'has_gt': True,
+
+    # A list of names for each of you classes.
+    'class_names': COCO_CLASSES,
+
+    # COCO class ids aren't sequential, so this is a bandage fix. If your ids aren't sequential,
+    # provide a map from category_id -> index in class_names + 1 (the +1 is there because it's 1-indexed).
+    # If not specified, this just assumes category ids start at 1 and increase sequentially.
+    'label_map': None
 })
 
 coco2014_dataset = dataset_base.copy({
@@ -90,6 +133,8 @@ coco2014_dataset = dataset_base.copy({
     
     'train_info': './data/coco/annotations/instances_train2014.json',
     'valid_info': './data/coco/annotations/instances_val2014.json',
+
+    'label_map': COCO_LABEL_MAP
 })
 
 coco2017_dataset = dataset_base.copy({
@@ -97,20 +142,24 @@ coco2017_dataset = dataset_base.copy({
     
     'train_info': './data/coco/annotations/instances_train2017.json',
     'valid_info': './data/coco/annotations/instances_val2017.json',
+
+    'label_map': COCO_LABEL_MAP
 })
 
 coco2017_testdev_dataset = dataset_base.copy({
     'name': 'COCO 2017 Test-Dev',
 
     'valid_info': './data/coco/annotations/image_info_test-dev2017.json',
+    'has_gt': False,
+
+    'label_map': COCO_LABEL_MAP
 })
 
-# Backbones
-from backbone import ResNetBackbone, VGGBackbone, ResNetBackboneGN, DarkNetBackbone
-from torchvision.models.vgg import cfg as vggcfg
-from math import sqrt
-import torch
 
+
+
+
+# ----------------------- TRANSFORMS ----------------------- #
 
 resnet_transform = Config({
     'channel_order': 'RGB',
@@ -120,7 +169,7 @@ resnet_transform = Config({
 })
 
 vgg_transform = Config({
-    # Note that though vgg is traditionally BRG,
+    # Note that though vgg is traditionally BGR,
     # the channel order of vgg_reducedfc.pth is RGB.
     'channel_order': 'RGB',
     'normalize': False,
@@ -135,6 +184,12 @@ darknet_transform = Config({
     'to_float': True,
 })
 
+
+
+
+
+# ----------------------- BACKBONES ----------------------- #
+
 resnet101_backbone = Config({
     'name': 'ResNet101',
     'path': 'resnet101_reducedfc.pth',
@@ -146,6 +201,7 @@ resnet101_backbone = Config({
     'pred_scales': [[1]]*6,
     'pred_aspect_ratios': [ [[0.66685089, 1.7073535, 0.87508774, 1.16524493, 0.49059086]] ] * 6,
     'use_pixel_scales': False,
+    'preapply_sqrt': True,
 })
 
 resnet101_gn_backbone = Config({
@@ -159,6 +215,7 @@ resnet101_gn_backbone = Config({
     'pred_scales': [[1]]*6,
     'pred_aspect_ratios': [ [[0.66685089, 1.7073535, 0.87508774, 1.16524493, 0.49059086]] ] * 6,
     'use_pixel_scales': False,
+    'preapply_sqrt': True,
 })
 
 resnet50_backbone = resnet101_backbone.copy({
@@ -180,6 +237,7 @@ darknet53_backbone = Config({
     'pred_scales': [[3.5, 4.95], [3.6, 4.90], [3.3, 4.02], [2.7, 3.10], [2.1, 2.37], [1.8, 1.92]],
     'pred_aspect_ratios': [ [[1, sqrt(2), 1/sqrt(2), sqrt(3), 1/sqrt(3)][:n], [1]] for n in [3, 5, 5, 5, 3, 3] ],
     'use_pixel_scales': False,
+    'preapply_sqrt': True,
 })
 
 vgg16_arch = [[64, 64],
@@ -204,13 +262,20 @@ vgg16_backbone = Config({
     'use_pixel_scales': False,
 })
 
+
+
+
+
+# ----------------------- MASK BRANCH TYPES ----------------------- #
+
 mask_type = Config({
     # Direct produces masks directly as the output of each pred module.
+    # This is denoted as fc-mask in the paper.
     # Parameters: mask_size, use_gt_bboxes
     'direct': 0,
 
     # Lincomb produces coefficients as the output of each pred module then uses those coefficients
-    # to linearly combine features from an earlier convout to create image-sized masks.
+    # to linearly combine features from a prototype network to create image-sized masks.
     # Parameters:
     #   - masks_to_train (int): Since we're producing (near) full image masks, it'd take too much
     #                           vram to backprop on every single mask. Thus we select only a subset.
@@ -261,7 +326,12 @@ mask_type = Config({
     'lincomb': 1,
 })
 
-# Self explanitory. For use with mask_proto_*_activation
+
+
+
+
+# ----------------------- ACTIVATION FUNCTIONS ----------------------- #
+
 activation_func = Config({
     'tanh':    torch.tanh,
     'sigmoid': torch.sigmoid,
@@ -270,6 +340,11 @@ activation_func = Config({
     'none':    lambda x: x,
 })
 
+
+
+
+
+# ----------------------- FPN DEFAULTS ----------------------- #
 
 fpn_base = Config({
     # The number of features to have in each FPN layer
@@ -289,7 +364,12 @@ fpn_base = Config({
     'pad': True,
 })
 
-# Configs
+
+
+
+
+# ----------------------- CONFIG DEFAULTS ----------------------- #
+
 coco_base_config = Config({
     'dataset': coco2014_dataset,
     'num_classes': 81, # This should include the background class
@@ -483,6 +563,108 @@ coco_base_config = Config({
     'backbone': None,
     'name': 'base_config',
 })
+
+
+
+
+
+# ----------------------- YOLACT v1.0 CONFIGS ----------------------- #
+
+yolact_base_config = coco_base_config.copy({
+    'name': 'yolact_base',
+
+    # Dataset stuff
+    'dataset': coco2017_dataset,
+    'num_classes': len(coco2017_dataset.class_names) + 1,
+
+    # Image Size
+    'max_size': 550,
+    
+    # Training params
+    'lr_steps': (280000, 600000, 700000, 750000),
+    'max_iter': 800000,
+    
+    # Backbone Settings
+    'backbone': resnet101_backbone.copy({
+        'selected_layers': list(range(1, 4)),
+        'use_pixel_scales': True,
+        'preapply_sqrt': False,
+
+        'pred_aspect_ratios': [ [[1, 1/2, 2]] ]*5,
+        'pred_scales': [[24], [48], [96], [192], [384]],
+    }),
+
+    # FPN Settings
+    'fpn': fpn_base.copy({
+        'use_conv_downsample': True,
+        'num_downsample': 2,
+    }),
+
+    # Mask Settings
+    'mask_type': mask_type.lincomb,
+    'mask_alpha': 6.125,
+    'mask_proto_src': 0,
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 3 + [(None, -2, {}), (256, 3, {'padding': 1})] + [(32, 1, {})],
+    'mask_proto_normalize_emulate_roi_pooling': True,
+
+    # Other stuff
+    'share_prediction_module': True,
+    'extra_head_net': [(256, 3, {'padding': 1})],
+
+    'positive_iou_threshold': 0.5,
+    'negative_iou_threshold': 0.4,
+
+    'crowd_iou_threshold': 0.7,
+
+    'use_semantic_segmentation_loss': True,
+})
+
+yolact_im400_config = yolact_base_config.copy({
+    'name': 'yolact_im400',
+
+    'max_size': 400,
+    'backbone': yolact_base_config.backbone.copy({
+        'pred_scales': [[int(x[0] / yolact_base_config.max_size * 400)] for x in yolact_base_config.backbone.pred_scales],
+    }),
+})
+
+yolact_im700_config = yolact_base_config.copy({
+    'name': 'yolact_im700',
+
+    'masks_to_train': 300,
+    'max_size': 700,
+    'backbone': yolact_base_config.backbone.copy({
+        'pred_scales': [[int(x[0] / yolact_base_config.max_size * 700)] for x in yolact_base_config.backbone.pred_scales],
+    }),
+})
+
+yolact_darknet53_config = yolact_base_config.copy({
+    'name': 'yolact_darknet53',
+
+    'backbone': darknet53_backbone.copy({
+        'selected_layers': list(range(2, 5)),
+        
+        'pred_scales': yolact_base_config.backbone.pred_scales,
+        'pred_aspect_ratios': yolact_base_config.backbone.pred_aspect_ratios,
+        'use_pixel_scales': True,
+        'preapply_sqrt': False,
+    }),
+})
+
+yolact_resnet50_config = yolact_base_config.copy({
+    'name': 'yolact_resnet50',
+
+    'backbone': resnet50_backbone.copy({
+        'selected_layers': list(range(1, 4)),
+        
+        'pred_scales': yolact_base_config.backbone.pred_scales,
+        'pred_aspect_ratios': yolact_base_config.backbone.pred_aspect_ratios,
+        'use_pixel_scales': True,
+        'preapply_sqrt': False,
+    }),
+})
+
+
 
 # Pretty close to the original ssd300 just using resnet101 instead of vgg16
 ssd550_resnet101_config = coco_base_config.copy({
@@ -1634,70 +1816,6 @@ dev_nocrop_config = dev_base_config.copy({
     'lr_warmup_init': dev_base_config.lr / 100,
 
     'mask_alpha': dev_base_config.mask_alpha * 2000,
-})
-
-dev_mask_scoring_config = dev_base_config.copy({
-    'name': 'dev_mask_scoring',
-
-    'use_mask_scoring': True,
-    'mask_scoring_alpha': 2,
-})
-
-
-
-
-yolact_base_config = yrm35_tweakedscales2_config.copy({
-    'name': 'yolact_base',
-
-    'max_size': 550,
-    'mask_proto_net': [(256, 3, {'padding': 1})] * 3 + [(None, -2, {}), (256, 3, {'padding': 1})] + [(32, 1, {})],
-    'use_semantic_segmentation_loss': True,
-
-    'lr_steps': (280000, 600000, 700000, 750000),
-    'max_iter': 800000,
-})
-
-yolact_im400_config = yolact_base_config.copy({
-    'name': 'yolact_im400',
-
-    'max_size': 400,
-    'backbone': yolact_base_config.backbone.copy({
-        'pred_scales': [[int(x[0] / yolact_base_config.max_size * 400)] for x in yolact_base_config.backbone.pred_scales],
-    }),
-})
-
-yolact_im700_config = yolact_base_config.copy({
-    'name': 'yolact_im700',
-
-    'masks_to_train': 300,
-    'max_size': 700,
-    'backbone': yolact_base_config.backbone.copy({
-        'pred_scales': [[int(x[0] / yolact_base_config.max_size * 700)] for x in yolact_base_config.backbone.pred_scales],
-    }),
-})
-
-yolact_darknet53_config = yolact_base_config.copy({
-    'name': 'yolact_darknet53',
-
-    'backbone': darknet53_backbone.copy({
-        'selected_layers': list(range(2, 5)),
-        
-        'pred_scales': yolact_base_config.backbone.pred_scales,
-        'pred_aspect_ratios': yolact_base_config.backbone.pred_aspect_ratios,
-        'use_pixel_scales': True,
-    }),
-})
-
-yolact_resnet50_config = yolact_base_config.copy({
-    'name': 'yolact_resnet50',
-
-    'backbone': resnet50_backbone.copy({
-        'selected_layers': list(range(1, 4)),
-        
-        'pred_scales': yolact_base_config.backbone.pred_scales,
-        'pred_aspect_ratios': yolact_base_config.backbone.pred_aspect_ratios,
-        'use_pixel_scales': True,
-    }),
 })
 
 

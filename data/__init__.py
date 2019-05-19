@@ -1,7 +1,5 @@
-from .voc0712 import VOCDetection, VOCAnnotationTransform, VOC_CLASSES, VOC_ROOT
-
-from .coco import COCODetection, COCOAnnotationTransform, COCO_CLASSES, get_label_map
 from .config import *
+from .coco import COCODetection, COCOAnnotationTransform, get_label_map
 
 import torch
 import cv2

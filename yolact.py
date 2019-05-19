@@ -5,6 +5,7 @@ from torchvision.models.resnet import Bottleneck
 import numpy as np
 from itertools import product
 from math import sqrt
+from typing import List
 
 from data.config import cfg, mask_type
 from layers import Detect
@@ -14,6 +15,17 @@ from backbone import construct_backbone
 import torch.backends.cudnn as cudnn
 from utils import timer
 from utils.functions import MovingAverage
+
+
+# As of March 10, 2019, Pytorch DataParallel still doesn't support JIT Script Modules
+use_jit = torch.cuda.device_count() <= 1
+if not use_jit:
+    print('Multiple GPUs detected! Turning off JIT.')
+
+ScriptModuleWrapper = torch.jit.ScriptModule if use_jit else nn.Module
+script_method_wrapper = torch.jit.script_method if use_jit else lambda fn, _rcn=None: fn
+
+
 
 class Concat(nn.Module):
     def __init__(self, nets, extra_params):
@@ -25,7 +37,6 @@ class Concat(nn.Module):
     def forward(self, x):
         # Concat each along the channel dimension
         return torch.cat([net(x) for net in self.nets], dim=1, **self.extra_params)
-
 
 
 
@@ -81,30 +92,6 @@ def make_net(in_channels, conf, include_last_relu=True):
 
     return nn.Sequential(*(net)), in_channels
 
-
-class JITModule(nn.Module):
-    """ Wraps the given module in a traced version. """
-
-    def __init__(self, net):
-        super().__init__()
-
-        self.last_size = None
-        self.last_training = self.training
-
-        # Store this as a list so our pytorch overlords don't put extra copies of weights in the state dict
-        self.traced = None
-        self.net = [net]
-    
-    def forward(self, x):
-        if cfg.no_jit:
-            return self.net[0](x)
-
-        if x.size() != self.last_size or self.training != self.last_training:
-            self.last_size = x.size()
-            self.last_training = self.training
-            self.traced = [torch.jit.trace(self.net[0], x)]
-        
-        return self.traced[0](x)
 
 
 class PredictionModule(nn.Module):
@@ -280,8 +267,12 @@ class PredictionModule(nn.Module):
                     
                     for scale, ars in zip(self.scales, self.aspect_ratios):
                         for ar in ars:
+                            if not cfg.backbone.preapply_sqrt:
+                                ar = sqrt(ar)
+
                             if cfg.backbone.use_pixel_scales:
                                 w = scale * ar / cfg.max_size
+                                # TODO: Fix this line.
                                 h = scale * ar / cfg.max_size
                             else:
                                 w = scale * ar / conv_w
@@ -294,8 +285,7 @@ class PredictionModule(nn.Module):
         
         return self.priors
 
-
-class FPN(nn.Module):
+class FPN(ScriptModuleWrapper):
     """
     Implements a general version of the FPN introduced in
     https://arxiv.org/pdf/1612.03144.pdf
@@ -310,6 +300,8 @@ class FPN(nn.Module):
         - in_channels (list): For each conv layer you supply in the forward pass,
                               how many features will it have?
     """
+    __constants__ = ['interpolation_mode', 'num_downsample', 'use_conv_downsample',
+                     'lat_layers', 'pred_layers', 'downsample_layers']
 
     def __init__(self, in_channels):
         super().__init__()
@@ -331,8 +323,13 @@ class FPN(nn.Module):
                 nn.Conv2d(cfg.fpn.num_features, cfg.fpn.num_features, kernel_size=3, padding=1, stride=2)
                 for _ in range(cfg.fpn.num_downsample)
             ])
+        
+        self.interpolation_mode  = cfg.fpn.interpolation_mode
+        self.num_downsample      = cfg.fpn.num_downsample
+        self.use_conv_downsample = cfg.fpn.use_conv_downsample
 
-    def forward(self, convouts):
+    @script_method_wrapper
+    def forward(self, convouts:List[torch.Tensor]):
         """
         Args:
             - convouts (list): A list of convouts for the corresponding layers in in_channels.
@@ -340,31 +337,38 @@ class FPN(nn.Module):
             - A list of FPN convouts in the same order as x with extra downsample layers if requested.
         """
 
-        out = [None] * len(convouts)
-        x = 0
+        out = []
+        x = torch.zeros(1, device=convouts[0].device)
+        for i in range(len(convouts)):
+            out.append(x)
 
         # For backward compatability, the conv layers are stored in reverse but the input and output is
         # given in the correct order. Thus, use j=-i-1 for the input and output and i for the conv layers.
-        for i in range(len(convouts)):
-            j = -i-1
+        j = len(convouts)
+        for lat_layer in self.lat_layers:
+            j -= 1
 
-            if i > 0:
+            if j < len(convouts) - 1:
                 _, _, h, w = convouts[j].size()
-                x = F.interpolate(x, size=(h, w), mode=cfg.fpn.interpolation_mode, align_corners=False)
+                x = F.interpolate(x, size=(h, w), mode=self.interpolation_mode, align_corners=False)
             
-            x = x + self.lat_layers[i](convouts[j])
-            out[j] = F.relu(self.pred_layers[i](x))
+            x = x + lat_layer(convouts[j])
+            out[j] = x
+        
+        # This janky second loop is here because TorchScript.
+        j = len(convouts)
+        for pred_layer in self.pred_layers:
+            j -= 1
+            out[j] = F.relu(pred_layer(out[j]))
 
         # In the original paper, this takes care of P6
-        for idx in range(cfg.fpn.num_downsample):
-            if cfg.fpn.use_conv_downsample:
-                # Thanks Retinanet, very cool.
-                out.append(self.downsample_layers[idx](out[-1]))
-            else:
-                # I decided against putting the stride in the conv layers because the prediction module conv layers
-                # are shared, so it would be hard to add stride to them. I should probably have shared the weights
-                # and not the conv layers themselves, but eh, it was easier that way. I doubt this is that slow either.
-                out.append(out[-1][:, :, ::2, ::2]) # A stride 2 view on out[-1] along both height and width
+        if self.use_conv_downsample:
+            for downsample_layer in self.downsample_layers:
+                out.append(downsample_layer(out[-1]))
+        else:
+            for idx in range(self.num_downsample):
+                # Note: this is an untested alternative to out.append(out[-1][:, :, ::2, ::2]). Thanks TorchScript.
+                out.append(nn.functional.max_pool2d(out[-1], 1, stride=2))
 
         return out
 
@@ -457,10 +461,6 @@ class Yolact(nn.Module):
 
         # For use in evaluation
         self.detect = Detect(cfg.num_classes, bkg_label=0, top_k=200, conf_thresh=0.05, nms_thresh=0.5)
-        
-        # Stuff for jit
-        # No JIT for Protonet or pass2 because it's fast enough already (actually slows down using JIT)
-        self.backbone_jit = None
 
     def save_weights(self, path):
         """ Saves the model's weights using compression because the file sizes were getting too big. """
@@ -471,12 +471,16 @@ class Yolact(nn.Module):
         state_dict = torch.load(path)
 
         # For backward compatability, remove these (the new variable is called layers)
-        keys = list(state_dict.keys())
-        for key in keys:
+        for key in list(state_dict.keys()):
             if key.startswith('backbone.layer') and not key.startswith('backbone.layers'):
                 del state_dict[key]
+        
+            # Also for backward compatibility with v1.0 weights, do this check
+            if key.startswith('fpn.downsample_layers.'):
+                if cfg.fpn is not None and int(key.split('.')[2]) >= cfg.fpn.num_downsample:
+                    del state_dict[key]
 
-        self.load_state_dict(state_dict, strict=False)
+        self.load_state_dict(state_dict)
 
     def init_weights(self, backbone_path):
         """ Initialize weights for training. """
@@ -526,13 +530,8 @@ class Yolact(nn.Module):
 
     def forward(self, x):
         """ The input should be of size [batch_size, 3, img_h, img_w] """
-        # Initialize this here or DataParellel will murder me in my sleep
-        # which, admittedly, I could use some of right now.
-        if self.backbone_jit == None:
-            self.backbone_jit = JITModule(self.backbone)
-        
         with timer.env('backbone'):
-            outs = self.backbone(x) if cfg.no_jit else self.backbone_jit(x)
+            outs = self.backbone(x)
 
         if cfg.fpn is not None:
             with timer.env('fpn'):

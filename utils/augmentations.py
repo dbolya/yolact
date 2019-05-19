@@ -592,19 +592,24 @@ class BaseTransform(object):
 
 import torch.nn.functional as F
 
-class FastBaseTransform(object):
+class FastBaseTransform(torch.nn.Module):
     """
     Transform that does all operations on the GPU for super speed.
     This doesn't suppport a lot of config settings and should only be used for production.
     Maintain this as necessary.
     """
 
-    def __init__(self, ):
+    def __init__(self):
+        super().__init__()
+
         self.mean = torch.Tensor(MEANS).float().cuda()[None, :, None, None]
         self.std  = torch.Tensor( STD ).float().cuda()[None, :, None, None]
         self.transform = cfg.backbone.transform
 
-    def __call__(self, img):
+    def forward(self, img):
+        self.mean = self.mean.to(img.device)
+        self.std  = self.std.to(img.device)
+        
         # img assumed to be a pytorch BGR image with channel order [n, h, w, c]
         if cfg.preserve_aspect_ratio:
             raise NotImplementedError
