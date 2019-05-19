@@ -323,6 +323,7 @@ mask_type = Config({
     #   - mask_proto_normalize_emulate_roi_pooling (bool): Normalize the mask loss to emulate roi pooling's affect on loss.
     #   - mask_proto_double_loss (bool): Whether to use the old loss in addition to any special new losses.
     #   - mask_proto_double_loss_alpha (float): The alpha to weight the above loss.
+    #   - mask_proto_split_prototypes_by_head (bool): If true, this will give each prediction head its own prototypes.
     'lincomb': 1,
 })
 
@@ -430,6 +431,7 @@ coco_base_config = Config({
     'mask_proto_normalize_emulate_roi_pooling': False,
     'mask_proto_double_loss': False,
     'mask_proto_double_loss_alpha': 1,
+    'mask_proto_split_prototypes_by_head': False,
 
     # SSD data augmentation parameters
     # Randomize hue, vibrance, etc.
@@ -1816,6 +1818,12 @@ dev_nocrop_config = dev_base_config.copy({
     'lr_warmup_init': dev_base_config.lr / 100,
 
     'mask_alpha': dev_base_config.mask_alpha * 2000,
+})
+
+dev_protosplit_config = dev_base_config.copy({
+    'name': 'dev_protosplit',
+    'mask_proto_split_prototypes_by_head': True,
+    'mask_proto_net': [(256, 3, {'padding': 1})] * 3 + [(None, -2, {}), (256, 3, {'padding': 1})] + [(32*5, 1, {})],
 })
 
 

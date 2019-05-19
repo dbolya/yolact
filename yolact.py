@@ -120,13 +120,18 @@ class PredictionModule(nn.Module):
                          from parent instead of from this module.
     """
     
-    def __init__(self, in_channels, out_channels=1024, aspect_ratios=[[1]], scales=[1], parent=None):
+    def __init__(self, in_channels, out_channels=1024, aspect_ratios=[[1]], scales=[1], parent=None, index=0):
         super().__init__()
 
         self.num_classes = cfg.num_classes
-        self.mask_dim    = cfg.mask_dim
+        self.mask_dim    = cfg.mask_dim # Defined by Yolact
         self.num_priors  = sum(len(x) for x in aspect_ratios)
         self.parent      = [parent] # Don't include this in the state dict
+        self.index       = index
+        self.num_heads   = cfg.num_heads # Defined by Yolact
+
+        if cfg.mask_proto_split_prototypes_by_head and cfg.mask_type == mask_type.lincomb:
+            self.mask_dim = self.mask_dim // self.num_heads
 
         if cfg.mask_proto_prototypes_as_features:
             in_channels += self.mask_dim
@@ -239,6 +244,9 @@ class PredictionModule(nn.Module):
                 if cfg.mask_proto_coeff_gate:
                     gate = src.gate_layer(x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, self.mask_dim)
                     mask = mask * torch.sigmoid(gate)
+
+        if cfg.mask_proto_split_prototypes_by_head and cfg.mask_type == mask_type.lincomb:
+            mask = F.pad(mask, (self.index * self.mask_dim, (self.num_heads - self.index - 1) * self.mask_dim), mode='constant', value=0)
         
         priors = self.make_priors(conv_h, conv_w)
 
@@ -437,6 +445,7 @@ class Yolact(nn.Module):
 
 
         self.prediction_layers = nn.ModuleList()
+        cfg.num_heads = len(self.selected_layers)
 
         for idx, layer_idx in enumerate(self.selected_layers):
             # If we're sharing prediction module weights, have every module's parent be the first one
@@ -447,7 +456,8 @@ class Yolact(nn.Module):
             pred = PredictionModule(src_channels[layer_idx], src_channels[layer_idx],
                                     aspect_ratios = cfg.backbone.pred_aspect_ratios[idx],
                                     scales        = cfg.backbone.pred_scales[idx],
-                                    parent        = parent)
+                                    parent        = parent,
+                                    index         = idx)
             self.prediction_layers.append(pred)
 
         # Extra parameters for the extra losses
