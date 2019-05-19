@@ -590,6 +590,7 @@ def evalimages(net:Yolact, input_folder:str, output_folder:str):
     print('Done.')
 
 from multiprocessing.pool import ThreadPool
+from queue import Queue
 
 class CustomDataParallel(torch.nn.DataParallel):
     """ A Custom Data Parallel class that properly gathers lists of dictionaries. """
@@ -610,10 +611,11 @@ def evalvideo(net:Yolact, path:str):
     
     net = CustomDataParallel(net).cuda()
     transform = torch.nn.DataParallel(FastBaseTransform()).cuda()
-    frame_times = MovingAverage()
+    frame_times = MovingAverage(100)
     fps = 0
     # The 0.8 is to account for the overhead of time.sleep
-    frame_time_target = 0.8 / vid.get(cv2.CAP_PROP_FPS)
+    frame_time_target = 1 / vid.get(cv2.CAP_PROP_FPS)
+    running = True
 
     def cleanup_and_exit():
         print()
@@ -640,6 +642,47 @@ def evalvideo(net:Yolact, path:str):
             frame, preds = inp
             return prep_display(preds, frame, None, None, undo_transform=False, class_color=True)
 
+    frame_buffer = Queue()
+    video_fps = 0
+
+    # All this timing code to make sure that 
+    def play_video():
+        nonlocal frame_buffer, running, video_fps
+
+        video_frame_times = MovingAverage(100)
+        frame_time_stabilizer = frame_time_target
+        last_time = None
+        stabilizer_step = 0.0005
+
+        while running:
+            frame_time_start = time.time()
+
+            if not frame_buffer.empty():
+                next_time = time.time()
+                if last_time is not None:
+                    video_frame_times.add(next_time - last_time)
+                    video_fps = 1 / video_frame_times.get_avg()
+                cv2.imshow(path, frame_buffer.get())
+                last_time = next_time
+
+            if cv2.waitKey(1) == 27: # Press Escape to close
+                running = False
+
+            buffer_size = frame_buffer.qsize()
+            if buffer_size < args.video_multiframe:
+                frame_time_stabilizer += stabilizer_step
+            elif buffer_size > args.video_multiframe:
+                frame_time_stabilizer -= stabilizer_step
+                if frame_time_stabilizer < 0:
+                    frame_time_stabilizer = 0
+
+            next_frame_target = max(2 * max(frame_time_stabilizer, frame_time_target) - video_frame_times.get_avg(), 0)
+            target_time = frame_time_start + next_frame_target - 0.001 # Let's just subtract a millisecond to be safe
+            # This gives more accurate timing than if sleeping the whole amount at once
+            while time.time() < target_time:
+                time.sleep(0.001)
+
+
     extract_frame = lambda x, i: (x[0][i] if x[1][i] is None else x[0][i].to(x[1][i]['box'].device), [x[1][i]])
 
     # Prime the network on the first frame because I do some thread unsafe things otherwise
@@ -649,12 +692,13 @@ def evalvideo(net:Yolact, path:str):
 
     # For each frame the sequence of functions it needs to go through to be processed (in reversed order)
     sequence = [prep_frame, eval_network, transform_frame]
-    pool = ThreadPool(processes=len(sequence) + args.video_multiframe)
+    pool = ThreadPool(processes=len(sequence) + args.video_multiframe + 2)
+    pool.apply_async(play_video)
 
     active_frames = []
 
     print()
-    while vid.isOpened():
+    while vid.isOpened() and running:
         start_time = time.time()
 
         # Start loading the next frames from the disk
@@ -668,12 +712,7 @@ def evalvideo(net:Yolact, path:str):
         # For each frame whose job was the last in the sequence (i.e. for all final outputs)
         for frame in active_frames:
             if frame['idx'] == 0:
-                # Wait here so that the frame has time to process and so that the video plays at the proper speed
-                time.sleep(frame_time_target)
-
-                cv2.imshow(path, frame['value'].get())
-                if cv2.waitKey(1) == 27: # Press Escape to close
-                    cleanup_and_exit()
+                frame_buffer.put(frame['value'].get())
 
         # Remove the finished frames from the processing queue
         active_frames = [x for x in active_frames if x['idx'] > 0]
@@ -696,7 +735,7 @@ def evalvideo(net:Yolact, path:str):
         frame_times.add(time.time() - start_time)
         fps = args.video_multiframe / frame_times.get_avg()
 
-        print('\rAvg FPS: %.2f     ' % fps, end='')
+        print('\rProcessing FPS: %.2f | Video Playback FPS: %.2f | Frames in Buffer: %d    ' % (fps, video_fps, frame_buffer.qsize()), end='')
     
     cleanup_and_exit()
 

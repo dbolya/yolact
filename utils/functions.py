@@ -2,6 +2,7 @@
 import torch
 import os
 import math
+from collections import deque
 from pathlib import Path
 
 class MovingAverage():
@@ -21,7 +22,7 @@ class MovingAverage():
         self.sum += elem
 
         if len(self.window) > self.max_window_size:
-            self.sum -= self.window.pop(0)
+            self.sum -= self.window.popleft()
     
     def append(self, elem):
         """ Same as add just more pythonic. """
@@ -29,7 +30,7 @@ class MovingAverage():
 
     def reset(self):
         """ Resets the MovingAverage to its initial state. """
-        self.window = []
+        self.window = deque()
         self.sum = 0
 
     def get_avg(self):
