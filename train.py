@@ -82,6 +82,7 @@ replace('decay')
 replace('gamma')
 replace('momentum')
 
+loss_types = ['B', 'C', 'M', 'P', 'D', 'E', 'S']
 
 if torch.cuda.is_available():
     if args.cuda:
@@ -191,7 +192,7 @@ def train():
     save_path = lambda epoch, iteration: SavePath(cfg.name, epoch, iteration).get_path(root=args.save_folder)
     time_avg = MovingAverage()
 
-    loss_types = ['B', 'C', 'M', 'P', 'D', 'E', 'S'] # Forms the print order
+    global loss_types # Forms the print order
     loss_avgs  = { k: MovingAverage(100) for k in loss_types }
 
     print('Begin training!')
@@ -327,6 +328,39 @@ def prepare_data(datum):
         masks = [Variable(mask, requires_grad=False) for mask in masks]
 
     return images, targets, masks, num_crowds
+
+def compute_validation_loss(net, data_loader, criterion):
+    global loss_types
+
+    with torch.no_grad():
+        losses = {}
+        
+        # Don't switch to eval mode because we want to get losses
+        iterations = 0
+        for datum in data_loader:
+            images, targets, masks, num_crowds = prepare_data(datum)
+            out = net(images)
+
+            wrapper = ScatterWrapper(targets, masks, num_crowds)
+            _losses = criterion(out, wrapper, wrapper.make_mask())
+            
+            for k, v in _losses.items():
+                v = v.mean().item()
+                if k in losses:
+                    losses[k] += v
+                else:
+                    losses[k] = v
+
+            iterations += 1
+            if args.validation_size <= iterations * args.batch_size:
+                break
+        
+        for k in losses:
+            losses[k] /= iterations
+            
+        
+        loss_labels = sum([[k, losses[k]] for k in loss_types if k in losses], [])
+        print(('Validation ||' + (' %s: %.3f |' * len(losses)) + ')') % tuple(loss_labels), flush=True)
 
 def compute_validation_map(yolact_net, dataset):
     with torch.no_grad():
