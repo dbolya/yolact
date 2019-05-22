@@ -186,7 +186,7 @@ class Detect(object):
         scr_lst = []
 
         # Multiplying by max_size is necessary because of how cnms computes its area and intersections
-        boxes = boxes * cfg.mask_size
+        boxes = boxes * cfg.max_size
 
         for _cls in range(num_classes):
             cls_scores = scores[_cls, :]
@@ -219,4 +219,4 @@ class Detect(object):
         classes = classes[idx2]
 
         # Undo the multiplication above
-        return boxes[idx] / cfg.mask_size, masks[idx], classes, scores
+        return boxes[idx] / cfg.max_size, masks[idx], classes, scores
