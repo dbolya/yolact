@@ -600,7 +600,9 @@ class CustomDataParallel(torch.nn.DataParallel):
 
 def evalvideo(net:Yolact, path:str):
     # If the path is a digit, parse it as a webcam index
-    if path.isdigit():
+    is_webcam = path.isdigit()
+    
+    if is_webcam:
         vid = cv2.VideoCapture(int(path))
     else:
         vid = cv2.VideoCapture(path)
@@ -647,7 +649,7 @@ def evalvideo(net:Yolact, path:str):
 
     # All this timing code to make sure that 
     def play_video():
-        nonlocal frame_buffer, running, video_fps
+        nonlocal frame_buffer, running, video_fps, is_webcam
 
         video_frame_times = MovingAverage(100)
         frame_time_stabilizer = frame_time_target
@@ -676,7 +678,9 @@ def evalvideo(net:Yolact, path:str):
                 if frame_time_stabilizer < 0:
                     frame_time_stabilizer = 0
 
-            next_frame_target = max(2 * max(frame_time_stabilizer, frame_time_target) - video_frame_times.get_avg(), 0)
+            new_target = frame_time_stabilizer if is_webcam else max(frame_time_stabilizer, frame_time_target)
+
+            next_frame_target = max(2 * new_target - video_frame_times.get_avg(), 0)
             target_time = frame_time_start + next_frame_target - 0.001 # Let's just subtract a millisecond to be safe
             # This gives more accurate timing than if sleeping the whole amount at once
             while time.time() < target_time:
