@@ -194,6 +194,9 @@ def train():
     loss_types = ['B', 'C', 'M', 'P', 'D', 'E', 'S', 'R'] # Forms the print order
     loss_avgs  = { k: MovingAverage(100) for k in loss_types }
 
+    # I made iteration a float so I have to work around that for step sizes < 1
+    iteration_step_size = args.batch_size / cfg.default_batch_size
+
     print('Begin training!')
     print()
     # try-except so you can use ctrl+c to save early and stop training
@@ -206,11 +209,11 @@ def train():
             
             for datum in data_loader:
                 # Stop if we've reached an epoch if we're resuming from start_iter
-                if iteration == (epoch+1)*epoch_size:
+                if iteration >= (epoch+1)*epoch_size:
                     break
 
                 # Stop at the configured number of iterations even if mid-epoch
-                if iteration == cfg.max_iter:
+                if iteration >= cfg.max_iter:
                     break
 
                 # Change a config setting if we've reached the specified iteration
@@ -270,23 +273,23 @@ def train():
                 if iteration != args.start_iter:
                     time_avg.add(elapsed)
 
-                if iteration % 10 == 0:
+                if iteration % 10 < iteration_step_size:
                     eta_str = str(datetime.timedelta(seconds=(cfg.max_iter-iteration) * time_avg.get_avg())).split('.')[0]
                     
                     total = sum([loss_avgs[k].get_avg() for k in losses])
                     loss_labels = sum([[k, loss_avgs[k].get_avg()] for k in loss_types if k in losses], [])
                     
                     print(('[%3d] %7d ||' + (' %s: %.3f |' * len(losses)) + ' T: %.3f || ETA: %s || timer: %.3f')
-                            % tuple([epoch, iteration] + loss_labels + [total, eta_str, elapsed]), flush=True)
+                            % tuple([epoch, int(iteration)] + loss_labels + [total, eta_str, elapsed]), flush=True)
                 
-                iteration += 1
+                iteration += iteration_step_size
 
-                if iteration % args.save_interval == 0 and iteration != args.start_iter:
+                if iteration % args.save_interval < iteration_step_size and iteration != args.start_iter:
                     if args.keep_latest:
                         latest = SavePath.get_latest(args.save_folder, cfg.name)
 
                     print('Saving state, iter:', iteration)
-                    yolact_net.save_weights(save_path(epoch, iteration))
+                    yolact_net.save_weights(save_path(epoch, int(iteration)))
 
                     if args.keep_latest and latest is not None:
                         if args.keep_latest_interval <= 0 or iteration % args.keep_latest_interval != args.save_interval:
@@ -303,10 +306,10 @@ def train():
         # Delete previous copy of the interrupted network so we don't spam the weights folder
         SavePath.remove_interrupt(args.save_folder)
         
-        yolact_net.save_weights(save_path(epoch, repr(iteration) + '_interrupt'))
+        yolact_net.save_weights(save_path(epoch, repr(int(iteration)) + '_interrupt'))
         exit()
 
-    yolact_net.save_weights(save_path(epoch, iteration))
+    yolact_net.save_weights(save_path(epoch, int(iteration)))
 
 
 def set_lr(optimizer, new_lr):

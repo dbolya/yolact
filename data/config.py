@@ -376,6 +376,10 @@ coco_base_config = Config({
     'num_classes': 81, # This should include the background class
 
     'max_iter': 400000,
+    
+    # One "iteration" will assume this batch size. For instance, if the default batch size is 8 and
+    # you run this with batch size 32, then each real iteration will advance the iteration counter by 4
+    'default_batch_size': 8,
 
     # The maximum number of detections for evaluation
     'max_num_detections': 100,
@@ -664,6 +668,17 @@ yolact_resnet50_config = yolact_base_config.copy({
         'use_pixel_scales': True,
         'preapply_sqrt': False,
     }),
+})
+
+
+yolactv2_resnet50_config = yolact_resnet50_config.copy({
+    'name': 'yolactv2_resnet50',
+
+    'lr_steps': (200000, 300000),
+    'max_iter': 400000,
+
+    'lr': 3e-3,
+    'freeze_bn': True,
 })
 
 
