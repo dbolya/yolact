@@ -1,6 +1,7 @@
 from data import *
 from utils.augmentations import SSDAugmentation, BaseTransform
 from utils.functions import MovingAverage, SavePath
+from utils import timer
 from layers.modules import MultiBoxLoss
 from yolact import Yolact
 import os
@@ -142,6 +143,10 @@ def train():
     yolact_net = Yolact()
     net = yolact_net
     net.train()
+
+    # I don't use the timer during training (I use a different timing method).
+    # Apparently there's a race condition with multiple GPUs.
+    timer.disable_all()
 
     # Both of these can set args.resume to None, so do them before the check    
     if args.resume == 'interrupt':
