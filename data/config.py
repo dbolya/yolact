@@ -190,7 +190,23 @@ darknet_transform = Config({
 
 # ----------------------- BACKBONES ----------------------- #
 
-resnet101_backbone = Config({
+backbone_base = Config({
+    'name': 'Base Backbone',
+    'path': 'path/to/pretrained/weights',
+    'type': object,
+    'args': tuple(),
+    'transform': resnet_transform,
+
+    'selected_layers': list(),
+    'pred_scales': list(),
+    'pred_aspect_ratios': list(),
+
+    'use_pixel_scales': False,
+    'preapply_sqrt': True,
+    'use_square_anchors': False,
+})
+
+resnet101_backbone = backbone_base.copy({
     'name': 'ResNet101',
     'path': 'resnet101_reducedfc.pth',
     'type': ResNetBackbone,
@@ -200,11 +216,9 @@ resnet101_backbone = Config({
     'selected_layers': list(range(2, 8)),
     'pred_scales': [[1]]*6,
     'pred_aspect_ratios': [ [[0.66685089, 1.7073535, 0.87508774, 1.16524493, 0.49059086]] ] * 6,
-    'use_pixel_scales': False,
-    'preapply_sqrt': True,
 })
 
-resnet101_gn_backbone = Config({
+resnet101_gn_backbone = backbone_base.copy({
     'name': 'ResNet101_GN',
     'path': 'R-101-GN.pkl',
     'type': ResNetBackboneGN,
@@ -214,8 +228,6 @@ resnet101_gn_backbone = Config({
     'selected_layers': list(range(2, 8)),
     'pred_scales': [[1]]*6,
     'pred_aspect_ratios': [ [[0.66685089, 1.7073535, 0.87508774, 1.16524493, 0.49059086]] ] * 6,
-    'use_pixel_scales': False,
-    'preapply_sqrt': True,
 })
 
 resnet50_backbone = resnet101_backbone.copy({
@@ -226,7 +238,7 @@ resnet50_backbone = resnet101_backbone.copy({
     'transform': resnet_transform,
 })
 
-darknet53_backbone = Config({
+darknet53_backbone = backbone_base.copy({
     'name': 'DarkNet53',
     'path': 'darknet53.pth',
     'type': DarkNetBackbone,
@@ -236,8 +248,6 @@ darknet53_backbone = Config({
     'selected_layers': list(range(3, 9)),
     'pred_scales': [[3.5, 4.95], [3.6, 4.90], [3.3, 4.02], [2.7, 3.10], [2.1, 2.37], [1.8, 1.92]],
     'pred_aspect_ratios': [ [[1, sqrt(2), 1/sqrt(2), sqrt(3), 1/sqrt(3)][:n], [1]] for n in [3, 5, 5, 5, 3, 3] ],
-    'use_pixel_scales': False,
-    'preapply_sqrt': True,
 })
 
 vgg16_arch = [[64, 64],
@@ -249,7 +259,7 @@ vgg16_arch = [[64, 64],
                (1024, {'kernel_size': 3, 'padding': 6, 'dilation': 6}),
                (1024, {'kernel_size': 1})]]
 
-vgg16_backbone = Config({
+vgg16_backbone = backbone_base.copy({
     'name': 'VGG16',
     'path': 'vgg16_reducedfc.pth',
     'type': VGGBackbone,
@@ -259,7 +269,6 @@ vgg16_backbone = Config({
     'selected_layers': [3] + list(range(5, 10)),
     'pred_scales': [[5, 4]]*6,
     'pred_aspect_ratios': [ [[1], [1, sqrt(2), 1/sqrt(2), sqrt(3), 1/sqrt(3)][:n]] for n in [3, 5, 5, 5, 3, 3] ],
-    'use_pixel_scales': False,
 })
 
 
@@ -585,6 +594,7 @@ yolact_base_config = coco_base_config.copy({
         'selected_layers': list(range(1, 4)),
         'use_pixel_scales': True,
         'preapply_sqrt': False,
+        'use_square_anchors': True, # This is for backward compatability with a bug
 
         'pred_aspect_ratios': [ [[1, 1/2, 2]] ]*5,
         'pred_scales': [[24], [48], [96], [192], [384]],
@@ -644,6 +654,7 @@ yolact_darknet53_config = yolact_base_config.copy({
         'pred_aspect_ratios': yolact_base_config.backbone.pred_aspect_ratios,
         'use_pixel_scales': True,
         'preapply_sqrt': False,
+        'use_square_anchors': True, # This is for backward compatability with a bug
     }),
 })
 
@@ -657,6 +668,7 @@ yolact_resnet50_config = yolact_base_config.copy({
         'pred_aspect_ratios': yolact_base_config.backbone.pred_aspect_ratios,
         'use_pixel_scales': True,
         'preapply_sqrt': False,
+        'use_square_anchors': True, # This is for backward compatability with a bug
     }),
 })
 

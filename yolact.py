@@ -265,11 +265,14 @@ class PredictionModule(nn.Module):
 
                             if cfg.backbone.use_pixel_scales:
                                 w = scale * ar / cfg.max_size
-                                # TODO: Fix this line.
-                                h = scale * ar / cfg.max_size
+                                h = scale / ar / cfg.max_size
                             else:
                                 w = scale * ar / conv_w
                                 h = scale / ar / conv_h
+                            
+                            # This is for backward compatability with a bug where I made everything square by accident
+                            if cfg.backbone.use_square_anchors:
+                                h = w
 
                             prior_data += [x, y, w, h]
                 
