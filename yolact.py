@@ -267,7 +267,7 @@ class PredictionModule(nn.Module):
         """ Note that priors are [x,y,width,height] where (x,y) is the center of the box. """
         
         with timer.env('makepriors'):
-            if self.last_conv_size != (conv_w, conv_h):
+            if self.last_conv_size != (cfg._tmp_img_w, cfg._tmp_img_h):
                 prior_data = []
 
                 # Iteration order is important (it has to sync up with the convout)
@@ -282,8 +282,8 @@ class PredictionModule(nn.Module):
                                 ar = sqrt(ar)
 
                             if cfg.backbone.use_pixel_scales:
-                                w = scale * ar / cfg.max_size
-                                h = scale / ar / cfg.max_size
+                                w = scale * ar / cfg._tmp_img_w  # These are populated by
+                                h = scale / ar / cfg._tmp_img_h  # Yolact.forward
                             else:
                                 w = scale * ar / conv_w
                                 h = scale / ar / conv_h
@@ -294,8 +294,8 @@ class PredictionModule(nn.Module):
 
                             prior_data += [x, y, w, h]
                 
-                self.priors = torch.Tensor(prior_data).view(-1, 4)
-                self.last_conv_size = (conv_w, conv_h)
+                self.priors = torch.Tensor(prior_data).cuda().view(-1, 4).detach()
+                self.last_conv_size = (cfg._tmp_img_w, cfg._tmp_img_h)
         
         return self.priors
 
@@ -546,6 +546,10 @@ class Yolact(nn.Module):
 
     def forward(self, x):
         """ The input should be of size [batch_size, 3, img_h, img_w] """
+        _, _, img_h, img_w = x.size()
+        cfg._tmp_img_h = img_h
+        cfg._tmp_img_w = img_w
+        
         with timer.env('backbone'):
             outs = self.backbone(x)
 

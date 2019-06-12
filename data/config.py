@@ -524,8 +524,7 @@ coco_base_config = Config({
     # This is filled in at runtime by Yolact's __init__, so don't touch it
     'mask_dim': None,
 
-    # Input image size. If preserve_aspect_ratio is False, min_size is ignored.
-    'min_size': 200,
+    # Input image size.
     'max_size': 300,
     
     # Whether or not to do post processing on the cpu at test time
@@ -548,7 +547,7 @@ coco_base_config = Config({
     'use_gt_bboxes': False,
 
     # Whether or not to preserve aspect ratio when resizing the image.
-    # If True, uses the faster r-cnn resizing scheme.
+    # If True, this will resize all images to be max_size^2 pixels in area while keeping aspect ratio.
     # If False, all images are resized to max_size x max_size
     'preserve_aspect_ratio': False,
 
@@ -697,6 +696,13 @@ dev_base_config = yolact_resnet50_config.copy({
     'augment_expand': False,
 
     'use_semantic_segmentation_loss': False,
+})
+
+dev_ar_config = dev_base_config.copy({
+    'name': 'dev_ar',
+
+    'preserve_aspect_ratio': True,
+    'augment_random_sample_crop': False,
 })
 
 

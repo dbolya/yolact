@@ -46,26 +46,6 @@ def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear',
         
         if dets['score'].size(0) == 0:
             return [torch.Tensor()] * 4
-
-    # im_w and im_h when it concerns bboxes. This is a workaround hack for preserve_aspect_ratio
-    b_w, b_h = (w, h)
-
-    # Undo the padding introduced with preserve_aspect_ratio
-    if cfg.preserve_aspect_ratio:
-        r_w, r_h = Resize.faster_rcnn_scale(w, h, cfg.min_size, cfg.max_size)
-
-        # Get rid of any detections whose centers are outside the image
-        boxes = dets['box']
-        boxes = center_size(boxes)
-        s_w, s_h = (r_w/cfg.max_size, r_h/cfg.max_size)
-        
-        not_outside = ((boxes[:, 0] > s_w) + (boxes[:, 1] > s_h)) < 1 # not (a or b)
-        for k in dets:
-            if k != 'proto':
-                dets[k] = dets[k][not_outside]
-
-        # A hack to scale the bboxes to the right size
-        b_w, b_h = (cfg.max_size / r_w * w, cfg.max_size / r_h * h)
     
     # Actually extract everything from dets now
     classes = dets['class']
@@ -95,18 +75,14 @@ def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear',
         masks = masks.permute(2, 0, 1).contiguous()
 
         # Scale masks up to the full image
-        if cfg.preserve_aspect_ratio:
-            # Undo padding
-            masks = masks[:, :int(r_h/cfg.max_size*proto_data.size(1)), :int(r_w/cfg.max_size*proto_data.size(2))]
-        
         masks = F.interpolate(masks.unsqueeze(0), (h, w), mode=interpolation_mode, align_corners=False).squeeze(0)
 
         # Binarize the masks
         masks.gt_(0.5)
 
     
-    boxes[:, 0], boxes[:, 2] = sanitize_coordinates(boxes[:, 0], boxes[:, 2], b_w, cast=False)
-    boxes[:, 1], boxes[:, 3] = sanitize_coordinates(boxes[:, 1], boxes[:, 3], b_h, cast=False)
+    boxes[:, 0], boxes[:, 2] = sanitize_coordinates(boxes[:, 0], boxes[:, 2], w, cast=False)
+    boxes[:, 1], boxes[:, 3] = sanitize_coordinates(boxes[:, 1], boxes[:, 3], h, cast=False)
     boxes = boxes.long()
 
     if cfg.mask_type == mask_type.direct and cfg.eval_mask_branch:
@@ -152,16 +128,7 @@ def undo_image_transformation(img, w, h):
     img_numpy = img_numpy[:, :, (2, 1, 0)] # To RGB
     img_numpy = np.clip(img_numpy, 0, 1)
 
-    if cfg.preserve_aspect_ratio:
-        # Undo padding
-        r_w, r_h = Resize.faster_rcnn_scale(w, h, cfg.min_size, cfg.max_size)
-        img_numpy = img_numpy[:r_h, :r_w]
-
-        # Undo resizing
-        img_numpy = cv2.resize(img_numpy, (w,h))
-
-    else:
-        return cv2.resize(img_numpy, (w,h))
+    return cv2.resize(img_numpy, (w,h))
 
 
 def display_lincomb(proto_data, masks):

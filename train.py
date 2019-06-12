@@ -7,7 +7,7 @@ from yolact import Yolact
 import os
 import sys
 import time
-import math
+import math, random
 from pathlib import Path
 import torch
 from torch.autograd import Variable
@@ -172,7 +172,6 @@ def train():
                              negpos_ratio=3)
 
     if args.cuda:
-        cudnn.benchmark = True
         net       = nn.DataParallel(net).cuda()
         criterion = nn.DataParallel(criterion).cuda()
 
@@ -322,15 +321,25 @@ def set_lr(optimizer, new_lr):
 
 def prepare_data(datum):
     images, (targets, masks, num_crowds) = datum
-    
+
     if args.cuda:
-        images = Variable(images.cuda(), requires_grad=False)
+        images = [Variable(img.cuda(), requires_grad=False) for img in images]
         targets = [Variable(ann.cuda(), requires_grad=False) for ann in targets]
         masks = [Variable(mask.cuda(), requires_grad=False) for mask in masks]
     else:
-        images = Variable(images, requires_grad=False)
+        images = [Variable(img, requires_grad=False) for img in images]
         targets = [Variable(ann, requires_grad=False) for ann in targets]
         masks = [Variable(mask, requires_grad=False) for mask in masks]
+
+    if cfg.preserve_aspect_ratio:
+        # Choose a random size from the batch
+        _, h, w = images[random.randint(0, len(images)-1)].size()
+
+        for idx, (image, target, mask, num_crowd) in enumerate(zip(images, targets, masks, num_crowds)):
+            images[idx], targets[idx], masks[idx], num_crowds[idx] \
+                = enforce_size(image, target, mask, num_crowd, w, h)
+    
+    images = torch.stack(images, 0)
 
     return images, targets, masks, num_crowds
 

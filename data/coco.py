@@ -3,7 +3,7 @@ import os.path as osp
 import sys
 import torch
 import torch.utils.data as data
-import torchvision.transforms as transforms
+import torch.nn.functional as F
 import cv2
 import numpy as np
 from .config import cfg
@@ -203,3 +203,70 @@ class COCODetection(data.Dataset):
         tmp = '    Target Transforms (if any): '
         fmt_str += '{0}{1}'.format(tmp, self.target_transform.__repr__().replace('\n', '\n' + ' ' * len(tmp)))
         return fmt_str
+
+def enforce_size(img, targets, masks, num_crowds, new_w, new_h):
+    """ Ensures that the image is the given size without distorting aspect ratio. """
+    with torch.no_grad():
+        _, h, w = img.size()
+
+        if h == new_h and w == new_w:
+            return img, targets, masks, num_crowds
+        
+        # Resize the image so that it fits within new_w, new_h
+        w_prime = new_w
+        h_prime = h * new_w / w
+
+        if h_prime > new_h:
+            w_prime *= new_h / h_prime
+            h_prime = new_h
+
+        w_prime = int(w_prime)
+        h_prime = int(h_prime)
+
+        # Do all the resizing
+        img = F.interpolate(img.unsqueeze(0), (h_prime, w_prime), mode='bilinear', align_corners=False)
+        img.squeeze_(0)
+
+        # Act like each object is a color channel
+        masks = F.interpolate(masks.unsqueeze(0), (h_prime, w_prime), mode='bilinear', align_corners=False)
+        masks.squeeze_(0)
+
+        # Scale bounding boxes (this will put them in the top left corner in the case of padding)
+        targets[:, [0, 2]] *= (w_prime / new_w)
+        targets[:, [1, 3]] *= (h_prime / new_h)
+
+        # Finally, pad everything to be the new_w, new_h
+        pad_dims = (0, new_w - w_prime, 0, new_h - h_prime)
+        img   = F.pad(  img, pad_dims, mode='constant', value=0)
+        masks = F.pad(masks, pad_dims, mode='constant', value=0)
+
+        return img, targets, masks, num_crowds
+        
+
+
+
+def detection_collate(batch):
+    """Custom collate fn for dealing with batches of images that have a different
+    number of associated object annotations (bounding boxes).
+
+    Arguments:
+        batch: (tuple) A tuple of tensor images and (lists of annotations, masks)
+
+    Return:
+        A tuple containing:
+            1) (tensor) batch of images stacked on their 0 dim
+            2) (list<tensor>, list<tensor>, list<int>) annotations for a given image are stacked
+                on 0 dim. The output gt is a tuple of annotations and masks.
+    """
+    targets = []
+    imgs = []
+    masks = []
+    num_crowds = []
+
+    for sample in batch:
+        imgs.append(sample[0])
+        targets.append(torch.FloatTensor(sample[1][0]))
+        masks.append(torch.FloatTensor(sample[1][1]))
+        num_crowds.append(sample[1][2])
+
+    return imgs, (targets, masks, num_crowds)

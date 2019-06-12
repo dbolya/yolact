@@ -4,6 +4,7 @@ import cv2
 import numpy as np
 import types
 from numpy import random
+from math import sqrt
 
 from data import cfg, MEANS, STD
 
@@ -126,31 +127,18 @@ class Pad(object):
         return expand_image, masks, boxes, labels
 
 class Resize(object):
-    """
-    The same resizing scheme as used in faster R-CNN
-    https://arxiv.org/pdf/1506.01497.pdf
-
-    We resize the image so that the shorter side is min_size.
-    If the longer side is then over max_size, we instead resize
-    the image so the long side is max_size.
-    """
+    """ If preserve_aspect_ratio is true, this resizes to an approximate area of max_size * max_size """
 
     @staticmethod
-    def faster_rcnn_scale(width, height, min_size, max_size):
-        min_scale = min_size / min(width, height)
-        width  *= min_scale
-        height *= min_scale
-
-        max_scale = max_size / max(width, height)
-        if max_scale < 1: # If a size is greater than max_size
-            width  *= max_scale
-            height *= max_scale
-        
-        return int(width), int(height)
+    def calc_size_preserve_ar(img_w, img_h, max_size):
+        """ I mathed this one out on the piece of paper. Resulting width*height = approx max_size^2 """
+        ratio = sqrt(img_w / img_h)
+        w = max_size * ratio
+        h = max_size / ratio
+        return int(w), int(h)
 
     def __init__(self, resize_gt=True):
         self.resize_gt = resize_gt
-        self.min_size = cfg.min_size
         self.max_size = cfg.max_size
         self.preserve_aspect_ratio = cfg.preserve_aspect_ratio
 
@@ -158,12 +146,12 @@ class Resize(object):
         img_h, img_w, _ = image.shape
         
         if self.preserve_aspect_ratio:
-            width, height = Resize.faster_rcnn_scale(img_w, img_h, self.min_size, self.max_size)
+            width, height = Resize.calc_size_preserve_ar(img_w, img_h, self.max_size)
         else:
             width, height = self.max_size, self.max_size
 
         image = cv2.resize(image, (width, height))
-        
+
         if self.resize_gt:
             # Act like each object is a color channel
             masks = masks.transpose((1, 2, 0))
@@ -583,7 +571,6 @@ class BaseTransform(object):
         self.augment = Compose([
             ConvertFromInts(),
             Resize(resize_gt=False),
-            Pad(cfg.max_size, cfg.max_size, mean, pad_gt=False),
             BackboneTransform(cfg.backbone.transform, mean, std, 'BGR')
         ])
 
@@ -612,10 +599,14 @@ class FastBaseTransform(torch.nn.Module):
         
         # img assumed to be a pytorch BGR image with channel order [n, h, w, c]
         if cfg.preserve_aspect_ratio:
-            raise NotImplementedError
+            _, h, w, _ = img.size()
+            img_size = Resize.calc_size_preserve_ar(w, h, cfg.max_size)
+            img_size = (img_size[1], img_size[0]) # Pytorch needs h, w
+        else:
+            img_size = (cfg.max_size, cfg.max_size)
 
         img = img.permute(0, 3, 1, 2).contiguous()
-        img = F.interpolate(img, (cfg.max_size, cfg.max_size), mode='bilinear', align_corners=False)
+        img = F.interpolate(img, img_size, mode='bilinear', align_corners=False)
 
         if self.transform.normalize:
             img = (img - self.mean) / self.std
@@ -651,7 +642,7 @@ class SSDAugmentation(object):
             enable_if(cfg.augment_random_sample_crop, RandomSampleCrop()),
             enable_if(cfg.augment_random_mirror, RandomMirror()),
             Resize(),
-            Pad(cfg.max_size, cfg.max_size, mean),
+            enable_if(not cfg.preserve_aspect_ratio, Pad(cfg.max_size, cfg.max_size, mean)),
             ToPercentCoords(),
             PrepareMasks(cfg.mask_size, cfg.use_gt_bboxes),
             BackboneTransform(cfg.backbone.transform, mean, std, 'BGR')
