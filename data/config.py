@@ -155,6 +155,23 @@ coco2017_testdev_dataset = dataset_base.copy({
     'label_map': COCO_LABEL_MAP
 })
 
+PASCAL_CLASSES = ("aeroplane", "bicycle", "bird", "boat", "bottle",
+                  "bus", "car", "cat", "chair", "cow", "diningtable",
+                  "dog", "horse", "motorbike", "person", "pottedplant",
+                  "sheep", "sofa", "train", "tvmonitor")
+
+pascal2007_dataset = dataset_base.copy({
+    'name': 'Pascal VOC 2007',
+
+    'train_images': './data/coco/pascal2007images',
+    'valid_images': './data/coco/pascal2007images',
+    
+    'train_info': './data/coco/annotations/pascal_train2007.json',
+    'valid_info': './data/coco/annotations/pascal_val2007.json',
+
+    'class_names': PASCAL_CLASSES,
+})
+
 
 
 
@@ -675,6 +692,15 @@ yolact_resnet50_config = yolact_base_config.copy({
         'preapply_sqrt': False,
         'use_square_anchors': True, # This is for backward compatability with a bug
     }),
+})
+
+
+yolact_base_pascal_config = yolact_base_config.copy({
+    'name': 'yolact_base_pascal',
+    
+    # Dataset stuff
+    'dataset': pascal2007_dataset,
+    'num_classes': len(pascal2007_dataset.class_names) + 1,
 })
 
 

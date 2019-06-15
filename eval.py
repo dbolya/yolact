@@ -587,6 +587,9 @@ def evalvideo(net:Yolact, path:str):
     # If the path is a digit, parse it as a webcam index
     is_webcam = path.isdigit()
     
+    # If the input image size is constant, this make things faster (hence why we can use it in a video setting).
+    cudnn.benchmark = True
+    
     if is_webcam:
         vid = cv2.VideoCapture(int(path))
     else:
