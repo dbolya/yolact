@@ -703,6 +703,24 @@ yolact_base_pascal_config = yolact_base_config.copy({
     'num_classes': len(pascal2007_dataset.class_names) + 1,
 })
 
+yolact_base_pascal2_config = yolact_base_pascal_config.copy({
+    'name': 'yolact_base_pascal2',
+    
+    'lr_steps': (70000, 150000, 175000, 187500),
+    'max_iter': 200000,
+})
+
+yolact_resnet50_pascal2_config = yolact_resnet50_config.copy({
+    'name': 'yolact_resnet50_pascal2',
+    
+    # Dataset stuff
+    'dataset': pascal2007_dataset,
+    'num_classes': len(pascal2007_dataset.class_names) + 1,
+
+    'lr_steps': (70000, 150000, 175000, 187500),
+    'max_iter': 200000,
+})
+
 
 
 
