@@ -749,6 +749,15 @@ dev_ar_config = dev_base_config.copy({
     'augment_random_sample_crop': False,
 })
 
+dev_ar2_config = dev_ar_config.copy({
+    'name': 'dev_ar2',
+
+    'backbone': dev_ar_config.backbone.copy({
+        'use_pixel_scales': False,
+        'pred_scales': [[3], [3], [3], [3], [3]],
+    })
+})
+
 
 # Default config
 cfg = yolact_base_config.copy()
