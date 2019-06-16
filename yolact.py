@@ -181,6 +181,7 @@ class PredictionModule(nn.Module):
 
         self.priors = None
         self.last_conv_size = None
+        self.last_img_size = None
 
     def forward(self, x):
         """
@@ -267,7 +268,7 @@ class PredictionModule(nn.Module):
         """ Note that priors are [x,y,width,height] where (x,y) is the center of the box. """
         
         with timer.env('makepriors'):
-            if self.last_conv_size != (cfg._tmp_img_w, cfg._tmp_img_h):
+            if self.last_img_size != (cfg._tmp_img_w, cfg._tmp_img_h):
                 prior_data = []
 
                 # Iteration order is important (it has to sync up with the convout)
@@ -295,7 +296,8 @@ class PredictionModule(nn.Module):
                             prior_data += [x, y, w, h]
                 
                 self.priors = torch.Tensor(prior_data).cuda().view(-1, 4).detach()
-                self.last_conv_size = (cfg._tmp_img_w, cfg._tmp_img_h)
+                self.last_img_size = (cfg._tmp_img_w, cfg._tmp_img_h)
+                self.last_conv_size = (conv_w, conv_h)
         
         return self.priors
 
