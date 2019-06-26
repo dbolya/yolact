@@ -737,7 +737,7 @@ yolact_resnet50_pascal3_config = yolact_resnet50_pascal2_config.copy({
     
     'max_iter': 50000,
     'lr_steps': (45000,),
-    'backbone': yolact_base_pascal2_config.backbone.copy({
+    'backbone': yolact_resnet50_pascal2_config.backbone.copy({
         'pred_scales': [[32], [64], [128], [256], [512]],
         'use_square_anchors': False,
     })
