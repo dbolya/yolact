@@ -710,6 +710,17 @@ yolact_base_pascal2_config = yolact_base_pascal_config.copy({
     'max_iter': 200000,
 })
 
+yolact_base_pascal3_config = yolact_base_pascal2_config.copy({
+    'name': 'yolact_base_pascal3',
+
+    'max_iter': 50000,
+    'lr_steps': (45000,),
+    'backbone': yolact_base_pascal2_config.backbone.copy({
+        'pred_scales': [[32], [64], [128], [256], [512]],
+        'use_square_anchors': False,
+    })
+})
+
 yolact_resnet50_pascal2_config = yolact_resnet50_config.copy({
     'name': 'yolact_resnet50_pascal2',
     
@@ -719,6 +730,17 @@ yolact_resnet50_pascal2_config = yolact_resnet50_config.copy({
 
     'lr_steps': (70000, 150000, 175000, 187500),
     'max_iter': 200000,
+})
+
+yolact_resnet50_pascal3_config = yolact_resnet50_pascal2_config.copy({
+    'name': 'yolact_resnet50_pascal3',
+    
+    'max_iter': 50000,
+    'lr_steps': (45000,),
+    'backbone': yolact_base_pascal2_config.backbone.copy({
+        'pred_scales': [[32], [64], [128], [256], [512]],
+        'use_square_anchors': False,
+    })
 })
 
 
