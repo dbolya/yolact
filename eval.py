@@ -762,7 +762,7 @@ def savevideo(net:Yolact, in_path:str, out_path:str):
         for i in range(num_frames):
             timer.reset()
             with timer.env('Video'):
-                frame = torch.Tensor(vid.read()[1]).float().cuda()
+                frame = torch.from_numpy(vid.read()[1]).cuda().float()
                 batch = transform(frame.unsqueeze(0))
                 preds = net(batch)
                 processed = prep_display(preds, frame, None, None, undo_transform=False, class_color=True)
