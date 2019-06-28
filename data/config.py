@@ -160,14 +160,14 @@ PASCAL_CLASSES = ("aeroplane", "bicycle", "bird", "boat", "bottle",
                   "dog", "horse", "motorbike", "person", "pottedplant",
                   "sheep", "sofa", "train", "tvmonitor")
 
-pascal2007_dataset = dataset_base.copy({
-    'name': 'Pascal VOC 2007',
+pascal_sbd_dataset = dataset_base.copy({
+    'name': 'Pascal SBD 2012',
 
-    'train_images': './data/coco/pascal2007images',
-    'valid_images': './data/coco/pascal2007images',
+    'train_images': './data/sbd/img',
+    'valid_images': './data/sbd/img',
     
-    'train_info': './data/coco/annotations/pascal_train2007.json',
-    'valid_info': './data/coco/annotations/pascal_val2007.json',
+    'train_info': './data/sbd/pascal_sbd_train.json',
+    'valid_info': './data/sbd/pascal_sbd_val.json',
 
     'class_names': PASCAL_CLASSES,
 })
@@ -699,8 +699,8 @@ yolact_base_pascal_config = yolact_base_config.copy({
     'name': 'yolact_base_pascal',
     
     # Dataset stuff
-    'dataset': pascal2007_dataset,
-    'num_classes': len(pascal2007_dataset.class_names) + 1,
+    'dataset': pascal_sbd_dataset,
+    'num_classes': len(pascal_sbd_dataset.class_names) + 1,
 })
 
 yolact_base_pascal2_config = yolact_base_pascal_config.copy({
@@ -725,8 +725,8 @@ yolact_resnet50_pascal2_config = yolact_resnet50_config.copy({
     'name': 'yolact_resnet50_pascal2',
     
     # Dataset stuff
-    'dataset': pascal2007_dataset,
-    'num_classes': len(pascal2007_dataset.class_names) + 1,
+    'dataset': pascal_sbd_dataset,
+    'num_classes': len(pascal_sbd_dataset.class_names) + 1,
 
     'lr_steps': (70000, 150000, 175000, 187500),
     'max_iter': 200000,
