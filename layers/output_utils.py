@@ -144,7 +144,7 @@ def display_lincomb(proto_data, masks):
         # plt.show()
         
         coeffs_sort = coeffs[idx]
-        arr_h, arr_w = (6,6)
+        arr_h, arr_w = (4,8)
         proto_h, proto_w, _ = proto_data.size()
         arr_img = np.zeros([proto_h*arr_h, proto_w*arr_w])
         arr_run = np.zeros([proto_h*arr_h, proto_w*arr_w])

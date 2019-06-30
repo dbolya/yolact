@@ -198,7 +198,6 @@ class MultiBoxLoss(nn.Module):
         #  - D: Coefficient Diversity Loss
         #  - E: Class Existence Loss
         #  - S: Semantic Segmentation Loss
-        #  - R: Mask Rescoring loss
         return losses
 
     def class_existence_loss(self, class_data, class_existence_t):
@@ -437,7 +436,6 @@ class MultiBoxLoss(nn.Module):
 
         loss_m = 0
         loss_d = 0 # Coefficient diversity loss
-        loss_r = 0 # Mask Rescoring Loss
 
         for idx in range(mask_data.size(0)):
             with torch.no_grad():
@@ -542,33 +540,15 @@ class MultiBoxLoss(nn.Module):
                 gt_box_height = pos_get_csize[:, 3] * mask_h
                 pre_loss = pre_loss.sum(dim=(0, 1)) / gt_box_width / gt_box_height * weight
 
-
             # If the number of masks were limited scale the loss accordingly
             if old_num_pos > num_pos:
                 pre_loss *= old_num_pos / num_pos
 
             loss_m += torch.sum(pre_loss)
-
-            
-            if cfg.use_mask_scoring:
-                ious = elemwise_mask_iou((pred_masks > 0.5).float(), mask_t)
-                r_loss = F.binary_cross_entropy_with_logits(mask_scores, ious[:, None], reduction='sum')
-
-                if not torch.isfinite(r_loss):
-                    import code
-                    code.interact(local=locals())
-
-                if old_num_pos > num_pos:
-                    r_loss *= old_num_pos / num_pos
-                
-                loss_r += r_loss * cfg.mask_scoring_alpha
         
         losses = {'M': loss_m * cfg.mask_alpha / mask_h / mask_w}
         
         if cfg.mask_proto_coeff_diversity_loss:
             losses['D'] = loss_d
-        
-        if cfg.use_mask_scoring:
-            losses['R'] = loss_r
 
         return losses
