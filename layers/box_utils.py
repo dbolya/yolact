@@ -136,20 +136,22 @@ def match(pos_thresh, neg_thresh, truths, priors, labels, crowd_boxes, loc_t, co
     # Size [num_objects, num_priors]
     overlaps = jaccard(truths, decoded_priors) if not cfg.use_change_matching else change(truths, decoded_priors)
 
-    # Size [num_objects] best prior for each ground truth
-    best_prior_overlap, best_prior_idx = overlaps.max(1)
     # Size [num_priors] best ground truth for each prior
     best_truth_overlap, best_truth_idx = overlaps.max(0)
-    
-    # For the best prior for each gt object, set its overlap to 2. This ensures
-    # that it won't get thresholded out in the threshold step even if the IoU is
-    # under the negative threshold. This is because we want at least one anchor
-    # to match with each ground truth or else we'd be wasting training data.
-    best_truth_overlap.index_fill_(0, best_prior_idx, 2)
 
-    # Set the index of the pair (prior, gt) we set the overlap for above.
-    for j in range(best_prior_idx.size(0)):
-        best_truth_idx[best_prior_idx[j]] = j
+    # We want to ensure that each gt gets used at least once so that we don't
+    # waste any training data. In order to do that, find the max overlap anchor
+    # with each gt, and force that anchor to use that gt.
+    for j in range(overlaps.size(0)):
+        # Find i, the highest overlap anchor with this gt
+        i = overlaps[j].max(0)[1]
+        # Set all other overlaps with i to be 0 so that no other gt uses it
+        overlaps[:, i] = 0
+
+        # Overwrite i's score to be 2 so it doesn't get thresholded ever
+        best_truth_overlap[i] = 2
+        # Set the gt to be used for i to be j, overwriting whatever was there
+        best_truth_idx[i] = j
 
     matches = truths[best_truth_idx]            # Shape: [num_priors,4]
     conf = labels[best_truth_idx] + 1           # Shape: [num_priors]
