@@ -171,11 +171,20 @@ def match(pos_thresh, neg_thresh, truths, priors, labels, crowd_boxes, loc_t, co
     # We want to ensure that each gt gets used at least once so that we don't
     # waste any training data. In order to do that, find the max overlap anchor
     # with each gt, and force that anchor to use that gt.
-    for j in range(overlaps.size(0)):
+    for _ in range(overlaps.size(0)):
+        # Find j, the gt with the highest overlap with a prior
+        # In effect, this will loop through overlaps.size(0) in a "smart" order,
+        # always choosing the highest overlap first.
+        best_prior_overlap, best_prior_idx = overlaps.max(1)
+        j = best_prior_overlap.max(0)[1]
+
         # Find i, the highest overlap anchor with this gt
-        i = overlaps[j].max(0)[1]
-        # Set all other overlaps with i to be 0 so that no other gt uses it
-        overlaps[:, i] = 0
+        i = best_prior_idx[j]
+
+        # Set all other overlaps with i to be -1 so that no other gt uses it
+        overlaps[:, i] = -1
+        # Set all other overlaps with j to be -1 so that this loop never uses j again
+        overlaps[j, :] = -1
 
         # Overwrite i's score to be 2 so it doesn't get thresholded ever
         best_truth_overlap[i] = 2
