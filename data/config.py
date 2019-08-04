@@ -746,11 +746,12 @@ yolact_resnet50_pascal3_config = yolact_resnet50_pascal2_config.copy({
 yolact_resnet50_pascal4_config = yolact_resnet50_pascal3_config.copy({
     'name': 'yolact_resnet50_pascal4',
     
-    'max_iter': 80000,
-    'lr_steps': (60000,),
+    'max_iter': 120000,
+    'lr_steps': (60000, 100000),
 })
 
-
+yolact_resnet50_pascal5_config = yolact_resnet50_pascal4_config.copy({'name': 'yolact_resnet50_pascal5'})
+yolact_resnet50_pascal6_config = yolact_resnet50_pascal4_config.copy({'name': 'yolact_resnet50_pascal6'})
 
 
 
