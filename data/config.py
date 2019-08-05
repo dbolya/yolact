@@ -753,6 +753,14 @@ yolact_resnet50_pascal4_config = yolact_resnet50_pascal3_config.copy({
 yolact_resnet50_pascal5_config = yolact_resnet50_pascal4_config.copy({'name': 'yolact_resnet50_pascal5'})
 yolact_resnet50_pascal6_config = yolact_resnet50_pascal4_config.copy({'name': 'yolact_resnet50_pascal6'})
 
+yolact_resnet50_pascal7_config = yolact_resnet50_pascal6_config.copy({
+    'name': 'yolact_resnet50_pascal7',
+
+    'use_focal_loss': True,
+    'use_sigmoid_focal_loss': True,
+
+    'conf_alpha': 10,
+})
 
 
 dev_base_config = yolact_resnet50_config.copy({
