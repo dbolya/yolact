@@ -694,10 +694,46 @@ yolact_resnet50_config = yolact_base_config.copy({
     }),
 })
 
-yolact_base2_config = yolact_base_config.copy({
-    'name': 'yolact_base2',
+yolact_base_v1_config = yolact_base_config.copy({
+    'name': 'yolact_base_v1',
 
     'backbone': yolact_base_config.backbone.copy({
+        'pred_aspect_ratios': [ [[1, 1/2, 2, 1/3, 3]] ]*5,
+        'use_square_anchors': False,
+    }),
+})
+
+yolact_im400_v1_config = yolact_im400_config.copy({
+    'name': 'yolact_im400_v1',
+
+    'backbone': yolact_im400_config.backbone.copy({
+        'pred_aspect_ratios': [ [[1, 1/2, 2, 1/3, 3]] ]*5,
+        'use_square_anchors': False,
+    }),
+})
+
+yolact_im700_v1_config = yolact_im700_config.copy({
+    'name': 'yolact_im700_v1',
+
+    'backbone': yolact_im700_config.backbone.copy({
+        'pred_aspect_ratios': [ [[1, 1/2, 2, 1/3, 3]] ]*5,
+        'use_square_anchors': False,
+    }),
+})
+
+yolact_darknet53_v1_config = yolact_darknet53_config.copy({
+    'name': 'yolact_darknet53_v1',
+
+    'backbone': yolact_darknet53_config.backbone.copy({
+        'pred_aspect_ratios': [ [[1, 1/2, 2, 1/3, 3]] ]*5,
+        'use_square_anchors': False,
+    }),
+})
+
+yolact_resnet50_v1_config = yolact_resnet50_config.copy({
+    'name': 'yolact_resnet50_v1',
+
+    'backbone': yolact_resnet50_config.backbone.copy({
         'pred_aspect_ratios': [ [[1, 1/2, 2, 1/3, 3]] ]*5,
         'use_square_anchors': False,
     }),
