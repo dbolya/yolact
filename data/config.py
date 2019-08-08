@@ -694,6 +694,15 @@ yolact_resnet50_config = yolact_base_config.copy({
     }),
 })
 
+yolact_base2_config = yolact_base_config.copy({
+    'name': 'yolact_base2',
+
+    'backbone': yolact_base_config.backbone.copy({
+        'pred_aspect_ratios': [ [[1, 1/2, 2, 1/3, 3]] ]*5,
+        'use_square_anchors': False,
+    }),
+})
+
 
 yolact_base_pascal_config = yolact_base_config.copy({
     'name': 'yolact_base_pascal',
@@ -753,8 +762,16 @@ yolact_resnet50_pascal4_config = yolact_resnet50_pascal3_config.copy({
 yolact_resnet50_pascal5_config = yolact_resnet50_pascal4_config.copy({'name': 'yolact_resnet50_pascal5'})
 yolact_resnet50_pascal6_config = yolact_resnet50_pascal4_config.copy({'name': 'yolact_resnet50_pascal6'})
 
-yolact_resnet50_pascal7_config = yolact_resnet50_pascal6_config.copy({
-    'name': 'yolact_resnet50_pascal7',
+yolact_resnet50_2_pascal_config = yolact_resnet50_pascal6_config.copy({
+    'name': 'yolact_resnet50_2_pascal',
+
+    'backbone': yolact_resnet50_pascal6_config.backbone.copy({
+        'pred_aspect_ratios': [ [[1, 1/2, 2, 1/3, 3]] ]*5,
+    })
+})
+
+yolact_resnet50_2_pascal2_config = yolact_resnet50_2_pascal_config.copy({
+    'name': 'yolact_resnet50_2_pascal2',
 
     'use_focal_loss': True,
     'use_sigmoid_focal_loss': True,
