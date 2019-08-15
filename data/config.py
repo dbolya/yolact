@@ -849,6 +849,95 @@ dev_ar2_config = dev_ar_config.copy({
     })
 })
 
+yrm35_32proto_config = coco_base_config.copy({
+    'name': 'yrm35_32proto',
+    
+    'dataset': coco2017_dataset,
+    
+    'max_size': 550,
+
+    'backbone': resnet101_backbone.copy({
+        'pred_aspect_ratios': [[[1, 0.7071067811865475, 1.4142135623730951]],
+                               [[1, 0.7071067811865475, 1.4142135623730951]],
+                               [[1, 0.7071067811865475, 1.4142135623730951]],
+                               [[1, 0.7071067811865475, 1.4142135623730951]],
+                               [[1, 0.7071067811865475, 1.4142135623730951]]],
+        'pred_scales': [[32], [64], [128], [256], [512]],
+        'selected_layers': [1, 2, 3],
+        
+        'use_pixel_scales': True,
+        'use_square_anchors': True,
+    }),
+
+    
+    'extra_head_net': [(256, 3, {'padding': 1})],
+    
+    'fpn': fpn_base.copy({
+        'num_downsample': 2,
+        'use_conv_downsample': True,
+    }),
+
+    'share_prediction_module': True,
+    
+    'mask_type': 1,
+    'mask_alpha': 6.125,
+    'mask_proto_src': 0,
+    'mask_proto_net': [(256, 3, {'padding': 1}),
+                       (256, 3, {'padding': 1}),
+                       (256, 3, {'padding': 1}),
+                       (None, -2, {}),
+                       (256, 3, {'padding': 1}),
+                       (32, 1, {})],
+    'mask_proto_normalize_emulate_roi_pooling': True,
+    
+    'crowd_iou_threshold': 0.7,
+    'negative_iou_threshold': 0.4,
+})
+
+yrm35_16proto_config = yrm35_32proto_config.copy({
+    'name': 'yrm35_16proto',
+
+    'mask_proto_net': [(256, 3, {'padding': 1}),
+                       (256, 3, {'padding': 1}),
+                       (256, 3, {'padding': 1}),
+                       (None, -2, {}),
+                       (256, 3, {'padding': 1}),
+                       (16, 1, {})],
+})
+
+yrm35_8proto_config = yrm35_32proto_config.copy({
+    'name': 'yrm35_8proto',
+
+    'mask_proto_net': [(256, 3, {'padding': 1}),
+                       (256, 3, {'padding': 1}),
+                       (256, 3, {'padding': 1}),
+                       (None, -2, {}),
+                       (256, 3, {'padding': 1}),
+                       (8, 1, {})],
+})
+
+yrm35_4proto_config = yrm35_32proto_config.copy({
+    'name': 'yrm35_4proto',
+
+    'mask_proto_net': [(256, 3, {'padding': 1}),
+                       (256, 3, {'padding': 1}),
+                       (256, 3, {'padding': 1}),
+                       (None, -2, {}),
+                       (256, 3, {'padding': 1}),
+                       (4, 1, {})],
+})
+
+yrm35_2proto_config = yrm35_32proto_config.copy({
+    'name': 'yrm35_2proto',
+
+    'mask_proto_net': [(256, 3, {'padding': 1}),
+                       (256, 3, {'padding': 1}),
+                       (256, 3, {'padding': 1}),
+                       (None, -2, {}),
+                       (256, 3, {'padding': 1}),
+                       (2, 1, {})],
+})
+
 
 # Default config
 cfg = yolact_base_config.copy()
