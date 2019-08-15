@@ -938,6 +938,17 @@ yrm35_2proto_config = yrm35_32proto_config.copy({
                        (2, 1, {})],
 })
 
+yrm35_1proto_config = yrm35_32proto_config.copy({
+    'name': 'yrm35_1proto',
+
+    'mask_proto_net': [(256, 3, {'padding': 1}),
+                       (256, 3, {'padding': 1}),
+                       (256, 3, {'padding': 1}),
+                       (None, -2, {}),
+                       (256, 3, {'padding': 1}),
+                       (1, 1, {})],
+})
+
 
 # Default config
 cfg = yolact_base_config.copy()
