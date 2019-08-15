@@ -856,6 +856,9 @@ yrm35_32proto_config = coco_base_config.copy({
     
     'max_size': 550,
 
+    'max_iter': 200000,
+    'lr_steps': (140000, 180000, 200000),
+
     'backbone': resnet101_backbone.copy({
         'pred_aspect_ratios': [[[1, 0.7071067811865475, 1.4142135623730951]],
                                [[1, 0.7071067811865475, 1.4142135623730951]],
