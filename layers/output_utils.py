@@ -72,6 +72,7 @@ def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear',
     boxes   = dets['box']
     scores  = dets['score']
     masks   = dets['mask']
+    feats   = dets['feats']
 
     if cfg.mask_type == mask_type.lincomb and cfg.eval_mask_branch:
         # At this points masks is only the coefficients
@@ -130,7 +131,7 @@ def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear',
         
         masks = full_masks
 
-    return classes, scores, boxes, masks
+    return classes, scores, boxes, masks, feats
 
 
     

@@ -334,7 +334,7 @@ class Detections:
             json.dump(output, f)
         
 
-        
+feature_classification = []     
 
 def mask_iou(mask1, mask2, iscrowd=False):
     """
@@ -378,7 +378,7 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, num_crowd, image_id, de
                 crowd_classes, gt_classes = split(gt_classes)
 
     with timer.env('Postprocess'):
-        classes, scores, boxes, masks = postprocess(dets, w, h, crop_masks=args.crop, score_threshold=args.score_threshold)
+        classes, scores, boxes, masks, feats = postprocess(dets, w, h, crop_masks=args.crop, score_threshold=args.score_threshold)
 
         if classes.size(0) == 0:
             return
@@ -387,6 +387,7 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, num_crowd, image_id, de
         scores = list(scores.cpu().numpy().astype(float))
         masks = masks.view(-1, h*w).cuda()
         boxes = boxes.cuda()
+        feats = feats.cpu().numpy()
 
 
     if args.output_coco_json:
@@ -418,6 +419,24 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, num_crowd, image_id, de
             ('box',  lambda i,j: bbox_iou_cache[i, j].item(), lambda i,j: crowd_bbox_iou_cache[i,j].item()),
             ('mask', lambda i,j: mask_iou_cache[i, j].item(), lambda i,j: crowd_mask_iou_cache[i,j].item())
         ]
+
+    global feature_classification
+
+    gt_boxes_npy = gt_boxes.cpu().numpy()
+
+    for i in range(bbox_iou_cache.size(0)):
+        max_iou, max_idx = bbox_iou_cache[i].max(dim=0)
+        j = max_idx.item()
+
+        if max_iou > 0.5:
+            feature_classification.append({
+                'score': scores[i],
+                'gt_box': gt_boxes_npy[j],
+                'gt_class': gt_classes[j],
+                'pred_class': classes[i],
+                'feats': feats[i],
+                'image': image_id,
+            })
 
     timer.start('Main loop')
     for _class in set(classes + gt_classes):
@@ -906,6 +925,10 @@ def evaluate(net:Yolact, dataset, train_mode=False):
                     print('Saving data...')
                     with open(args.ap_data_file, 'wb') as f:
                         pickle.dump(ap_data, f)
+
+                    global feature_classification
+                    with open('class_feats.pkl', 'wb') as f:
+                        pickle.dump(feature_classification, f)
 
                 return calc_map(ap_data)
         elif args.benchmark:

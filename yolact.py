@@ -238,7 +238,11 @@ class PredictionModule(nn.Module):
         
         priors = self.make_priors(conv_h, conv_w)
 
-        preds = { 'loc': bbox, 'conf': conf, 'mask': mask, 'priors': priors }
+        ones = torch.ones(1, self.num_priors, device=x.device)
+
+        feats = (x[..., None] @ ones).permute(0, 2, 3, 4, 1).contiguous().view(x.size(0), -1, x.size(1))
+
+        preds = { 'loc': bbox, 'conf': conf, 'mask': mask, 'priors': priors, 'feats': feats }
 
         if cfg.use_instance_coeff:
             preds['inst'] = inst
@@ -564,7 +568,7 @@ class Yolact(nn.Module):
 
 
         with timer.env('pred_heads'):
-            pred_outs = { 'loc': [], 'conf': [], 'mask': [], 'priors': [] }
+            pred_outs = { 'loc': [], 'conf': [], 'mask': [], 'priors': [], 'feats': [] }
 
             if cfg.use_instance_coeff:
                 pred_outs['inst'] = []
