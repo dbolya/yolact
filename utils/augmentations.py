@@ -473,7 +473,7 @@ class RandomRot90(object):
             masks = np.array([np.rot90(mask,k) for mask in masks])
             boxes = boxes.copy()
             for _ in range(k):
-                boxes = np.array([[box[1],old_width - 1 - box[2],box[3],old_width - 1 - box[0]] for box in boxes])
+                boxes = np.array([[box[1], old_width - 1 - box[2], box[3], old_width - 1 - box[0]] for box in boxes])
                 old_width, old_height = old_height, old_width
         return image, masks, boxes, labels
 
