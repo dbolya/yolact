@@ -468,7 +468,7 @@ class RandomRot90(object):
     def __call__(self, image, masks, boxes, labels):
         old_height , old_width , _ = image.shape
         if random.randint(2):
-            k = random.randint(3)
+            k = random.randint(1,4)
             image = np.rot90(image,k)
             masks = np.array([np.rot90(mask,k) for mask in masks])
             boxes = boxes.copy()
