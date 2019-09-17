@@ -457,7 +457,7 @@ class RandomFlip(object):
     def __call__(self, image, masks, boxes, labels):
         height , _ , _ = image.shape
         if random.randint(2):
-            image = image[::-1,:]
+            image = image[::-1, :]
             masks = masks[:, ::-1, :]
             boxes = boxes.copy()
             boxes[:, 1::2] = height - boxes[:, 3::-2]
