@@ -449,6 +449,8 @@ coco_base_config = Config({
     'augment_random_sample_crop': True,
     # Mirror the image with a probability of 1/2
     'augment_random_mirror': True,
+    # Flip the image vertically with a probability of 1/2
+    'augment_random_flip': False,
 
     # If using batchnorm anywhere in the backbone, freeze the batchnorm layer during training.
     # Note: any additional batch norm layers after the backbone will not be frozen.
