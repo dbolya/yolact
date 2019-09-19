@@ -467,14 +467,13 @@ class RandomFlip(object):
 class RandomRot90(object):
     def __call__(self, image, masks, boxes, labels):
         old_height , old_width , _ = image.shape
-        if random.randint(2):
-            k = random.randint(4)
-            image = np.rot90(image,k)
-            masks = np.array([np.rot90(mask,k) for mask in masks])
-            boxes = boxes.copy()
-            for _ in range(k):
-                boxes = np.array([[box[1], old_width - 1 - box[2], box[3], old_width - 1 - box[0]] for box in boxes])
-                old_width, old_height = old_height, old_width
+        k = random.randint(4)
+        image = np.rot90(image,k)
+        masks = np.array([np.rot90(mask,k) for mask in masks])
+        boxes = boxes.copy()
+        for _ in range(k):
+            boxes = np.array([[box[1], old_width - 1 - box[2], box[3], old_width - 1 - box[0]] for box in boxes])
+            old_width, old_height = old_height, old_width
         return image, masks, boxes, labels
 
 
