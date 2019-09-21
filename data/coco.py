@@ -59,11 +59,14 @@ class COCODetection(data.Dataset):
     """
 
     def __init__(self, image_path, info_file, transform=None,
-                 target_transform=COCOAnnotationTransform(),
+                 target_transform=None,
                  dataset_name='MS COCO', has_gt=True):
         # Do this here because we have too many things named COCO
         from pycocotools.coco import COCO
         
+        if target_transform is None:
+            target_transform = COCOAnnotationTransform()
+
         self.root = image_path
         self.coco = COCO(info_file)
         
