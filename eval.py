@@ -931,6 +931,9 @@ def calc_map(ap_data):
         all_maps[iou_type]['all'] = (sum(all_maps[iou_type].values()) / (len(all_maps[iou_type].values())-1))
     
     print_maps(all_maps)
+    
+    # Put in a prettier format so we can serialize it to json during training
+    all_maps = {k: {j: round(u, 2) for j, u in v.items()} for k, v in all_maps.items()}
     return all_maps
 
 def print_maps(all_maps):
@@ -942,7 +945,7 @@ def print_maps(all_maps):
     print(make_row([''] + [('.%d ' % x if isinstance(x, int) else x + ' ') for x in all_maps['box'].keys()]))
     print(make_sep(len(all_maps['box']) + 1))
     for iou_type in ('box', 'mask'):
-        print(make_row([iou_type] + ['%.2f' % x for x in all_maps[iou_type].values()]))
+        print(make_row([iou_type] + ['%.2f' % x if x < 100 else '%.1f' % x for x in all_maps[iou_type].values()]))
     print(make_sep(len(all_maps['box']) + 1))
     print()
 

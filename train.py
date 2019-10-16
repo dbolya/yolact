@@ -1,6 +1,7 @@
 from data import *
 from utils.augmentations import SSDAugmentation, BaseTransform
 from utils.functions import MovingAverage, SavePath
+from utils.logger import Log
 from utils import timer
 from layers.modules import MultiBoxLoss
 from yolact import Yolact
@@ -34,7 +35,7 @@ parser.add_argument('--batch_size', default=8, type=int,
 parser.add_argument('--resume', default=None, type=str,
                     help='Checkpoint state_dict file to resume training from. If this is "interrupt"'\
                          ', the model will resume training from the interrupt file.')
-parser.add_argument('--start_iter', default=0, type=int,
+parser.add_argument('--start_iter', default=-1, type=int,
                     help='Resume training at this iter. If this is -1, the iteration will be'\
                          'determined from the file name.')
 parser.add_argument('--num_workers', default=4, type=int,
@@ -50,7 +51,9 @@ parser.add_argument('--decay', '--weight_decay', default=None, type=float,
 parser.add_argument('--gamma', default=None, type=float,
                     help='For each lr step, what to multiply the lr by. Leave as None to read this from the config.')
 parser.add_argument('--save_folder', default='weights/',
-                    help='Directory for saving checkpoint models')
+                    help='Directory for saving checkpoint models.')
+parser.add_argument('--log_folder', default='logs/',
+                    help='Directory for saving logs.')
 parser.add_argument('--config', default=None,
                     help='The config object to use.')
 parser.add_argument('--save_interval', default=10000, type=int,
@@ -65,9 +68,16 @@ parser.add_argument('--keep_latest_interval', default=100000, type=int,
                     help='When --keep_latest is on, don\'t delete the latest file at these intervals. This should be a multiple of save_interval or 0.')
 parser.add_argument('--dataset', default=None, type=str,
                     help='If specified, override the dataset specified in the config with this one (example: coco2017_dataset).')
+parser.add_argument('--no_log', dest='log', action='store_false',
+                    help='Don\'t log per iteration information into log_folder.')
+parser.add_argument('--no_log_gpu', dest='log_gpu', action='store_false',
+                    help='Don\'t include GPU information in the logs. Set this if nvidia-smi is very slow for you.')
 
-parser.set_defaults(keep_latest=False)
+parser.set_defaults(keep_latest=False, log=True, log_gpu=True)
 args = parser.parse_args()
+
+# This is managed by set_lr
+cur_lr = 0
 
 if args.config is not None:
     set_cfg(args.config)
@@ -144,8 +154,12 @@ def train():
     net = yolact_net
     net.train()
 
+    if args.log:
+        log = Log(cfg.name, args.log_folder, dict(args._get_kwargs()),
+            overwrite=(args.resume is None), log_gpu_stats=args.log_gpu)
+
     # I don't use the timer during training (I use a different timing method).
-    # Apparently there's a race condition with multiple GPUs.
+    # Apparently there's a race condition with multiple GPUs, so disable it just to be safe.
     timer.disable_all()
 
     # Both of these can set args.resume to None, so do them before the check    
@@ -169,7 +183,7 @@ def train():
     criterion = MultiBoxLoss(num_classes=cfg.num_classes,
                              pos_threshold=cfg.positive_iou_threshold,
                              neg_threshold=cfg.negative_iou_threshold,
-                             negpos_ratio=3)
+                             negpos_ratio=cfg.ohem_negpos_ratio)
 
     if args.cuda:
         net       = nn.DataParallel(net).cuda()
@@ -207,7 +221,6 @@ def train():
             # Resume from start_iter
             if (epoch+1)*epoch_size < iteration:
                 continue
-
             
             for datum in data_loader:
                 # Stop if we've reached an epoch if we're resuming from start_iter
@@ -283,6 +296,19 @@ def train():
                     
                     print(('[%3d] %7d ||' + (' %s: %.3f |' * len(losses)) + ' T: %.3f || ETA: %s || timer: %.3f')
                             % tuple([epoch, iteration] + loss_labels + [total, eta_str, elapsed]), flush=True)
+
+                if args.log:
+                    precision = 5
+                    loss_info = {k: round(losses[k].item(), precision) for k in losses}
+                    loss_info['T'] = round(losses[k].item(), precision)
+
+                    if args.log_gpu:
+                        log.log_gpu_stats = (iteration % 10 == 0) # nvidia-smi is sloooow
+                        
+                    log.log('train', loss=loss_info, epoch=epoch, iter=iteration,
+                        lr=round(cur_lr, 10), elapsed=elapsed)
+
+                    log.log_gpu_stats = args.log_gpu
                 
                 iteration += 1
 
@@ -301,7 +327,10 @@ def train():
             # This is done per epoch
             if args.validation_epoch > 0:
                 if epoch % args.validation_epoch == 0 and epoch > 0:
-                    compute_validation_map(yolact_net, val_dataset)
+                    compute_validation_map(epoch, iteration, yolact_net, val_dataset, log if args.log else None)
+        
+        # Compute validation mAP after training is finished
+        compute_validation_map(epoch, iteration, yolact_net, val_dataset, log if args.log else None)
     except KeyboardInterrupt:
         print('Stopping early. Saving network...')
         
@@ -317,6 +346,9 @@ def train():
 def set_lr(optimizer, new_lr):
     for param_group in optimizer.param_groups:
         param_group['lr'] = new_lr
+    
+    global cur_lr
+    cur_lr = new_lr
 
 
 def prepare_data(datum):
@@ -376,12 +408,19 @@ def compute_validation_loss(net, data_loader, criterion):
         loss_labels = sum([[k, losses[k]] for k in loss_types if k in losses], [])
         print(('Validation ||' + (' %s: %.3f |' * len(losses)) + ')') % tuple(loss_labels), flush=True)
 
-def compute_validation_map(yolact_net, dataset):
+def compute_validation_map(epoch, iteration, yolact_net, dataset, log:Log=None):
     with torch.no_grad():
         yolact_net.eval()
+        
+        start = time.time()
         print()
         print("Computing validation mAP (this may take a while)...", flush=True)
-        eval_script.evaluate(yolact_net, dataset, train_mode=True)
+        val_info = eval_script.evaluate(yolact_net, dataset, train_mode=True)
+        end = time.time()
+
+        if log is not None:
+            log.log('val', val_info, elapsed=(end - start), epoch=epoch, iter=iteration)
+
         yolact_net.train()
 
 def setup_eval():
