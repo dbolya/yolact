@@ -525,8 +525,9 @@ class Yolact(nn.Module):
         # Initialize the rest of the conv layers with xavier
         for name, module in self.named_modules():
             # See issue #127 for why we need such a complicated condition if the module is a WeakScriptModuleProxy
+            # Broke in 1.3 (see issue #175), WeakScriptModuleProxy was turned into just ScriptModule.
             # Note that this might break with future pytorch updates, so let me know if it does
-            is_script_conv = isinstance(module, torch.jit.WeakScriptModuleProxy) \
+            is_script_conv = 'Script' in type(module).__name__ \
                 and all_in(module.__dict__['_constants_set'], conv_constants) \
                 and all_in(conv_constants, module.__dict__['_constants_set'])
             
