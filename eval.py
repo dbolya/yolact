@@ -335,6 +335,7 @@ class Detections:
         
 
 feature_classification = []     
+iteration = 0
 
 def mask_iou(mask1, mask2, iscrowd=False):
     """
@@ -420,7 +421,7 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, num_crowd, image_id, de
             ('mask', lambda i,j: mask_iou_cache[i, j].item(), lambda i,j: crowd_mask_iou_cache[i,j].item())
         ]
 
-    global feature_classification
+    global feature_classification, iteration
 
     gt_boxes_npy = gt_boxes.cpu().numpy()
 
@@ -437,6 +438,13 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, num_crowd, image_id, de
                 'feats': feats[i],
                 'image': image_id,
             })
+
+            if len(feature_classification) % 100000 == 0:
+                with open(f'results/class_feats/class_feats_{iteration}.pkl', 'wb') as f:
+                    pickle.dump(feature_classification, f)
+                feature_classification = []
+
+    return
 
     timer.start('Main loop')
     for _class in set(classes + gt_classes):
@@ -865,6 +873,13 @@ def evaluate(net:Yolact, dataset, train_mode=False):
     try:
         # Main eval loop
         for it, image_idx in enumerate(dataset_indices):
+
+            if it <= 17917:
+                continue
+
+            global iteration
+            iteration = it
+
             timer.reset()
 
             with timer.env('Load Data'):

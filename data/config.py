@@ -141,7 +141,7 @@ coco2017_dataset = dataset_base.copy({
     'name': 'COCO 2017',
     
     'train_info': './data/coco/annotations/instances_train2017.json',
-    'valid_info': './data/coco/annotations/instances_val2017.json',
+    'valid_info': './data/coco/annotations/instances_train2017.json', # './data/coco/annotations/instances_val2017.json',
 
     'label_map': COCO_LABEL_MAP
 })

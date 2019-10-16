@@ -35,7 +35,7 @@ def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear',
     dets = det_output[batch_idx]
     
     if dets is None:
-        return [torch.Tensor()] * 4 # Warning, this is 4 copies of the same thing
+        return [torch.Tensor()] * 5 # Warning, this is 4 copies of the same thing
 
     if score_threshold > 0:
         keep = dets['score'] > score_threshold
@@ -45,7 +45,7 @@ def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear',
                 dets[k] = dets[k][keep]
         
         if dets['score'].size(0) == 0:
-            return [torch.Tensor()] * 4
+            return [torch.Tensor()] * 5
 
     # im_w and im_h when it concerns bboxes. This is a workaround hack for preserve_aspect_ratio
     b_w, b_h = (w, h)
