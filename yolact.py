@@ -513,9 +513,26 @@ class Yolact(nn.Module):
         # Initialize the backbone with the pretrained weights.
         self.backbone.init_backbone(backbone_path)
 
+        conv_constants = getattr(nn.Conv2d(1, 1, 1), '__constants__')
+        
+        # Quick lambda to test if one list contains the other
+        def all_in(x, y):
+            for _x in x:
+                if _x not in y:
+                    return False
+            return True
+
         # Initialize the rest of the conv layers with xavier
         for name, module in self.named_modules():
-            if isinstance(module, nn.Conv2d) and module not in self.backbone.backbone_modules:
+            # See issue #127 for why we need such a complicated condition if the module is a WeakScriptModuleProxy
+            # Note that this might break with future pytorch updates, so let me know if it does
+            is_script_conv = isinstance(module, torch.jit.WeakScriptModuleProxy) \
+                and all_in(module.__dict__['_constants_set'], conv_constants) \
+                and all_in(conv_constants, module.__dict__['_constants_set'])
+            
+            is_conv_layer = isinstance(module, nn.Conv2d) or is_script_conv
+            
+            if is_conv_layer and module not in self.backbone.backbone_modules:
                 nn.init.xavier_uniform_(module.weight.data)
                 
                 if module.bias is not None:

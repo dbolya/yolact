@@ -441,6 +441,30 @@ class RandomMirror(object):
         return image, masks, boxes, labels
 
 
+class RandomFlip(object):
+    def __call__(self, image, masks, boxes, labels):
+        height , _ , _ = image.shape
+        if random.randint(2):
+            image = image[::-1, :]
+            masks = masks[:, ::-1, :]
+            boxes = boxes.copy()
+            boxes[:, 1::2] = height - boxes[:, 3::-2]
+        return image, masks, boxes, labels
+
+
+class RandomRot90(object):
+    def __call__(self, image, masks, boxes, labels):
+        old_height , old_width , _ = image.shape
+        k = random.randint(4)
+        image = np.rot90(image,k)
+        masks = np.array([np.rot90(mask,k) for mask in masks])
+        boxes = boxes.copy()
+        for _ in range(k):
+            boxes = np.array([[box[1], old_width - 1 - box[2], box[3], old_width - 1 - box[0]] for box in boxes])
+            old_width, old_height = old_height, old_width
+        return image, masks, boxes, labels
+
+
 class SwapChannels(object):
     """Transforms a tensorized image by swapping the channels in the order
      specified in the swap tuple.
@@ -641,6 +665,8 @@ class SSDAugmentation(object):
             enable_if(cfg.augment_expand, Expand(mean)),
             enable_if(cfg.augment_random_sample_crop, RandomSampleCrop()),
             enable_if(cfg.augment_random_mirror, RandomMirror()),
+            enable_if(cfg.augment_random_flip, RandomFlip()),
+            enable_if(cfg.augment_random_flip, RandomRot90()),
             Resize(),
             enable_if(not cfg.preserve_aspect_ratio, Pad(cfg.max_size, cfg.max_size, mean)),
             ToPercentCoords(),
