@@ -152,3 +152,7 @@ scripts/aws3/
 data/config_dev.py
 data/coco/
 data/sbd/
+
+vid/
+
+_.py

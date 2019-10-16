@@ -317,7 +317,7 @@ class FPN(ScriptModuleWrapper):
                               how many features will it have?
     """
     __constants__ = ['interpolation_mode', 'num_downsample', 'use_conv_downsample',
-                     'lat_layers', 'pred_layers', 'downsample_layers']
+                     'lat_layers', 'pred_layers', 'downsample_layers', 'relu_downsample_layers']
 
     def __init__(self, in_channels):
         super().__init__()
@@ -340,9 +340,10 @@ class FPN(ScriptModuleWrapper):
                 for _ in range(cfg.fpn.num_downsample)
             ])
         
-        self.interpolation_mode  = cfg.fpn.interpolation_mode
-        self.num_downsample      = cfg.fpn.num_downsample
-        self.use_conv_downsample = cfg.fpn.use_conv_downsample
+        self.interpolation_mode     = cfg.fpn.interpolation_mode
+        self.num_downsample         = cfg.fpn.num_downsample
+        self.use_conv_downsample    = cfg.fpn.use_conv_downsample
+        self.relu_downsample_layers = cfg.fpn.relu_downsample_layers
 
     @script_method_wrapper
     def forward(self, convouts:List[torch.Tensor]):
@@ -380,11 +381,17 @@ class FPN(ScriptModuleWrapper):
         # In the original paper, this takes care of P6
         if self.use_conv_downsample:
             for downsample_layer in self.downsample_layers:
-                out.append(downsample_layer(out[-1]))
+                y = downsample_layer(out[-1])
+                if self.relu_downsample_layers:
+                    F.relu(y, inplace=True)
+                out.append(y)
         else:
             for idx in range(self.num_downsample):
                 # Note: this is an untested alternative to out.append(out[-1][:, :, ::2, ::2]). Thanks TorchScript.
-                out.append(nn.functional.max_pool2d(out[-1], 1, stride=2))
+                y = nn.functional.max_pool2d(out[-1], 1, stride=2)
+                if self.relu_downsample_layers:
+                    F.relu(y, inplace=True)
+                out.append(y)
 
         return out
 
@@ -402,7 +409,7 @@ class Yolact(nn.Module):
        ╚═╝    ╚═════╝ ╚══════╝╚═╝  ╚═╝ ╚═════╝   ╚═╝ 
 
 
-    You can set the arguments by chainging them in the backbone config object in config.py.
+    You can set the arguments by changing them in the backbone config object in config.py.
 
     Parameters (in cfg.backbone):
         - selected_layers: The indices of the conv layers to use for prediction.
@@ -478,7 +485,8 @@ class Yolact(nn.Module):
             self.semantic_seg_conv = nn.Conv2d(src_channels[0], cfg.num_classes-1, kernel_size=1)
 
         # For use in evaluation
-        self.detect = Detect(cfg.num_classes, bkg_label=0, top_k=200, conf_thresh=0.05, nms_thresh=0.5)
+        self.detect = Detect(cfg.num_classes, bkg_label=0, top_k=cfg.nms_top_k,
+            conf_thresh=cfg.nms_conf_thresh, nms_thresh=cfg.nms_thresh)
 
     def save_weights(self, path):
         """ Saves the model's weights using compression because the file sizes were getting too big. """
@@ -634,20 +642,29 @@ class Yolact(nn.Module):
             if cfg.use_mask_scoring:
                 pred_outs['score'] = torch.sigmoid(pred_outs['score'])
 
-            if cfg.use_sigmoid_focal_loss:
-                # Note: even though conf[0] exists, this mode doesn't train it so don't use it
-                pred_outs['conf'] = torch.sigmoid(pred_outs['conf'])
-                if cfg.use_mask_scoring:
-                    pred_outs['conf'] *= pred_outs['score']
-            elif cfg.use_objectness_score:
-                # See focal_loss_sigmoid in multibox_loss.py for details
-                objectness = torch.sigmoid(pred_outs['conf'][:, :, 0])
-                pred_outs['conf'][:, :, 1:] = objectness[:, :, None] * F.softmax(pred_outs['conf'][:, :, 1:], -1)
-                pred_outs['conf'][:, :, 0 ] = 1 - objectness
+            if cfg.use_focal_loss:
+                if cfg.use_sigmoid_focal_loss:
+                    # Note: even though conf[0] exists, this mode doesn't train it so don't use it
+                    pred_outs['conf'] = torch.sigmoid(pred_outs['conf'])
+                    if cfg.use_mask_scoring:
+                        pred_outs['conf'] *= pred_outs['score']
+                elif cfg.use_objectness_score:
+                    # See focal_loss_sigmoid in multibox_loss.py for details
+                    objectness = torch.sigmoid(pred_outs['conf'][:, :, 0])
+                    pred_outs['conf'][:, :, 1:] = objectness[:, :, None] * F.softmax(pred_outs['conf'][:, :, 1:], -1)
+                    pred_outs['conf'][:, :, 0 ] = 1 - objectness
+                else:
+                    pred_outs['conf'] = F.softmax(pred_outs['conf'], -1)
             else:
-                if cfg.use_mask_scoring:
-                    pred_outs['conf'][:, :, 0] *= 1 - pred_outs['score'][:, :, 0]
-                pred_outs['conf'] = F.softmax(pred_outs['conf'], -1)
+
+                if cfg.use_objectness_score:
+                    objectness = torch.sigmoid(pred_outs['conf'][:, :, 0])
+                    
+                    pred_outs['conf'][:, :, 1:] = (objectness > 0.10)[..., None] \
+                        * F.softmax(pred_outs['conf'][:, :, 1:], dim=-1)
+                    
+                else:
+                    pred_outs['conf'] = F.softmax(pred_outs['conf'], -1)
 
             return self.detect(pred_outs)
 

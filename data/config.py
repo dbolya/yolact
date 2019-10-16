@@ -389,6 +389,9 @@ fpn_base = Config({
     # Whether to pad the pred layers with 1 on each side (I forgot to add this at the start)
     # This is just here for backwards compatibility
     'pad': True,
+
+    # Whether to add relu to the downsampled layers. This is for bachward-compatability with a bug.
+    'relu_downsample_layers': False,
 })
 
 
@@ -428,6 +431,13 @@ coco_base_config = Config({
 
     # Eval.py sets this if you just want to run YOLACT as a detector
     'eval_mask_branch': True,
+
+    # Top_k examples to consider for NMS
+    'nms_top_k': 200,
+    # Examples with confidence less than this are not considered by NMS
+    'nms_conf_thresh': 0.05,
+    # Boxes with IoU overlap greater than this threshold will be culled during NMS
+    'nms_thresh': 0.5,
 
     # See mask_type for details.
     'mask_type': mask_type.direct,
@@ -491,6 +501,9 @@ coco_base_config = Config({
     # The initial bias toward forground objects, as specified in the focal loss paper
     'focal_loss_init_pi': 0.01,
 
+    # Keeps track of the average number of examples for each class, and weights the loss for that class accordingly.
+    'use_class_balanced_conf': False,
+
     # Whether to use sigmoid focal loss instead of softmax, all else being the same.
     'use_sigmoid_focal_loss': False,
 
@@ -533,6 +546,9 @@ coco_base_config = Config({
     # The rest are neutral and not used in calculating the loss.
     'positive_iou_threshold': 0.5,
     'negative_iou_threshold': 0.5,
+
+    # When using ohem, the ratio between positives and negatives (3 means 3 negatives to 1 positive)
+    'ohem_negpos_ratio': 3,
 
     # If less than 1, anchors treated as a negative that have a crowd iou over this threshold with
     # the crowd boxes will be treated as a neutral.
@@ -740,79 +756,42 @@ yolact_resnet50_v1_config = yolact_resnet50_config.copy({
 })
 
 
-yolact_base_pascal_config = yolact_base_config.copy({
-    'name': 'yolact_base_pascal',
-    
-    # Dataset stuff
-    'dataset': pascal_sbd_dataset,
-    'num_classes': len(pascal_sbd_dataset.class_names) + 1,
-})
-
-yolact_base_pascal2_config = yolact_base_pascal_config.copy({
-    'name': 'yolact_base_pascal2',
-    
-    'lr_steps': (70000, 150000, 175000, 187500),
-    'max_iter': 200000,
-})
-
-yolact_base_pascal3_config = yolact_base_pascal2_config.copy({
-    'name': 'yolact_base_pascal3',
-
-    'max_iter': 50000,
-    'lr_steps': (45000,),
-    'backbone': yolact_base_pascal2_config.backbone.copy({
-        'pred_scales': [[32], [64], [128], [256], [512]],
-        'use_square_anchors': False,
-    })
-})
-
-yolact_resnet50_pascal2_config = yolact_resnet50_config.copy({
-    'name': 'yolact_resnet50_pascal2',
+yolact_resnet50_pascal_config = yolact_resnet50_config.copy({
+    'name': 'yolact_resnet50_pascal',
     
     # Dataset stuff
     'dataset': pascal_sbd_dataset,
     'num_classes': len(pascal_sbd_dataset.class_names) + 1,
 
-    'lr_steps': (70000, 150000, 175000, 187500),
-    'max_iter': 200000,
-})
-
-yolact_resnet50_pascal3_config = yolact_resnet50_pascal2_config.copy({
-    'name': 'yolact_resnet50_pascal3',
-    
-    'max_iter': 50000,
-    'lr_steps': (45000,),
-    'backbone': yolact_resnet50_pascal2_config.backbone.copy({
-        'pred_scales': [[32], [64], [128], [256], [512]],
-        'use_square_anchors': False,
-    })
-})
-
-yolact_resnet50_pascal4_config = yolact_resnet50_pascal3_config.copy({
-    'name': 'yolact_resnet50_pascal4',
-    
     'max_iter': 120000,
     'lr_steps': (60000, 100000),
-})
+    
+    'backbone': yolact_resnet50_config.backbone.copy({
+        'pred_scales': [[32], [64], [128], [256], [512]],
+        'use_square_anchors': False,
+    }),
 
-yolact_resnet50_pascal5_config = yolact_resnet50_pascal4_config.copy({'name': 'yolact_resnet50_pascal5'})
-yolact_resnet50_pascal6_config = yolact_resnet50_pascal4_config.copy({'name': 'yolact_resnet50_pascal6'})
-
-yolact_resnet50_2_pascal_config = yolact_resnet50_pascal6_config.copy({
-    'name': 'yolact_resnet50_2_pascal',
-
-    'backbone': yolact_resnet50_pascal6_config.backbone.copy({
-        'pred_aspect_ratios': [ [[1, 1/2, 2, 1/3, 3]] ]*5,
+    'fpn': yolact_resnet50_config.fpn.copy({
+        'relu_downsample_layers': True,
     })
 })
 
-yolact_resnet50_2_pascal2_config = yolact_resnet50_2_pascal_config.copy({
-    'name': 'yolact_resnet50_2_pascal2',
+yolact_resnet50_pascal_weight_config = yolact_resnet50_pascal_config.copy({
+    'name': 'yolact_resnet50_pascal_weight',
+    
+    'use_class_balanced_conf': True,
+})
 
-    'use_focal_loss': True,
-    'use_sigmoid_focal_loss': True,
+yolact_resnet50_pascal_weight_allneg_config = yolact_resnet50_pascal_weight_config.copy({
+    'name': 'yolact_resnet50_pascal_weight_allneg',
+    
+    'ohem_negpos_ratio': 10000,
+})
 
-    'conf_alpha': 10,
+yolact_resnet50_pascal_obj_config = yolact_resnet50_pascal_config.copy({
+    'name': 'yolact_resnet50_pascal_obj',
+
+    'use_objectness_score': True
 })
 
 

@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
-from ..box_utils import match, log_sum_exp, decode, center_size, crop, elemwise_mask_iou
+from ..box_utils import match, log_sum_exp, decode, center_size, crop, elemwise_mask_iou, elemwise_box_iou
 
 from data import cfg, mask_type, activation_func
 
@@ -42,6 +42,10 @@ class MultiBoxLoss(nn.Module):
         # Note that the area is relative (so 1 would be the entire image)
         self.l1_expected_area = 20*20/70/70
         self.l1_alpha = 0.1
+
+        if cfg.use_class_balanced_conf:
+            self.class_instances = None
+            self.total_instances = 0
 
     def forward(self, predictions, wrapper, wrapper_mask):
         """Multibox Loss
@@ -173,7 +177,10 @@ class MultiBoxLoss(nn.Module):
             else:
                 losses['C'] = self.focal_conf_loss(conf_data, conf_t)
         else:
-            losses['C'] = self.ohem_conf_loss(conf_data, conf_t, pos, batch_size)
+            if cfg.use_objectness_score:
+                losses['C'] = self.conf_objectness_loss(conf_data, conf_t, batch_size, loc_p, loc_t, priors)
+            else:
+                losses['C'] = self.ohem_conf_loss(conf_data, conf_t, pos, batch_size)
 
         # These losses also don't depend on anchors
         if cfg.use_class_existence_loss:
@@ -257,7 +264,29 @@ class MultiBoxLoss(nn.Module):
         neg_idx = neg.unsqueeze(2).expand_as(conf_data)
         conf_p = conf_data[(pos_idx+neg_idx).gt(0)].view(-1, self.num_classes)
         targets_weighted = conf_t[(pos+neg).gt(0)]
-        loss_c = F.cross_entropy(conf_p, targets_weighted, reduction='sum')
+        loss_c = F.cross_entropy(conf_p, targets_weighted, reduction='none')
+
+        if cfg.use_class_balanced_conf:
+            # Lazy initialization
+            if self.class_instances is None:
+                self.class_instances = torch.zeros(self.num_classes, device=targets_weighted.device)
+            
+            classes, counts = targets_weighted.unique(return_counts=True)
+            
+            for _cls, _cnt in zip(classes.cpu().numpy(), counts.cpu().numpy()):
+                self.class_instances[_cls] += _cnt
+
+            self.total_instances += targets_weighted.size(0)
+
+            weighting = 1 - (self.class_instances[targets_weighted] / self.total_instances)
+            weighting = torch.clamp(weighting, min=1/self.num_classes)
+
+            # If you do the math, the average weight of self.class_instances is this
+            avg_weight = (self.num_classes - 1) / self.num_classes
+
+            loss_c = (loss_c * weighting).sum() / avg_weight
+        else:
+            loss_c = loss_c.sum()
         
         return cfg.conf_alpha * loss_c
 
@@ -354,6 +383,44 @@ class MultiBoxLoss(nn.Module):
         class_loss = F.cross_entropy(conf_data_pos, conf_t_pos, reduction='sum')
 
         return cfg.conf_alpha * (class_loss + (obj_loss * keep).sum())
+    
+    def conf_objectness_loss(self, conf_data, conf_t, batch_size, loc_p, loc_t, priors):
+        """
+        Instead of using softmax, use class[0] to be p(obj) * p(IoU) as in YOLO.
+        Then for the rest of the classes, softmax them and apply CE for only the positive examples.
+        """
+
+        conf_t = conf_t.view(-1) # [batch_size*num_priors]
+        conf_data = conf_data.view(-1, conf_data.size(-1)) # [batch_size*num_priors, num_classes]
+
+        pos_mask = (conf_t > 0)
+        neg_mask = (conf_t == 0)
+
+        obj_data = conf_data[:, 0]
+        obj_data_pos = obj_data[pos_mask]
+        obj_data_neg = obj_data[neg_mask]
+
+        # Don't be confused, this is just binary cross entropy similified
+        obj_neg_loss = - F.logsigmoid(-obj_data_neg).sum()
+
+        with torch.no_grad():
+            pos_priors = priors.unsqueeze(0).expand(batch_size, -1, -1).reshape(-1, 4)[pos_mask, :]
+
+            boxes_pred = decode(loc_p, pos_priors, cfg.use_yolo_regressors)
+            boxes_targ = decode(loc_t, pos_priors, cfg.use_yolo_regressors)
+
+            iou_targets = elemwise_box_iou(boxes_pred, boxes_targ)
+
+        obj_pos_loss = - iou_targets * F.logsigmoid(obj_data_pos) - (1 - iou_targets) * F.logsigmoid(-obj_data_pos)
+        obj_pos_loss = obj_pos_loss.sum()
+
+        # All that was the objectiveness loss--now time for the class confidence loss
+        conf_data_pos = (conf_data[:, 1:])[pos_mask] # Now this has just 80 classes
+        conf_t_pos    = conf_t[pos_mask] - 1         # So subtract 1 here
+
+        class_loss = F.cross_entropy(conf_data_pos, conf_t_pos, reduction='sum')
+
+        return cfg.conf_alpha * (class_loss + obj_pos_loss + obj_neg_loss)
 
 
     def direct_mask_loss(self, pos_idx, idx_t, loc_data, mask_data, priors, masks):

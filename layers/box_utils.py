@@ -80,6 +80,22 @@ def jaccard(box_a, box_b, iscrowd:bool=False):
     out = inter / area_a if iscrowd else inter / union
     return out if use_batch else out.squeeze(0)
 
+def elemwise_box_iou(box_a, box_b):
+    """ Does the same as above but instead of pairwise, elementwise along the inner dimension. """
+    max_xy = torch.min(box_a[:, 2:], box_b[:, 2:])
+    min_xy = torch.max(box_a[:, :2], box_b[:, :2])
+    inter = torch.clamp((max_xy - min_xy), min=0)
+    inter = inter[:, 0] * inter[:, 1]
+
+    area_a = (box_a[:, 2] - box_a[:, 0]) * (box_a[:, 3] - box_a[:, 1])
+    area_b = (box_b[:, 2] - box_b[:, 0]) * (box_b[:, 3] - box_b[:, 1])
+
+    union = area_a + area_b - inter
+    union = torch.clamp(union, min=0.1)
+
+    # Return value is [n] for inputs [n, 4]
+    return torch.clamp(inter / union, max=1)
+
 def mask_iou(masks_a, masks_b, iscrowd=False):
     """
     Computes the pariwise mask IoU between two sets of masks of size [a, h, w] and [b, h, w].
@@ -97,7 +113,7 @@ def mask_iou(masks_a, masks_b, iscrowd=False):
 
     return intersection / (area_a + area_b - intersection) if not iscrowd else intersection / area_a
 
-def elemwise_mask_iou(masks_a, masks_b, dim=0):
+def elemwise_mask_iou(masks_a, masks_b):
     """ Does the same as above but instead of pairwise, elementwise along the outer dimension. """
     masks_a = masks_a.view(-1, masks_a.size(-1))
     masks_b = masks_b.view(-1, masks_b.size(-1))
