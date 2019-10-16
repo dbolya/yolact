@@ -4,6 +4,9 @@ This document will detail all changes I make.
 I don't know how I'm going to be versioning things yet, so you get dates for now.
 
 ```
+Pending Changes:
+  - Changed the default behavior for --start_iter from 0 to -1 (latest iter)
+
 2019.09.20
   - Fixed a bug where custom label maps weren't being applied properly because of global default argument initialization.
 2019.08.29
