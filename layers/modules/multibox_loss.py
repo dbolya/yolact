@@ -47,7 +47,7 @@ class MultiBoxLoss(nn.Module):
             self.class_instances = None
             self.total_instances = 0
 
-    def forward(self, predictions, wrapper, wrapper_mask):
+    def forward(self, predictions, targets, masks, num_crowds):
         """Multibox Loss
         Args:
             predictions (tuple): A tuple containing loc preds, conf preds,
@@ -81,14 +81,10 @@ class MultiBoxLoss(nn.Module):
         score_data = predictions['score'] if cfg.use_mask_scoring   else None   
         inst_data  = predictions['inst']  if cfg.use_instance_coeff else None
         
-        targets, masks, num_crowds = wrapper.get_args(wrapper_mask)
         labels = [None] * len(targets) # Used in sem segm loss
 
         batch_size = loc_data.size(0)
-        # This is necessary for training on multiple GPUs because
-        # DataParallel will cat the priors from each GPU together
-        priors = priors[:loc_data.size(1), :]
-        num_priors = (priors.size(0))
+        num_priors = priors.size(0)
         num_classes = self.num_classes
 
         # Match priors (default boxes) and ground truth boxes
@@ -244,7 +240,11 @@ class MultiBoxLoss(nn.Module):
         else:
             # i.e. -softmax(class 0 confidence)
             loss_c = log_sum_exp(batch_conf) - batch_conf[:, 0]
-        
+
+        if cfg.tie_anchor_classes:
+            conf_t = conf_t.view(num, -1, 3).max(dim=-1)[0][..., None].expand(-1, -1, 3).contiguous().view(num, -1)
+            pos = (conf_t > 0)
+
         # Hard Negative Mining
         loss_c = loss_c.view(num, -1)
         loss_c[pos]        = 0 # filter out pos boxes
@@ -538,7 +538,10 @@ class MultiBoxLoss(nn.Module):
             
             if process_gt_bboxes:
                 # Note: this is in point-form
-                pos_gt_box_t = gt_box_t[idx, cur_pos]
+                if cfg.mask_proto_crop_with_pred_box:
+                    pos_gt_box_t = decode(loc_data[idx, :, :], priors.data, cfg.use_yolo_regressors)[cur_pos]
+                else:
+                    pos_gt_box_t = gt_box_t[idx, cur_pos]
 
             if pos_idx_t.size(0) == 0:
                 continue

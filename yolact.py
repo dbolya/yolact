@@ -6,6 +6,7 @@ import numpy as np
 from itertools import product
 from math import sqrt
 from typing import List
+from collections import defaultdict
 
 from data.config import cfg, mask_type
 from layers import Detect
@@ -95,7 +96,7 @@ def make_net(in_channels, conf, include_last_relu=True):
 
     return nn.Sequential(*(net)), in_channels
 
-
+prior_cache = defaultdict(lambda: None)
 
 class PredictionModule(nn.Module):
     """
@@ -252,7 +253,7 @@ class PredictionModule(nn.Module):
         if cfg.mask_proto_split_prototypes_by_head and cfg.mask_type == mask_type.lincomb:
             mask = F.pad(mask, (self.index * self.mask_dim, (self.num_heads - self.index - 1) * self.mask_dim), mode='constant', value=0)
         
-        priors = self.make_priors(conv_h, conv_w)
+        priors = self.make_priors(conv_h, conv_w, x.device)
 
         preds = { 'loc': bbox, 'conf': conf, 'mask': mask, 'priors': priors }
 
@@ -264,9 +265,11 @@ class PredictionModule(nn.Module):
         
         return preds
     
-    def make_priors(self, conv_h, conv_w):
+    def make_priors(self, conv_h, conv_w, device):
         """ Note that priors are [x,y,width,height] where (x,y) is the center of the box. """
-        
+        global prior_cache
+        size = (conv_h, conv_w)
+
         with timer.env('makepriors'):
             if self.last_img_size != (cfg._tmp_img_w, cfg._tmp_img_h):
                 prior_data = []
@@ -295,9 +298,20 @@ class PredictionModule(nn.Module):
 
                             prior_data += [x, y, w, h]
                 
-                self.priors = torch.Tensor(prior_data).cuda().view(-1, 4).detach()
+                self.priors = torch.Tensor(prior_data, device=device).view(-1, 4).detach()
+                self.priors.requires_grad = False
                 self.last_img_size = (cfg._tmp_img_w, cfg._tmp_img_h)
                 self.last_conv_size = (conv_w, conv_h)
+                prior_cache[size] = None
+            elif self.priors.device != device:
+                # This whole weird situation is so that DataParalell doesn't copy the priors each iteration
+                if prior_cache[size] is None:
+                    prior_cache[size] = {}
+                
+                if device not in prior_cache[size]:
+                    prior_cache[size][device] = self.priors.to(device)
+
+                self.priors = prior_cache[size][device]
         
         return self.priors
 
@@ -316,7 +330,7 @@ class FPN(ScriptModuleWrapper):
         - in_channels (list): For each conv layer you supply in the forward pass,
                               how many features will it have?
     """
-    __constants__ = ['interpolation_mode', 'num_downsample', 'use_conv_downsample',
+    __constants__ = ['interpolation_mode', 'num_downsample', 'use_conv_downsample', 'relu_pred_layers',
                      'lat_layers', 'pred_layers', 'downsample_layers', 'relu_downsample_layers']
 
     def __init__(self, in_channels):
@@ -344,6 +358,7 @@ class FPN(ScriptModuleWrapper):
         self.num_downsample         = cfg.fpn.num_downsample
         self.use_conv_downsample    = cfg.fpn.use_conv_downsample
         self.relu_downsample_layers = cfg.fpn.relu_downsample_layers
+        self.relu_pred_layers       = cfg.fpn.relu_pred_layers
 
     @script_method_wrapper
     def forward(self, convouts:List[torch.Tensor]):
@@ -376,22 +391,25 @@ class FPN(ScriptModuleWrapper):
         j = len(convouts)
         for pred_layer in self.pred_layers:
             j -= 1
-            out[j] = F.relu(pred_layer(out[j]))
+            out[j] = pred_layer(out[j])
+
+            if self.relu_pred_layers:
+                F.relu(out[j], inplace=True)
+
+        cur_idx = len(out)
 
         # In the original paper, this takes care of P6
         if self.use_conv_downsample:
             for downsample_layer in self.downsample_layers:
-                y = downsample_layer(out[-1])
-                if self.relu_downsample_layers:
-                    F.relu(y, inplace=True)
-                out.append(y)
+                out.append(downsample_layer(out[-1]))
         else:
             for idx in range(self.num_downsample):
                 # Note: this is an untested alternative to out.append(out[-1][:, :, ::2, ::2]). Thanks TorchScript.
-                y = nn.functional.max_pool2d(out[-1], 1, stride=2)
-                if self.relu_downsample_layers:
-                    F.relu(y, inplace=True)
-                out.append(y)
+                out.append(nn.functional.max_pool2d(out[-1], 1, stride=2))
+
+        if self.relu_downsample_layers:
+            for idx in range(cur_idx, len(out)):
+                out[idx] = F.relu(out[idx], inplace=False)
 
         return out
 
@@ -563,14 +581,14 @@ class Yolact(nn.Module):
         if cfg.freeze_bn:
             self.freeze_bn()
 
-    def freeze_bn(self):
+    def freeze_bn(self, enable=False):
         """ Adapted from https://discuss.pytorch.org/t/how-to-train-with-frozen-batchnorm/12106/8 """
         for module in self.modules():
             if isinstance(module, nn.BatchNorm2d):
-                module.eval()
+                module.train() if enable else module.eval()
 
-                module.weight.requires_grad = False
-                module.bias.requires_grad = False
+                module.weight.requires_grad = enable
+                module.bias.requires_grad = enable
 
     def forward(self, x):
         """ The input should be of size [batch_size, 3, img_h, img_w] """

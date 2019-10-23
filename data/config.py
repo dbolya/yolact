@@ -350,6 +350,7 @@ mask_type = Config({
     #   - mask_proto_double_loss (bool): Whether to use the old loss in addition to any special new losses.
     #   - mask_proto_double_loss_alpha (float): The alpha to weight the above loss.
     #   - mask_proto_split_prototypes_by_head (bool): If true, this will give each prediction head its own prototypes.
+    #   - mask_proto_crop_with_pred_box (bool): Whether to crop with the predicted box or the gt box.
     'lincomb': 1,
 })
 
@@ -390,8 +391,11 @@ fpn_base = Config({
     # This is just here for backwards compatibility
     'pad': True,
 
-    # Whether to add relu to the downsampled layers. This is for bachward-compatability with a bug.
+    # Whether to add relu to the downsampled layers.
     'relu_downsample_layers': False,
+
+    # Whether to add relu to the regular layers
+    'relu_pred_layers': True,
 })
 
 
@@ -468,6 +472,7 @@ coco_base_config = Config({
     'mask_proto_double_loss': False,
     'mask_proto_double_loss_alpha': 1,
     'mask_proto_split_prototypes_by_head': False,
+    'mask_proto_crop_with_pred_box': False,
 
     # SSD data augmentation parameters
     # Randomize hue, vibrance, etc.
@@ -606,6 +611,9 @@ coco_base_config = Config({
 
     # Use command-line arguments to set this.
     'no_jit': False,
+
+    # All anchors are trained to produce the same classification regardless of matching.
+    'tie_anchor_classes': False,
 
     'backbone': None,
     'name': 'base_config',
@@ -761,7 +769,7 @@ yolact_resnet50_v1_config = yolact_resnet50_config.copy({
 
 
 yolact_resnet50_pascal_config = yolact_resnet50_config.copy({
-    'name': 'yolact_resnet50_pascal',
+    'name': None, # Will default to yolact_resnet50_pascal
     
     # Dataset stuff
     'dataset': pascal_sbd_dataset,
@@ -773,28 +781,52 @@ yolact_resnet50_pascal_config = yolact_resnet50_config.copy({
     'backbone': yolact_resnet50_config.backbone.copy({
         'pred_scales': [[32], [64], [128], [256], [512]],
         'use_square_anchors': False,
-    }),
-
-    'fpn': yolact_resnet50_config.fpn.copy({
-        'relu_downsample_layers': True,
     })
 })
 
+factor = 44 / 8
+
+yolact_resnet50_pascal_4gpu_config = yolact_resnet50_pascal_config.copy({
+    'lr': yolact_resnet50_pascal_config.lr * factor,
+    'max_iter': yolact_resnet50_pascal_config.max_iter // factor,
+    'lr_steps': [x // factor for x in yolact_resnet50_pascal_config.lr_steps],
+})
+
+yolact_resnet50_pascal_4gpu_pred_box_config = yolact_resnet50_pascal_4gpu_config.copy({
+    'mask_proto_crop_with_pred_box': True,
+})
+
+factor = 28 / 8
+
+yolact_resnet50_pascal_2gpu_config = yolact_resnet50_pascal_config.copy({
+    'lr': yolact_resnet50_pascal_config.lr * factor,
+    'max_iter': yolact_resnet50_pascal_config.max_iter // factor,
+    'lr_steps': [x // factor for x in yolact_resnet50_pascal_config.lr_steps],
+})
+
+yolact_resnet50_pascal_norelu_config = yolact_resnet50_pascal_config.copy({
+    'fpn': yolact_resnet50_config.fpn
+})
+
+yolact_resnet50_pascal_norelu2_config = yolact_resnet50_pascal_norelu_config.copy({
+    'fpn': yolact_resnet50_config.fpn.copy({
+        'relu_pred_layers': False,
+    })
+})
+
+yolact_resnet50_pascal_tied_config = yolact_resnet50_pascal_config.copy({
+    'tie_anchor_classes': True
+})
+
 yolact_resnet50_pascal_weight_config = yolact_resnet50_pascal_config.copy({
-    'name': 'yolact_resnet50_pascal_weight',
-    
     'use_class_balanced_conf': True,
 })
 
 yolact_resnet50_pascal_weight_allneg_config = yolact_resnet50_pascal_weight_config.copy({
-    'name': 'yolact_resnet50_pascal_weight_allneg',
-    
     'ohem_negpos_ratio': 10000,
 })
 
 yolact_resnet50_pascal_obj_config = yolact_resnet50_pascal_config.copy({
-    'name': 'yolact_resnet50_pascal_obj',
-
     'use_objectness_score': True
 })
 
@@ -946,6 +978,9 @@ def set_cfg(config_name:str):
     # Note this is not just an eval because I'm lazy, but also because it can
     # be used like ssd300_config.copy({'max_size': 400}) for extreme fine-tuning
     cfg.replace(eval(config_name))
+
+    if cfg.name is None:
+        cfg.name = config_name.split('_config')[0]
 
 def set_dataset(dataset_name:str):
     """ Sets the dataset of the current config. """

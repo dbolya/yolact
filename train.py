@@ -72,8 +72,12 @@ parser.add_argument('--no_log', dest='log', action='store_false',
                     help='Don\'t log per iteration information into log_folder.')
 parser.add_argument('--no_log_gpu', dest='log_gpu', action='store_false',
                     help='Don\'t include GPU information in the logs. Set this if nvidia-smi is very slow for you.')
+parser.add_argument('--no_interrupt', dest='interrupt', action='store_false',
+                    help='Don\'t save an interrupt when KeyboardInterrupt is caught.')
+parser.add_argument('--batch_alloc', default=None, type=str,
+                    help='If using multiple GPUS, you can set this to be a comma separated list detailing which GPUs should get what local batch size (It should add up to your total batch size).')
 
-parser.set_defaults(keep_latest=False, log=True, log_gpu=True)
+parser.set_defaults(keep_latest=False, log=True, log_gpu=True, interrupt=True)
 args = parser.parse_args()
 
 # This is managed by set_lr
@@ -105,35 +109,44 @@ if torch.cuda.is_available():
 else:
     torch.set_default_tensor_type('torch.FloatTensor')
 
-class ScatterWrapper:
-    """ Input is any number of lists. This will preserve them through a dataparallel scatter. """
-    def __init__(self, *args):
-        for arg in args:
-            if not isinstance(arg, list):
-                print('Warning: ScatterWrapper got input of non-list type.')
-        self.args = args
-        self.batch_size = len(args[0])
+class NetLoss(nn.Module):
+    """
+    A wrapper for running the network and computing the loss
+    This is so we can more efficiently use DataParallel.
+    """
     
-    def make_mask(self):
-        out = torch.Tensor(list(range(self.batch_size))).long()
-        if args.cuda: return out.cuda()
-        else: return out
+    def __init__(self, net:Yolact, criterion:MultiBoxLoss):
+        super().__init__()
+
+        self.net = net
+        self.criterion = criterion
     
-    def get_args(self, mask):
-        device = mask.device
-        mask = [int(x) for x in mask]
-        out_args = [[] for _ in self.args]
+    def forward(self, images, targets, masks, num_crowds):
+        preds = self.net(images)
+        return self.criterion(preds, targets, masks, num_crowds)
 
-        for out, arg in zip(out_args, self.args):
-            for idx in mask:
-                x = arg[idx]
-                if isinstance(x, torch.Tensor):
-                    x = x.to(device)
-                out.append(x)
-        
-        return out_args
+class CustomDataParallel(nn.DataParallel):
+    """
+    This is a custom version of DataParallel that works better with our training data.
+    It should also be faster than the general case.
+    """
 
+    def scatter(self, inputs, kwargs, device_ids):
+        # More like scatter and data prep at the same time. The point is we prep the data in such a way
+        # that no scatter is necessary, and there's no need to shuffle stuff around different GPUs.
+        devices = ['cuda:' + str(x) for x in device_ids]
+        splits = prepare_data(inputs[0], devices, allocation=args.batch_alloc)
+
+        return [[split[device_idx] for split in splits] for device_idx in range(len(devices))], \
+            [kwargs] * len(devices)
+
+    def gather(self, outputs, output_device):
+        out = {}
+
+        for k in outputs[0]:
+            out[k] = torch.stack([output[k].to(output_device) for output in outputs])
         
+        return out
 
 def train():
     if not os.path.exists(args.save_folder):
@@ -185,9 +198,20 @@ def train():
                              neg_threshold=cfg.negative_iou_threshold,
                              negpos_ratio=cfg.ohem_negpos_ratio)
 
+    if args.batch_alloc is not None:
+        args.batch_alloc = [int(x) for x in args.batch_alloc.split(',')]
+        if sum(args.batch_alloc) != args.batch_size:
+            print('Error: Batch allocation (%s) does not sum to batch size (%s).' % (args.batch_alloc, args.batch_size))
+            exit(-1)
+
+    net = CustomDataParallel(NetLoss(net, criterion))
     if args.cuda:
-        net       = nn.DataParallel(net).cuda()
-        criterion = nn.DataParallel(criterion).cuda()
+        net = net.cuda()
+    
+    # Initialize everything
+    if not cfg.freeze_bn: yolact_net.freeze_bn() # Freeze bn so we don't kill our means
+    yolact_net(torch.zeros(1, 3, cfg.max_size, cfg.max_size).cuda())
+    if not cfg.freeze_bn: yolact_net.freeze_bn(True)
 
     # loss counters
     loc_loss = 0
@@ -254,23 +278,19 @@ def train():
                 while step_index < len(cfg.lr_steps) and iteration >= cfg.lr_steps[step_index]:
                     step_index += 1
                     set_lr(optimizer, args.lr * (args.gamma ** step_index))
-
-                # Load training data
-                # Note, for training on multiple gpus this will use the custom replicate and gather I wrote up there
-                images, targets, masks, num_crowds = prepare_data(datum)
                 
-                # Forward Pass
-                out = net(images)
-                
-                # Compute Loss
+                # Zero the grad to get ready to compute gradients
                 optimizer.zero_grad()
+
+                # Forward Pass + Compute loss at the same time (see CustomDataParallel and NetLoss)
+                losses = net(datum)
                 
-                wrapper = ScatterWrapper(targets, masks, num_crowds)
-                losses = criterion(out, wrapper, wrapper.make_mask())
-                
-                losses = { k: v.mean() for k,v in losses.items() } # Mean here because Dataparallel
+                losses = { k: (v).mean() for k,v in losses.items() } # Mean here because Dataparallel
                 loss = sum([losses[k] for k in losses])
                 
+                # no_inf_mean removes some components from the loss, so make sure to backward through all of it
+                # all_loss = sum([v.mean() for v in losses.values()])
+
                 # Backprop
                 loss.backward() # Do this to free up vram even if loss is not finite
                 if torch.isfinite(loss).item():
@@ -332,12 +352,13 @@ def train():
         # Compute validation mAP after training is finished
         compute_validation_map(epoch, iteration, yolact_net, val_dataset, log if args.log else None)
     except KeyboardInterrupt:
-        print('Stopping early. Saving network...')
-        
-        # Delete previous copy of the interrupted network so we don't spam the weights folder
-        SavePath.remove_interrupt(args.save_folder)
-        
-        yolact_net.save_weights(save_path(epoch, repr(iteration) + '_interrupt'))
+        if args.interrupt:
+            print('Stopping early. Saving network...')
+            
+            # Delete previous copy of the interrupted network so we don't spam the weights folder
+            SavePath.remove_interrupt(args.save_folder)
+            
+            yolact_net.save_weights(save_path(epoch, repr(iteration) + '_interrupt'))
         exit()
 
     yolact_net.save_weights(save_path(epoch, iteration))
@@ -350,30 +371,62 @@ def set_lr(optimizer, new_lr):
     global cur_lr
     cur_lr = new_lr
 
+def gradinator(x):
+    x.requires_grad = False
+    return x
 
-def prepare_data(datum):
-    images, (targets, masks, num_crowds) = datum
+def prepare_data(datum, devices:list=None, allocation:list=None):
+    with torch.no_grad():
+        if devices is None:
+            devices = ['cuda:0'] if args.cuda else ['cpu']
+        if allocation is None:
+            allocation = [args.batch_size // len(devices)] * (len(devices) - 1)
+            allocation.append(args.batch_size - sum(allocation)) # The rest might need more/less
+        
+        images, (targets, masks, num_crowds) = datum
 
-    if args.cuda:
-        images = [Variable(img.cuda(), requires_grad=False) for img in images]
-        targets = [Variable(ann.cuda(), requires_grad=False) for ann in targets]
-        masks = [Variable(mask.cuda(), requires_grad=False) for mask in masks]
+        cur_idx = 0
+        for device, alloc in zip(devices, allocation):
+            for _ in range(alloc):
+                images[cur_idx]  = gradinator(images[cur_idx].to(device))
+                targets[cur_idx] = gradinator(targets[cur_idx].to(device))
+                masks[cur_idx]   = gradinator(masks[cur_idx].to(device))
+                cur_idx += 1
+
+        if cfg.preserve_aspect_ratio:
+            # Choose a random size from the batch
+            _, h, w = images[random.randint(0, len(images)-1)].size()
+
+            for idx, (image, target, mask, num_crowd) in enumerate(zip(images, targets, masks, num_crowds)):
+                images[idx], targets[idx], masks[idx], num_crowds[idx] \
+                    = enforce_size(image, target, mask, num_crowd, w, h)
+        
+        cur_idx = 0
+        split_images, split_targets, split_masks, split_numcrowds \
+            = [[None for alloc in allocation] for _ in range(4)]
+
+        for device_idx, alloc in enumerate(allocation):
+            split_images[device_idx]    = torch.stack(images[cur_idx:cur_idx+alloc], dim=0)
+            split_targets[device_idx]   = targets[cur_idx:cur_idx+alloc]
+            split_masks[device_idx]     = masks[cur_idx:cur_idx+alloc]
+            split_numcrowds[device_idx] = num_crowds[cur_idx:cur_idx+alloc]
+
+            cur_idx += alloc
+
+        return split_images, split_targets, split_masks, split_numcrowds
+
+def no_inf_mean(x:torch.Tensor):
+    """
+    Computes the mean of a vector, throwing out all inf values.
+    If there are no non-inf values, this will return inf (i.e., just the normal mean).
+    """
+
+    no_inf = [a for a in x if torch.isfinite(a)]
+
+    if len(no_inf) > 0:
+        return sum(no_inf) / len(no_inf)
     else:
-        images = [Variable(img, requires_grad=False) for img in images]
-        targets = [Variable(ann, requires_grad=False) for ann in targets]
-        masks = [Variable(mask, requires_grad=False) for mask in masks]
-
-    if cfg.preserve_aspect_ratio:
-        # Choose a random size from the batch
-        _, h, w = images[random.randint(0, len(images)-1)].size()
-
-        for idx, (image, target, mask, num_crowd) in enumerate(zip(images, targets, masks, num_crowds)):
-            images[idx], targets[idx], masks[idx], num_crowds[idx] \
-                = enforce_size(image, target, mask, num_crowd, w, h)
-    
-    images = torch.stack(images, 0)
-
-    return images, targets, masks, num_crowds
+        return x.mean()
 
 def compute_validation_loss(net, data_loader, criterion):
     global loss_types
