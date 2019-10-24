@@ -241,10 +241,6 @@ class MultiBoxLoss(nn.Module):
             # i.e. -softmax(class 0 confidence)
             loss_c = log_sum_exp(batch_conf) - batch_conf[:, 0]
 
-        if cfg.tie_anchor_classes:
-            conf_t = conf_t.view(num, -1, 3).max(dim=-1)[0][..., None].expand(-1, -1, 3).contiguous().view(num, -1)
-            pos = (conf_t > 0)
-
         # Hard Negative Mining
         loss_c = loss_c.view(num, -1)
         loss_c[pos]        = 0 # filter out pos boxes

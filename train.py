@@ -76,8 +76,10 @@ parser.add_argument('--no_interrupt', dest='interrupt', action='store_false',
                     help='Don\'t save an interrupt when KeyboardInterrupt is caught.')
 parser.add_argument('--batch_alloc', default=None, type=str,
                     help='If using multiple GPUS, you can set this to be a comma separated list detailing which GPUs should get what local batch size (It should add up to your total batch size).')
+parser.add_argument('--no_autoscale', dest='autoscale', action='store_false',
+                    help='YOLACT will automatically scale the lr and the number of iterations depending on the batch size. Set this if you want to disable that.')
 
-parser.set_defaults(keep_latest=False, log=True, log_gpu=False, interrupt=True)
+parser.set_defaults(keep_latest=False, log=True, log_gpu=False, interrupt=True, autoscale=True)
 args = parser.parse_args()
 
 # This is managed by set_lr
@@ -96,6 +98,22 @@ replace('lr')
 replace('decay')
 replace('gamma')
 replace('momentum')
+
+if args.autoscale and args.batch_size != 8:
+    factor = args.batch_size / 8
+    print('Scaling parameters by %.2f to account for a batch size of %d.' % (factor, args.batch_size))
+
+    cfg.lr *= factor
+    cfg.max_iter //= factor
+    cfg.lr_steps = [x // factor for x in cfg.lr_steps]
+
+if torch.cuda.device_count() == 0:
+    print('No GPUs detected. Exiting...')
+    exit(-1)
+
+if args.batch_size // torch.cuda.device_count() < 6:
+    print('Per-GPU batch size is less than the recommended limit for batch norm. Disabling batch norm.')
+    cfg.freeze_bn = True
 
 loss_types = ['B', 'C', 'M', 'P', 'D', 'E', 'S']
 
