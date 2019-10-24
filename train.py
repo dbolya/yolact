@@ -70,14 +70,14 @@ parser.add_argument('--dataset', default=None, type=str,
                     help='If specified, override the dataset specified in the config with this one (example: coco2017_dataset).')
 parser.add_argument('--no_log', dest='log', action='store_false',
                     help='Don\'t log per iteration information into log_folder.')
-parser.add_argument('--no_log_gpu', dest='log_gpu', action='store_false',
-                    help='Don\'t include GPU information in the logs. Set this if nvidia-smi is very slow for you.')
+parser.add_argument('--log_gpu', dest='log_gpu', action='store_true',
+                    help='Include GPU information in the logs. Nvidia-smi tends to be slow, so set this with caution.')
 parser.add_argument('--no_interrupt', dest='interrupt', action='store_false',
                     help='Don\'t save an interrupt when KeyboardInterrupt is caught.')
 parser.add_argument('--batch_alloc', default=None, type=str,
                     help='If using multiple GPUS, you can set this to be a comma separated list detailing which GPUs should get what local batch size (It should add up to your total batch size).')
 
-parser.set_defaults(keep_latest=False, log=True, log_gpu=True, interrupt=True)
+parser.set_defaults(keep_latest=False, log=True, log_gpu=False, interrupt=True)
 args = parser.parse_args()
 
 # This is managed by set_lr
