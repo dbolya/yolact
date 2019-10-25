@@ -10,10 +10,10 @@
 
 A simple, fully convolutional model for real-time instance segmentation. This is the code for [our paper](https://arxiv.org/abs/1904.02689).
 
-#### ICCV Update! Check out the trailer here:
+#### ICCV update (v1.1) released! Check out the ICCV trailer here:
 [![IMAGE ALT TEXT HERE](https://img.youtube.com/vi/0pMfmo8qfpQ/0.jpg)](https://www.youtube.com/watch?v=0pMfmo8qfpQ)
 
-Read [the changelog](CHANGELOG.md) for details on, well, what changed.
+Read [the changelog](CHANGELOG.md) for details on, well, what changed. Oh, and the paper got updated too with pascal results and an appendix with box mAP.
 
 Some examples from our base model (33.5 fps on a Titan Xp and 29.8 mAP on COCO's `test-dev`):
 
@@ -198,10 +198,10 @@ See [this nice post by @Amit12690](https://github.com/dbolya/yolact/issues/70#is
 # Citation
 If you use YOLACT or this code base in your work, please cite
 ```
-@article{bolya-arxiv2019,
+@inproceedings{bolya-iccv2019,
   author    = {Daniel Bolya and Chong Zhou and Fanyi Xiao and Yong Jae Lee},
   title     = {YOLACT: {Real-time} Instance Segmentation},
-  journal   = {arXiv},
+  booktitle = {ICCV},
   year      = {2019},
 }
 ```
