@@ -4,11 +4,11 @@ This document will detail all changes I make.
 I don't know how I'm going to be versioning things yet, so you get dates for now.
 
 ```
-Pending Changes:
+2019.10.25 (v1.1):
   - Added proper Multi-GPU support. Simply increase your batch size to 8*num_gpus and everything will scale.
     - I get an ~1.8x training speed increase when using 2 gpus and an ~3x increase when using 4.
   - Added a logger that logs everything about your training.
-    - Check the Logging section of the README to see how to visualize your logs.
+    - Check the Logging section of the README to see how to visualize your logs. (Not written yet)
   - Savevideo now uses the evalvideo framework and suports --video_multiframe. It's much faster now!
   - Added the ability to display fps right on the videos themselves by using --display_fps
   - Evalvideo now doesn't crash when it runs out of frames.
