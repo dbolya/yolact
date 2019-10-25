@@ -408,8 +408,8 @@ class FPN(ScriptModuleWrapper):
                 out.append(nn.functional.max_pool2d(out[-1], 1, stride=2))
 
         if self.relu_downsample_layers:
-            for idx in range(cur_idx, len(out)):
-                out[idx] = F.relu(out[idx], inplace=False)
+            for idx in range(len(out) - cur_idx):
+                out[idx] = F.relu(out[idx + cur_idx], inplace=False)
 
         return out
 
