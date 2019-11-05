@@ -4,6 +4,9 @@ This document will detail all changes I make.
 I don't know how I'm going to be versioning things yet, so you get dates for now.
 
 ```
+2019.11.04:
+  - Fixed a bug where the learning rate auto-scaling wasn't being applied properly.
+
 2019.10.25 (v1.1):
   - Added proper Multi-GPU support. Simply increase your batch size to 8*num_gpus and everything will scale.
     - I get an ~1.8x training speed increase when using 2 gpus and an ~3x increase when using 4.

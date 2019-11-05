@@ -91,14 +91,6 @@ if args.config is not None:
 if args.dataset is not None:
     set_dataset(args.dataset)
 
-# Update training parameters from the config if necessary
-def replace(name):
-    if getattr(args, name) == None: setattr(args, name, getattr(cfg, name))
-replace('lr')
-replace('decay')
-replace('gamma')
-replace('momentum')
-
 if args.autoscale and args.batch_size != 8:
     factor = args.batch_size / 8
     print('Scaling parameters by %.2f to account for a batch size of %d.' % (factor, args.batch_size))
@@ -106,6 +98,14 @@ if args.autoscale and args.batch_size != 8:
     cfg.lr *= factor
     cfg.max_iter //= factor
     cfg.lr_steps = [x // factor for x in cfg.lr_steps]
+
+# Update training parameters from the config if necessary
+def replace(name):
+    if getattr(args, name) == None: setattr(args, name, getattr(cfg, name))
+replace('lr')
+replace('decay')
+replace('gamma')
+replace('momentum')
 
 if torch.cuda.device_count() == 0:
     print('No GPUs detected. Exiting...')
