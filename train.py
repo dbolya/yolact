@@ -82,9 +82,6 @@ parser.add_argument('--no_autoscale', dest='autoscale', action='store_false',
 parser.set_defaults(keep_latest=False, log=True, log_gpu=False, interrupt=True, autoscale=True)
 args = parser.parse_args()
 
-# This is managed by set_lr
-cur_lr = 0
-
 if args.config is not None:
     set_cfg(args.config)
 
@@ -106,6 +103,9 @@ replace('lr')
 replace('decay')
 replace('gamma')
 replace('momentum')
+
+# This is managed by set_lr
+cur_lr = args.lr
 
 if torch.cuda.device_count() == 0:
     print('No GPUs detected. Exiting...')

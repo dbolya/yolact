@@ -6,6 +6,7 @@ I don't know how I'm going to be versioning things yet, so you get dates for now
 ```
 2019.11.04:
   - Fixed a bug where the learning rate auto-scaling wasn't being applied properly.
+  - Fixed a logging bug were lr was sometimes not properly logged after a resume.
 
 2019.10.25 (v1.1):
   - Added proper Multi-GPU support. Simply increase your batch size to 8*num_gpus and everything will scale.
