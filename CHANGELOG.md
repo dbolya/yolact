@@ -4,6 +4,9 @@ This document will detail all changes I make.
 I don't know how I'm going to be versioning things yet, so you get dates for now.
 
 ```
+2019.11.06:
+  - Changed Cython import to only active when using traditional nms.
+
 2019.11.04:
   - Fixed a bug where the learning rate auto-scaling wasn't being applied properly.
   - Fixed a logging bug were lr was sometimes not properly logged after a resume.

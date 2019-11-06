@@ -7,11 +7,6 @@ from data import cfg, mask_type
 
 import numpy as np
 
-import pyximport
-pyximport.install(setup_args={"include_dirs":np.get_include()}, reload_support=True)
-
-from utils.cython_nms import nms as cnms
-
 
 class Detect(object):
     """At test time, Detect is the final layer of SSD.  Decode location preds,
@@ -179,6 +174,11 @@ class Detect(object):
         return boxes, masks, classes, scores
 
     def traditional_nms(self, boxes, masks, scores, iou_threshold=0.5, conf_thresh=0.05):
+        import pyximport
+        pyximport.install(setup_args={"include_dirs":np.get_include()}, reload_support=True)
+
+        from utils.cython_nms import nms as cnms
+
         num_classes = scores.size(0)
 
         idx_lst = []
