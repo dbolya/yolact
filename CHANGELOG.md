@@ -6,6 +6,7 @@ I don't know how I'm going to be versioning things yet, so you get dates for now
 ```
 2019.11.06:
   - Changed Cython import to only active when using traditional nms.
+  - Added cross-class fast NMS.
 
 2019.11.04:
   - Fixed a bug where the learning rate auto-scaling wasn't being applied properly.
