@@ -690,67 +690,76 @@ def evalvideo(net:Yolact, path:str, out_path:str=None):
 
     # All this timing code to make sure that 
     def play_video():
-        nonlocal frame_buffer, running, video_fps, is_webcam, num_frames, frames_displayed, vid_done
+        try:
+            nonlocal frame_buffer, running, video_fps, is_webcam, num_frames, frames_displayed, vid_done
 
-        video_frame_times = MovingAverage(100)
-        frame_time_stabilizer = frame_time_target
-        last_time = None
-        stabilizer_step = 0.0005
-        progress_bar = ProgressBar(30, num_frames)
+            video_frame_times = MovingAverage(100)
+            frame_time_stabilizer = frame_time_target
+            last_time = None
+            stabilizer_step = 0.0005
+            progress_bar = ProgressBar(30, num_frames)
 
-        while running:
-            frame_time_start = time.time()
+            while running:
+                frame_time_start = time.time()
 
-            if not frame_buffer.empty():
-                next_time = time.time()
-                if last_time is not None:
-                    video_frame_times.add(next_time - last_time)
-                    video_fps = 1 / video_frame_times.get_avg()
-                if out_path is None:
-                    cv2.imshow(path, frame_buffer.get())
-                else:
-                    out.write(frame_buffer.get())
-                frames_displayed += 1
-                last_time = next_time
-
-                if out_path is not None:
-                    if video_frame_times.get_avg() == 0:
-                        fps = 0
+                if not frame_buffer.empty():
+                    next_time = time.time()
+                    if last_time is not None:
+                        video_frame_times.add(next_time - last_time)
+                        video_fps = 1 / video_frame_times.get_avg()
+                    if out_path is None:
+                        cv2.imshow(path, frame_buffer.get())
                     else:
-                        fps = 1 / video_frame_times.get_avg()
-                    progress = frames_displayed / num_frames * 100
-                    progress_bar.set_val(frames_displayed)
+                        out.write(frame_buffer.get())
+                    frames_displayed += 1
+                    last_time = next_time
 
-                    print('\rProcessing Frames  %s %6d / %6d (%5.2f%%)    %5.2f fps        '
-                        % (repr(progress_bar), frames_displayed, num_frames, progress, fps), end='')
+                    if out_path is not None:
+                        if video_frame_times.get_avg() == 0:
+                            fps = 0
+                        else:
+                            fps = 1 / video_frame_times.get_avg()
+                        progress = frames_displayed / num_frames * 100
+                        progress_bar.set_val(frames_displayed)
 
-            # Press Escape to close
-            if cv2.waitKey(1) == 27 or not (frames_displayed < num_frames):
-                running = False
+                        print('\rProcessing Frames  %s %6d / %6d (%5.2f%%)    %5.2f fps        '
+                            % (repr(progress_bar), frames_displayed, num_frames, progress, fps), end='')
 
-            if not vid_done:
-                buffer_size = frame_buffer.qsize()
-                if buffer_size < args.video_multiframe:
-                    frame_time_stabilizer += stabilizer_step
-                elif buffer_size > args.video_multiframe:
-                    frame_time_stabilizer -= stabilizer_step
-                    if frame_time_stabilizer < 0:
-                        frame_time_stabilizer = 0
+                
+                # This is split because you don't want savevideo to require cv2 display functionality (see #197)
+                if out_path is None and cv2.waitKey(1) == 27:
+                    # Press Escape to close
+                    running = False
+                if not (frames_displayed < num_frames):
+                    running = False
 
-                new_target = frame_time_stabilizer if is_webcam else max(frame_time_stabilizer, frame_time_target)
-            else:
-                new_target = frame_time_target
+                if not vid_done:
+                    buffer_size = frame_buffer.qsize()
+                    if buffer_size < args.video_multiframe:
+                        frame_time_stabilizer += stabilizer_step
+                    elif buffer_size > args.video_multiframe:
+                        frame_time_stabilizer -= stabilizer_step
+                        if frame_time_stabilizer < 0:
+                            frame_time_stabilizer = 0
 
-            next_frame_target = max(2 * new_target - video_frame_times.get_avg(), 0)
-            target_time = frame_time_start + next_frame_target - 0.001 # Let's just subtract a millisecond to be safe
-            
-            if out_path is None or args.emulate_playback:
-                # This gives more accurate timing than if sleeping the whole amount at once
-                while time.time() < target_time:
+                    new_target = frame_time_stabilizer if is_webcam else max(frame_time_stabilizer, frame_time_target)
+                else:
+                    new_target = frame_time_target
+
+                next_frame_target = max(2 * new_target - video_frame_times.get_avg(), 0)
+                target_time = frame_time_start + next_frame_target - 0.001 # Let's just subtract a millisecond to be safe
+                
+                if out_path is None or args.emulate_playback:
+                    # This gives more accurate timing than if sleeping the whole amount at once
+                    while time.time() < target_time:
+                        time.sleep(0.001)
+                else:
+                    # Let's not starve the main thread, now
                     time.sleep(0.001)
-            else:
-                # Let's not starve the main thread, now
-                time.sleep(0.001)
+        except:
+            # See issue #197 for why this is necessary
+            import traceback
+            traceback.print_exc()
 
 
     extract_frame = lambda x, i: (x[0][i] if x[1][i] is None else x[0][i].to(x[1][i]['box'].device), [x[1][i]])

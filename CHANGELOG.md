@@ -4,6 +4,9 @@ This document will detail all changes I make.
 I don't know how I'm going to be versioning things yet, so you get dates for now.
 
 ```
+2019.11.20:
+  - Fixed bug where saving videos wouldn't work when using cv2 not compiled with display support (#197).
+
 2019.11.06:
   - Changed Cython import to only active when using traditional nms.
   - Added cross-class fast NMS.
