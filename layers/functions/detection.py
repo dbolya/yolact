@@ -93,7 +93,7 @@ class Detect(object):
         scores = cur_scores[:, keep]
         boxes = decoded_boxes[keep, :]
         masks = mask_data[batch_idx, keep, :]
-        feats = feats[batch_idx, keep, :]
+        feats = { k: v[keep, :] for k, v in feats.items() }
 
         if inst_data is not None:
             inst = inst_data[batch_idx, keep, :]
@@ -102,38 +102,37 @@ class Detect(object):
             return None
         
         if self.use_fast_nms:
-            boxes, masks, classes, scores, feats = self.fast_nms(boxes, masks, scores, feats, self.nms_thresh, self.top_k)
+            boxes, masks, classes, scores, feats = self.cc_fast_nms(boxes, masks, scores, feats, self.nms_thresh, self.top_k)
         else:
             boxes, masks, classes, scores = self.traditional_nms(boxes, masks, scores, self.nms_thresh, self.conf_thresh)
 
         return {'box': boxes, 'mask': masks, 'class': classes, 'score': scores, 'feats': feats}
     
+    def cc_fast_nms(self, boxes, masks, scores, feats, iou_threshold:float=0.5, top_k:int=200):
+        # Collapse all the classes into 1 
+        scores, classes = scores.max(dim=0)
 
-    def coefficient_nms(self, coeffs, scores, cos_threshold=0.9, top_k=400):
         _, idx = scores.sort(0, descending=True)
         idx = idx[:top_k]
-        coeffs_norm = F.normalize(coeffs[idx], dim=1)
 
-        # Compute the pairwise cosine similarity between the coefficients
-        cos_similarity = coeffs_norm @ coeffs_norm.t()
+        boxes_idx = boxes[idx]
+
+        # Compute the pairwise IoU between the boxes
+        iou = jaccard(boxes_idx, boxes_idx)
         
         # Zero out the lower triangle of the cosine similarity matrix and diagonal
-        cos_similarity.triu_(diagonal=1)
+        iou.triu_(diagonal=1)
 
         # Now that everything in the diagonal and below is zeroed out, if we take the max
-        # of the cos similarity matrix along the columns, each column will represent the
-        # maximum cosine similarity between this element and every element with a higher
-        # score than this element.
-        cos_max, _ = torch.max(cos_similarity, dim=0)
+        # of the IoU matrix along the columns, each column will represent the maximum IoU
+        # between this element and every element with a higher score than this element.
+        iou_max, _ = torch.max(iou, dim=0)
 
-        # Now just filter out the ones higher than the threshold
-        idx_out = idx[cos_max <= cos_threshold]
-
-
-        # new_mask_norm = F.normalize(masks[idx_out], dim=1)
-        # print(new_mask_norm[:5] @ new_mask_norm[:5].t())
+        # Now just filter out the ones greater than the threshold, i.e., only keep boxes that
+        # don't have a higher scoring box that would supress it in normal NMS.
+        idx_out = idx[iou_max <= iou_threshold]
         
-        return idx_out, idx_out.size(0)
+        return boxes[idx_out], masks[idx_out], classes[idx_out], scores[idx_out], { k: v[idx_out] for k, v in feats.items() }
 
     def fast_nms(self, boxes, masks, scores, feats, iou_threshold:float=0.5, top_k:int=200, second_threshold:bool=False):
         scores, idx = scores.sort(1, descending=True)
@@ -145,7 +144,7 @@ class Detect(object):
 
         boxes = boxes[idx.view(-1), :].view(num_classes, num_dets, 4)
         masks = masks[idx.view(-1), :].view(num_classes, num_dets, -1)
-        feats = feats[idx.view(-1), :].view(num_classes, num_dets, -1)
+        feats = { k: v[idx.view(-1), :].view(num_classes, num_dets, -1) for k, v in feats.items() }
 
         iou = jaccard(boxes, boxes)
         iou.triu_(diagonal=1)
@@ -168,7 +167,7 @@ class Detect(object):
 
         boxes = boxes[keep]
         masks = masks[keep]
-        feats = feats[keep]
+        feats = { k: v[keep] for k, v in feats.items() }
         scores = scores[keep]
         
         # Only keep the top cfg.max_num_detections highest scores across all classes
@@ -179,7 +178,7 @@ class Detect(object):
         classes = classes[idx]
         boxes = boxes[idx]
         masks = masks[idx]
-        feats = feats[idx]
+        feats = { k: v[idx] for k, v in feats.items() }
 
         return boxes, masks, classes, scores, feats
 

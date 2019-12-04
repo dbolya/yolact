@@ -387,7 +387,8 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, num_crowd, image_id, de
         scores = list(scores.cpu().numpy().astype(float))
         masks = masks.view(-1, h*w).cuda()
         boxes = boxes.cuda()
-        feats = feats.cpu().numpy()
+        feats = { k: v.cpu().numpy() for k, v in feats.items() }
+        boxes_cpu = boxes.cpu().numpy()
 
 
     if args.output_coco_json:
@@ -428,13 +429,19 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, num_crowd, image_id, de
         max_iou, max_idx = bbox_iou_cache[i].max(dim=0)
         j = max_idx.item()
 
-        if max_iou > 0.5:
+        if max_iou > 0.5 and scores[i] > 0.05:
             feature_classification.append({
                 'score': scores[i],
                 'gt_box': gt_boxes_npy[j],
                 'gt_class': gt_classes[j],
                 'pred_class': classes[i],
-                'feats': feats[i],
+                'pred_box': boxes_cpu[i],
+                'feats': feats['feats'][i],
+                'anchor': feats['anchor'][i],
+                'scale': feats['scale'][i],
+                'box_iou': max_iou.item(),
+                'mask_iou': mask_iou_cache[i, j].item(),
+                'ar': feats['ar'][i],
                 'image': image_id,
             })
 

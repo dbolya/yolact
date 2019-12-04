@@ -240,7 +240,11 @@ class PredictionModule(nn.Module):
 
         ones = torch.ones(1, self.num_priors, device=x.device)
 
-        feats = (x[..., None] @ ones).permute(0, 2, 3, 4, 1).contiguous().view(x.size(0), -1, x.size(1))
+        feats = {}
+        feats['feats'] = (x[..., None] @ ones).permute(0, 2, 3, 4, 1).contiguous().view(x.size(0), -1, x.size(1))[0]
+        feats['anchor'] = priors
+        feats['scale'] = self.scales
+        feats['ar'] = self.ars
 
         preds = { 'loc': bbox, 'conf': conf, 'mask': mask, 'priors': priors, 'feats': feats }
 
@@ -255,6 +259,8 @@ class PredictionModule(nn.Module):
         with timer.env('makepriors'):
             if self.last_conv_size != (conv_w, conv_h):
                 prior_data = []
+                scale_data = []
+                ar_data = []
 
                 # Iteration order is important (it has to sync up with the convout)
                 for j, i in product(range(conv_h), range(conv_w)):
@@ -279,8 +285,12 @@ class PredictionModule(nn.Module):
                                 h = w
 
                             prior_data += [x, y, w, h]
+                            scale_data.append(scale)
+                            ar_data.append(ar)
                 
                 self.priors = torch.Tensor(prior_data).view(-1, 4)
+                self.scales = torch.Tensor(scale_data).view(-1, 1)
+                self.ars = torch.Tensor(ar_data).view(-1, 1)
                 self.last_conv_size = (conv_w, conv_h)
         
         return self.priors
@@ -591,7 +601,10 @@ class Yolact(nn.Module):
                     pred_outs[k].append(v)
 
         for k, v in pred_outs.items():
-            pred_outs[k] = torch.cat(v, -2)
+            if k == 'feats':
+                pred_outs[k] = { k2: torch.cat([v2[k2] for v2 in v], -2) for k2 in v[0] }
+            else:
+                pred_outs[k] = torch.cat(v, -2)
 
         if proto_out is not None:
             pred_outs['proto'] = proto_out
