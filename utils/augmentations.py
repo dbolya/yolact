@@ -167,6 +167,16 @@ class Resize(object):
             boxes[:, [0, 2]] *= (width  / img_w)
             boxes[:, [1, 3]] *= (height / img_h)
 
+        # Discard boxes that are smaller than we'd like
+        w = boxes[:, 2] - boxes[:, 0]
+        h = boxes[:, 3] - boxes[:, 1]
+
+        keep = (w > cfg.discard_box_width) * (h > cfg.discard_box_height)
+        masks = masks[keep]
+        boxes = boxes[keep]
+        labels['labels'] = labels['labels'][keep]
+        labels['num_crowds'] = (labels['labels'] < 0).sum()
+
         return image, masks, boxes, labels
 
 

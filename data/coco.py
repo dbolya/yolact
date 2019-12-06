@@ -8,6 +8,7 @@ import cv2
 import numpy as np
 from .config import cfg
 from pycocotools import mask as maskUtils
+import random
 
 def get_label_map():
     if cfg.dataset.label_map is None:
@@ -36,14 +37,16 @@ class COCOAnnotationTransform(object):
         for obj in target:
             if 'bbox' in obj:
                 bbox = obj['bbox']
-                label_idx = self.label_map[obj['category_id']] - 1
+                label_idx = obj['category_id']
+                if label_idx >= 0:
+                    label_idx = self.label_map[label_idx] - 1
                 final_box = list(np.array([bbox[0], bbox[1], bbox[0]+bbox[2], bbox[1]+bbox[3]])/scale)
                 final_box.append(label_idx)
                 res += [final_box]  # [xmin, ymin, xmax, ymax, label_idx]
             else:
                 print("No bbox found for object ", obj)
 
-        return res  # [[xmin, ymin, xmax, ymax, label_idx], ... ]
+        return res
 
 
 class COCODetection(data.Dataset):
@@ -121,6 +124,9 @@ class COCODetection(data.Dataset):
         target = [x for x in target if not ('iscrowd' in x and x['iscrowd'])]
         num_crowds = len(crowd)
 
+        for x in crowd:
+            x['category_id'] = -1
+
         # This is so we ensure that all crowd annotations are at the end of the array
         target += crowd
         
@@ -163,6 +169,10 @@ class COCODetection(data.Dataset):
                     {'num_crowds': 0, 'labels': np.array([0])})
                 masks = None
                 target = None
+
+        if target.shape[0] == 0:
+            print('Warning: Augmentation output an example with no ground truth. Resampling...')
+            return self.pull_image(random.randint(0, len(self.ids)-1))
 
         return torch.from_numpy(img).permute(2, 0, 1), target, masks, height, width, num_crowds
 

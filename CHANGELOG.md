@@ -4,6 +4,11 @@ This document will detail all changes I make.
 I don't know how I'm going to be versioning things yet, so you get dates for now.
 
 ```
+2019.12.06:
+  - Made training much more stable (no more infs and hopefully fewer loss explosions) by ignoring
+    augmented boxes with < 4px of height and width (this includes 0 area boxes which caused the inf).
+    See #222 for details.
+
 2019.11.20:
   - Fixed bug where saving videos wouldn't work when using cv2 not compiled with display support (#197).
 
