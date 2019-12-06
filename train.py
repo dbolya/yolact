@@ -115,7 +115,7 @@ if args.batch_size // torch.cuda.device_count() < 6:
     print('Per-GPU batch size is less than the recommended limit for batch norm. Disabling batch norm.')
     cfg.freeze_bn = True
 
-loss_types = ['B', 'C', 'M', 'P', 'D', 'E', 'S']
+loss_types = ['B', 'C', 'M', 'P', 'D', 'E', 'S', 'I']
 
 if torch.cuda.is_available():
     if args.cuda:
@@ -138,10 +138,20 @@ class NetLoss(nn.Module):
 
         self.net = net
         self.criterion = criterion
+        if cfg.use_maskiou:
+            self.maskiou_net = net.get_maskiou_net()
     
     def forward(self, images, targets, masks, num_crowds):
         preds = self.net(images)
-        return self.criterion(preds, targets, masks, num_crowds)
+
+        if cfg.use_maskiou:
+            losses, maskiou_targets = self.criterion(preds, targets, masks, num_crowds)
+            maskiou_net_input, maskiou_t, label_t = maskiou_targets
+            loss_i = self.maskiou_net(maskiou_net_input, target=[maskiou_t, label_t])
+            losses['I'] = loss_i
+        else:
+            losses = self.criterion(preds, targets, masks, num_crowds)
+        return losses
 
 class CustomDataParallel(nn.DataParallel):
     """

@@ -132,7 +132,7 @@ coco_cats = {} # Call prep_coco_cats to fill this
 coco_cats_inv = {}
 color_cache = defaultdict(lambda: {})
 
-def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, mask_alpha=0.45, fps_str=''):
+def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, mask_alpha=0.45, fps_str='', maskiou_net=None):
     """
     Note: If undo_transform=False then im_h and im_w are allowed to be None.
     """
@@ -146,14 +146,34 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
     with timer.env('Postprocess'):
         t = postprocess(dets_out, w, h, visualize_lincomb = args.display_lincomb,
                                         crop_masks        = args.crop,
-                                        score_threshold   = args.score_threshold)
+                                        score_threshold   = args.score_threshold,
+                                        maskiou_net       = maskiou_net)
         torch.cuda.synchronize()
 
+    # FIXME reduce copy
     with timer.env('Copy'):
         if cfg.eval_mask_branch:
             # Masks are drawn on the GPU, so don't copy
-            masks = t[3][:args.top_k]
-        classes, scores, boxes = [x[:args.top_k].cpu().numpy() for x in t[:3]]
+            masks = t[3]
+        classes, scores, boxes = [x for x in t[:3]]
+        if isinstance(scores, list):
+            box_scores = scores[0].cpu().numpy()
+            mask_scores = scores[1].cpu().numpy()
+            # Re-rank predictions by mask scores
+            _scores = mask_scores * box_scores
+            idx = np.argsort(-_scores)
+            scores = box_scores[idx]
+            classes = classes.cpu().numpy()[idx]
+            boxes = boxes.cpu().numpy()[idx]
+            masks = masks[idx]
+        else:
+            scores = scores.cpu().numpy()
+            classes = classes.cpu().numpy()
+            boxes = boxes.cpu().numpy()
+        scores = scores[:args.top_k]
+        classes = classes[:args.top_k]
+        boxes = boxes[:args.top_k]
+        masks = masks[:args.top_k]
 
     num_dets_to_consider = min(args.top_k, classes.shape[0])
     for j in range(num_dets_to_consider):
@@ -257,12 +277,20 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
     
     return img_numpy
 
-def prep_benchmark(dets_out, h, w):
+def prep_benchmark(dets_out, h, w, maskiou_net=None):
     with timer.env('Postprocess'):
-        t = postprocess(dets_out, w, h, crop_masks=args.crop, score_threshold=args.score_threshold)
+        t = postprocess(dets_out, w, h, crop_masks=args.crop, score_threshold=args.score_threshold, maskiou_net=maskiou_net)
 
     with timer.env('Copy'):
-        classes, scores, boxes, masks = [x[:args.top_k].cpu().numpy() for x in t]
+        classes, scores, boxes, masks = [x[:args.top_k] for x in t]
+        if isinstance(scores, list):
+            box_scores = scores[0].cpu().numpy()
+            mask_scores = scores[1].cpu().numpy()
+        else:
+            scores = scores.cpu().numpy()
+        classes = classes.cpu().numpy()
+        boxes = boxes.cpu().numpy()
+        masks = masks.cpu().numpy()
     
     with timer.env('Sync'):
         # Just in case
@@ -371,7 +399,7 @@ def _bbox_iou(bbox1, bbox2, iscrowd=False):
         ret = jaccard(bbox1, bbox2, iscrowd)
     return ret.cpu()
 
-def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, num_crowd, image_id, detections:Detections=None):
+def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, num_crowd, image_id, detections:Detections=None, maskiou_net=None):
     """ Returns a list of APs for this image, with each element being for a class  """
     if not args.output_coco_json:
         with timer.env('Prepare gt'):
@@ -388,13 +416,19 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, num_crowd, image_id, de
                 crowd_classes, gt_classes = split(gt_classes)
 
     with timer.env('Postprocess'):
-        classes, scores, boxes, masks = postprocess(dets, w, h, crop_masks=args.crop, score_threshold=args.score_threshold)
+        classes, scores, boxes, masks = postprocess(dets, w, h, crop_masks=args.crop, score_threshold=args.score_threshold, maskiou_net=maskiou_net)
 
         if classes.size(0) == 0:
             return
 
         classes = list(classes.cpu().numpy().astype(int))
-        scores = list(scores.cpu().numpy().astype(float))
+        if isinstance(scores, list):
+            box_scores = list(scores[0].cpu().numpy().astype(float))
+            mask_scores = list(scores[1].cpu().numpy().astype(float))
+        else:
+            scores = list(scores.cpu().numpy().astype(float))
+            box_scores = scores
+            mask_scores = scores
         masks = masks.view(-1, h*w).cuda()
         boxes = boxes.cuda()
 
@@ -406,8 +440,8 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, num_crowd, image_id, de
             for i in range(masks.shape[0]):
                 # Make sure that the bounding box actually makes sense and a mask was produced
                 if (boxes[i, 3] - boxes[i, 1]) * (boxes[i, 2] - boxes[i, 0]) > 0:
-                    detections.add_bbox(image_id, classes[i], boxes[i,:],   scores[i])
-                    detections.add_mask(image_id, classes[i], masks[i,:,:], scores[i])
+                    detections.add_bbox(image_id, classes[i], boxes[i,:],   box_scores[i])
+                    detections.add_mask(image_id, classes[i], masks[i,:,:], mask_scores[i])
             return
     
     with timer.env('Eval Setup'):
@@ -425,8 +459,8 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, num_crowd, image_id, de
             crowd_bbox_iou_cache = None
 
         iou_types = [
-            ('box',  lambda i,j: bbox_iou_cache[i, j].item(), lambda i,j: crowd_bbox_iou_cache[i,j].item()),
-            ('mask', lambda i,j: mask_iou_cache[i, j].item(), lambda i,j: crowd_mask_iou_cache[i,j].item())
+            ('box',  lambda i,j: bbox_iou_cache[i, j].item(), lambda i,j: crowd_bbox_iou_cache[i,j].item(), lambda i: box_scores[i]),
+            ('mask', lambda i,j: mask_iou_cache[i, j].item(), lambda i,j: crowd_mask_iou_cache[i,j].item(), lambda i: mask_scores[i])
         ]
 
     timer.start('Main loop')
@@ -437,7 +471,7 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, num_crowd, image_id, de
         for iouIdx in range(len(iou_thresholds)):
             iou_threshold = iou_thresholds[iouIdx]
 
-            for iou_type, iou_func, crowd_func in iou_types:
+            for iou_type, iou_func, crowd_func, score_func in iou_types:
                 gt_used = [False] * len(gt_classes)
                 
                 ap_obj = ap_data[iou_type][iouIdx][_class]
@@ -461,7 +495,7 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, num_crowd, image_id, de
                     
                     if max_match_idx >= 0:
                         gt_used[max_match_idx] = True
-                        ap_obj.push(scores[i], True)
+                        ap_obj.push(score_func(i), True)
                     else:
                         # If the detection matches a crowd, we can just ignore it
                         matched_crowd = False
@@ -481,7 +515,7 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, num_crowd, image_id, de
                         # same result as COCOEval. There aren't even that many crowd annotations to
                         # begin with, but accuracy is of the utmost importance.
                         if not matched_crowd:
-                            ap_obj.push(scores[i], False)
+                            ap_obj.push(score_func(i), False)
     timer.stop('Main loop')
 
 
@@ -846,6 +880,7 @@ def evaluate(net:Yolact, dataset, train_mode=False):
     net.detect.use_cross_class_nms = args.cross_class_nms
     cfg.mask_proto_debug = args.mask_proto_debug
 
+    # TODO Currently we do not support Fast Mask Re-scroing in evalimage, evalimages, and evalvideo
     if args.image is not None:
         if ':' in args.image:
             inp, out = args.image.split(':')
@@ -921,13 +956,14 @@ def evaluate(net:Yolact, dataset, train_mode=False):
             with timer.env('Network Extra'):
                 preds = net(batch)
 
+            maskiou_net = net.get_maskiou_net()
             # Perform the meat of the operation here depending on our mode.
             if args.display:
-                img_numpy = prep_display(preds, img, h, w)
+                img_numpy = prep_display(preds, img, h, w, maskiou_net=maskiou_net)
             elif args.benchmark:
-                prep_benchmark(preds, h, w)
+                prep_benchmark(preds, h, w, maskiou_net=maskiou_net)
             else:
-                prep_metrics(ap_data, preds, img, gt, gt_masks, h, w, num_crowd, dataset.ids[image_idx], detections)
+                prep_metrics(ap_data, preds, img, gt, gt_masks, h, w, num_crowd, dataset.ids[image_idx], detections, maskiou_net=maskiou_net)
             
             # First couple of images take longer because we're constructing the graph.
             # Since that's technically initialization, don't include those in the FPS calculations.

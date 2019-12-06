@@ -4,16 +4,25 @@ import pickle
 
 from collections import OrderedDict
 
+from dcn_v2 import DCN
+
 class Bottleneck(nn.Module):
     """ Adapted from torchvision.models.resnet """
     expansion = 4
 
-    def __init__(self, inplanes, planes, stride=1, downsample=None, norm_layer=nn.BatchNorm2d, dilation=1):
+    def __init__(self, inplanes, planes, stride=1, downsample=None, norm_layer=nn.BatchNorm2d, dilation=1, use_dcn=False):
         super(Bottleneck, self).__init__()
         self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, bias=False, dilation=dilation)
         self.bn1 = norm_layer(planes)
-        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=stride,
-                               padding=dilation, bias=False, dilation=dilation)
+        if use_dcn:
+            self.conv2 = DCN(planes, planes, kernel_size=3, stride=stride,
+                                padding=dilation, dilation=dilation, deformable_groups=1)
+            self.conv2.bias.data.zero_()
+            self.conv2.conv_offset_mask.weight.data.zero_()
+            self.conv2.conv_offset_mask.bias.data.zero_()
+        else:
+            self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=stride,
+                                padding=dilation, bias=False, dilation=dilation)
         self.bn2 = norm_layer(planes)
         self.conv3 = nn.Conv2d(planes, planes * 4, kernel_size=1, bias=False, dilation=dilation)
         self.bn3 = norm_layer(planes * 4)
@@ -47,7 +56,7 @@ class Bottleneck(nn.Module):
 class ResNetBackbone(nn.Module):
     """ Adapted from torchvision.models.resnet """
 
-    def __init__(self, layers, atrous_layers=[], block=Bottleneck, norm_layer=nn.BatchNorm2d):
+    def __init__(self, layers, dcn_layers=[0, 0, 0, 0], dcn_interval=1, atrous_layers=[], block=Bottleneck, norm_layer=nn.BatchNorm2d):
         super().__init__()
 
         # These will be populated by _make_layer
@@ -66,10 +75,10 @@ class ResNetBackbone(nn.Module):
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         
-        self._make_layer(block, 64, layers[0])
-        self._make_layer(block, 128, layers[1], stride=2)
-        self._make_layer(block, 256, layers[2], stride=2)
-        self._make_layer(block, 512, layers[3], stride=2)
+        self._make_layer(block, 64, layers[0], dcn_layers=dcn_layers[0], dcn_interval=dcn_interval)
+        self._make_layer(block, 128, layers[1], stride=2, dcn_layers=dcn_layers[1], dcn_interval=dcn_interval)
+        self._make_layer(block, 256, layers[2], stride=2, dcn_layers=dcn_layers[2], dcn_interval=dcn_interval)
+        self._make_layer(block, 512, layers[3], stride=2, dcn_layers=dcn_layers[3], dcn_interval=dcn_interval)
 
         # This contains every module that should be initialized by loading in pretrained weights.
         # Any extra layers added onto this that won't be initialized by init_backbone will not be
@@ -78,7 +87,7 @@ class ResNetBackbone(nn.Module):
         self.backbone_modules = [m for m in self.modules() if isinstance(m, nn.Conv2d)]
         
     
-    def _make_layer(self, block, planes, blocks, stride=1):
+    def _make_layer(self, block, planes, blocks, stride=1, dcn_layers=0, dcn_interval=1):
         """ Here one layer means a string of n Bottleneck blocks. """
         downsample = None
 
@@ -97,11 +106,12 @@ class ResNetBackbone(nn.Module):
             )
 
         layers = []
-        layers.append(block(self.inplanes, planes, stride, downsample, self.norm_layer, self.dilation))
+        use_dcn = (dcn_layers >= blocks)
+        layers.append(block(self.inplanes, planes, stride, downsample, self.norm_layer, self.dilation, use_dcn=use_dcn))
         self.inplanes = planes * block.expansion
         for i in range(1, blocks):
-            layers.append(block(self.inplanes, planes, norm_layer=self.norm_layer))
-
+            use_dcn = ((i+dcn_layers) >= blocks) and (i % dcn_interval == 0)
+            layers.append(block(self.inplanes, planes, norm_layer=self.norm_layer, use_dcn=use_dcn))
         layer = nn.Sequential(*layers)
 
         self.channels.append(planes * block.expansion)
