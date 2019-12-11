@@ -13,7 +13,7 @@ from utils import timer
 from .box_utils import crop, sanitize_coordinates
 
 def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear',
-                visualize_lincomb=False, crop_masks=True, score_threshold=0):
+                visualize_lincomb=False, crop_masks=True, score_threshold=0, maskiou_net=None):
     """
     Postprocesses the output of Yolact on testing mode into a format that makes sense,
     accounting for all the possible configuration settings.
@@ -73,6 +73,17 @@ def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear',
 
         # Permute into the correct output shape [num_dets, proto_h, proto_w]
         masks = masks.permute(2, 0, 1).contiguous()
+
+        if cfg.use_maskiou:
+            with timer.env('maskiou_net'):                
+                with torch.no_grad():
+                    maskiou_p = maskiou_net(masks.unsqueeze(1))
+                    maskiou_p = torch.gather(maskiou_p, dim=1, index=classes.unsqueeze(1)).squeeze(1)
+                    if cfg.rescore_mask:
+                        if cfg.rescore_bbox:
+                            scores = scores * maskiou_p
+                        else:
+                            scores = [scores, scores * maskiou_p]
 
         # Scale masks up to the full image
         masks = F.interpolate(masks.unsqueeze(0), (h, w), mode=interpolation_mode, align_corners=False).squeeze(0)

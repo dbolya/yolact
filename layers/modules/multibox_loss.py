@@ -156,8 +156,13 @@ class MultiBoxLoss(nn.Module):
                 else:
                     losses['M'] = self.direct_mask_loss(pos_idx, idx_t, loc_data, mask_data, priors, masks)
             elif cfg.mask_type == mask_type.lincomb:
-                losses.update(self.lincomb_mask_loss(pos, idx_t, loc_data, mask_data, priors, proto_data, masks, gt_box_t, score_data, inst_data))
-                
+                ret = self.lincomb_mask_loss(pos, idx_t, loc_data, mask_data, priors, proto_data, masks, gt_box_t, score_data, inst_data, labels)
+                if cfg.use_maskiou:
+                    loss, maskiou_targets = ret
+                else:
+                    loss = ret
+                losses.update(loss)
+
                 if cfg.mask_proto_loss is not None:
                     if cfg.mask_proto_loss == 'l1':
                         losses['P'] = torch.mean(torch.abs(proto_data)) / self.l1_expected_area * self.l1_alpha
@@ -201,7 +206,10 @@ class MultiBoxLoss(nn.Module):
         #  - D: Coefficient Diversity Loss
         #  - E: Class Existence Loss
         #  - S: Semantic Segmentation Loss
-        return losses
+        if cfg.use_maskiou:
+            return losses, maskiou_targets
+        else:
+            return losses
 
     def class_existence_loss(self, class_data, class_existence_t):
         return cfg.class_existence_alpha * F.binary_cross_entropy_with_logits(class_data, class_existence_t, reduction='sum')
@@ -487,7 +495,7 @@ class MultiBoxLoss(nn.Module):
         return cfg.mask_proto_coeff_diversity_alpha * loss.sum() / num_pos
 
 
-    def lincomb_mask_loss(self, pos, idx_t, loc_data, mask_data, priors, proto_data, masks, gt_box_t, score_data, inst_data, interpolation_mode='bilinear'):
+    def lincomb_mask_loss(self, pos, idx_t, loc_data, mask_data, priors, proto_data, masks, gt_box_t, score_data, inst_data, labels, interpolation_mode='bilinear'):
         mask_h = proto_data.size(1)
         mask_w = proto_data.size(2)
 
@@ -499,6 +507,10 @@ class MultiBoxLoss(nn.Module):
 
         loss_m = 0
         loss_d = 0 # Coefficient diversity loss
+
+        maskiou_t_list = []
+        maskiou_net_input_list = []
+        label_t_list = []
 
         for idx in range(mask_data.size(0)):
             with torch.no_grad():
@@ -570,7 +582,8 @@ class MultiBoxLoss(nn.Module):
                     mask_scores = mask_scores[select, :]
 
             num_pos = proto_coef.size(0)
-            mask_t = downsampled_masks[:, :, pos_idx_t]          
+            mask_t = downsampled_masks[:, :, pos_idx_t]     
+            label_t = labels[idx][pos_idx_t]     
 
             # Size: [mask_h, mask_w, num_pos]
             pred_masks = proto_masks @ proto_coef.t()
@@ -611,10 +624,54 @@ class MultiBoxLoss(nn.Module):
                 pre_loss *= old_num_pos / num_pos
 
             loss_m += torch.sum(pre_loss)
+
+            if cfg.use_maskiou:
+                if cfg.remove_small_gt_mask > 0:
+                    gt_mask_area = torch.sum(mask_t, dim=(0, 1))
+                    select = gt_mask_area > cfg.remove_small_gt_mask
+
+                    if torch.sum(select) < 1:
+                        continue
+
+                    pos_gt_box_t = pos_gt_box_t[select, :]
+                    pred_masks = pred_masks[:, :, select]
+                    mask_t = mask_t[:, :, select]
+                    label_t = label_t[select]
+
+                maskiou_net_input = pred_masks.permute(2, 0, 1).contiguous().unsqueeze(1)
+                pred_masks = pred_masks.gt(0.5).float()                
+                maskiou_t = self._mask_iou(pred_masks, mask_t)
+                
+                maskiou_net_input_list.append(maskiou_net_input)
+                maskiou_t_list.append(maskiou_t)
+                label_t_list.append(label_t)
         
         losses = {'M': loss_m * cfg.mask_alpha / mask_h / mask_w}
         
         if cfg.mask_proto_coeff_diversity_loss:
             losses['D'] = loss_d
 
+        if cfg.use_maskiou:
+            maskiou_t = torch.cat(maskiou_t_list)
+            label_t = torch.cat(label_t_list)
+            maskiou_net_input = torch.cat(maskiou_net_input_list)
+
+            num_samples = maskiou_t.size(0)
+            if cfg.maskious_to_train > 0 and num_samples > cfg.maskious_to_train:
+                perm = torch.randperm(num_samples)
+                select = perm[:cfg.masks_to_train]
+                maskiou_t = maskiou_t[select]
+                label_t = label_t[select]
+                maskiou_net_input = maskiou_net_input[select]
+
+            return losses, [maskiou_net_input, maskiou_t, label_t]
+
         return losses
+
+    def _mask_iou(self, mask1, mask2):
+        intersection = torch.sum(mask1*mask2, dim=(0, 1))
+        area1 = torch.sum(mask1, dim=(0, 1))
+        area2 = torch.sum(mask2, dim=(0, 1))
+        union = (area1 + area2) - intersection
+        ret = intersection / union
+        return ret

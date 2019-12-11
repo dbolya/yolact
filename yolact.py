@@ -10,12 +10,13 @@ from collections import defaultdict
 
 from data.config import cfg, mask_type
 from layers import Detect
+from layers.mask_score import FastMaskIoUNet
 from layers.interpolate import InterpolateModule
 from backbone import construct_backbone
 
 import torch.backends.cudnn as cudnn
 from utils import timer
-from utils.functions import MovingAverage
+from utils.functions import MovingAverage, make_net
 
 # This is required for Pytorch 1.0.1 on Windows to initialize Cuda on some driver versions.
 # See the bug report here: https://github.com/pytorch/pytorch/issues/17108
@@ -41,60 +42,6 @@ class Concat(nn.Module):
     def forward(self, x):
         # Concat each along the channel dimension
         return torch.cat([net(x) for net in self.nets], dim=1, **self.extra_params)
-
-
-
-def make_net(in_channels, conf, include_last_relu=True):
-    """
-    A helper function to take a config setting and turn it into a network.
-    Used by protonet and extrahead. Returns (network, out_channels)
-    """
-    def make_layer(layer_cfg):
-        nonlocal in_channels
-        
-        # Possible patterns:
-        # ( 256, 3, {}) -> conv
-        # ( 256,-2, {}) -> deconv
-        # (None,-2, {}) -> bilinear interpolate
-        # ('cat',[],{}) -> concat the subnetworks in the list
-        #
-        # You know it would have probably been simpler just to adopt a 'c' 'd' 'u' naming scheme.
-        # Whatever, it's too late now.
-        if isinstance(layer_cfg[0], str):
-            layer_name = layer_cfg[0]
-
-            if layer_name == 'cat':
-                nets = [make_net(in_channels, x) for x in layer_cfg[1]]
-                layer = Concat([net[0] for net in nets], layer_cfg[2])
-                num_channels = sum([net[1] for net in nets])
-        else:
-            num_channels = layer_cfg[0]
-            kernel_size = layer_cfg[1]
-
-            if kernel_size > 0:
-                layer = nn.Conv2d(in_channels, num_channels, kernel_size, **layer_cfg[2])
-            else:
-                if num_channels is None:
-                    layer = InterpolateModule(scale_factor=-kernel_size, mode='bilinear', align_corners=False, **layer_cfg[2])
-                else:
-                    layer = nn.ConvTranspose2d(in_channels, num_channels, -kernel_size, **layer_cfg[2])
-        
-        in_channels = num_channels if num_channels is not None else in_channels
-
-        # Don't return a ReLU layer if we're doing an upsample. This probably doesn't affect anything
-        # output-wise, but there's no need to go through a ReLU here.
-        # Commented out for backwards compatibility with previous models
-        # if num_channels is None:
-        #     return [layer]
-        # else:
-        return [layer, nn.ReLU(inplace=True)]
-
-    # Use sum to concat together all the component layer lists
-    net = sum([make_layer(x) for x in conf], [])
-    if not include_last_relu:
-        net = net[:-1]
-
-    return nn.Sequential(*(net)), in_channels
 
 prior_cache = defaultdict(lambda: None)
 
@@ -129,7 +76,7 @@ class PredictionModule(nn.Module):
 
         self.num_classes = cfg.num_classes
         self.mask_dim    = cfg.mask_dim # Defined by Yolact
-        self.num_priors  = sum(len(x) for x in aspect_ratios)
+        self.num_priors  = sum(len(x)*len(scales) for x in aspect_ratios)
         self.parent      = [parent] # Don't include this in the state dict
         self.index       = index
         self.num_heads   = cfg.num_heads # Defined by Yolact
@@ -264,7 +211,7 @@ class PredictionModule(nn.Module):
             preds['inst'] = inst
         
         return preds
-    
+
     def make_priors(self, conv_h, conv_w, device):
         """ Note that priors are [x,y,width,height] where (x,y) is the center of the box. """
         global prior_cache
@@ -280,24 +227,25 @@ class PredictionModule(nn.Module):
                     x = (i + 0.5) / conv_w
                     y = (j + 0.5) / conv_h
                     
-                    for scale, ars in zip(self.scales, self.aspect_ratios):
-                        for ar in ars:
-                            if not cfg.backbone.preapply_sqrt:
-                                ar = sqrt(ar)
+                    for ars in self.aspect_ratios:
+                        for scale in self.scales:
+                            for ar in ars:
+                                if not cfg.backbone.preapply_sqrt:
+                                    ar = sqrt(ar)
 
-                            if cfg.backbone.use_pixel_scales:
-                                w = scale * ar / cfg._tmp_img_w  # These are populated by
-                                h = scale / ar / cfg._tmp_img_h  # Yolact.forward
-                            else:
-                                w = scale * ar / conv_w
-                                h = scale / ar / conv_h
-                            
-                            # This is for backward compatability with a bug where I made everything square by accident
-                            if cfg.backbone.use_square_anchors:
-                                h = w
+                                if cfg.backbone.use_pixel_scales:
+                                    w = scale * ar / cfg.max_size
+                                    h = scale / ar / cfg.max_size
+                                else:
+                                    w = scale * ar / conv_w
+                                    h = scale / ar / conv_h
+                                
+                                # This is for backward compatability with a bug where I made everything square by accident
+                                if cfg.backbone.use_square_anchors:
+                                    h = w
 
-                            prior_data += [x, y, w, h]
-                
+                                prior_data += [x, y, w, h]
+
                 self.priors = torch.Tensor(prior_data, device=device).view(-1, 4).detach()
                 self.priors.requires_grad = False
                 self.last_img_size = (cfg._tmp_img_w, cfg._tmp_img_h)
@@ -470,6 +418,9 @@ class Yolact(nn.Module):
         self.selected_layers = cfg.backbone.selected_layers
         src_channels = self.backbone.channels
 
+        if cfg.use_maskiou:
+            self.maskiou_net = FastMaskIoUNet()
+
         if cfg.fpn is not None:
             # Some hacky rewiring to accomodate the FPN
             self.fpn = FPN([src_channels[i] for i in self.selected_layers])
@@ -523,7 +474,6 @@ class Yolact(nn.Module):
             if key.startswith('fpn.downsample_layers.'):
                 if cfg.fpn is not None and int(key.split('.')[2]) >= cfg.fpn.num_downsample:
                     del state_dict[key]
-
         self.load_state_dict(state_dict)
 
     def init_weights(self, backbone_path):
@@ -575,6 +525,11 @@ class Yolact(nn.Module):
                     else:
                         module.bias.data.zero_()
 
+    def get_maskiou_net(self):
+        if cfg.use_maskiou:
+            return self.maskiou_net
+        return None
+    
     def train(self, mode=True):
         super().train(mode)
 
@@ -589,7 +544,7 @@ class Yolact(nn.Module):
 
                 module.weight.requires_grad = enable
                 module.bias.requires_grad = enable
-
+    
     def forward(self, x):
         """ The input should be of size [batch_size, 3, img_h, img_w] """
         _, _, img_h, img_w = x.size()
