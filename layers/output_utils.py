@@ -13,7 +13,7 @@ from utils import timer
 from .box_utils import crop, sanitize_coordinates
 
 def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear',
-                visualize_lincomb=False, crop_masks=True, score_threshold=0, maskiou_net=None):
+                visualize_lincomb=False, crop_masks=True, score_threshold=0):
     """
     Postprocesses the output of Yolact on testing mode into a format that makes sense,
     accounting for all the possible configuration settings.
@@ -33,7 +33,9 @@ def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear',
     """
     
     dets = det_output[batch_idx]
-    
+    net = dets['net']
+    dets = dets['detection']
+
     if dets is None:
         return [torch.Tensor()] * 4 # Warning, this is 4 copies of the same thing
 
@@ -77,7 +79,7 @@ def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear',
         if cfg.use_maskiou:
             with timer.env('maskiou_net'):                
                 with torch.no_grad():
-                    maskiou_p = maskiou_net(masks.unsqueeze(1))
+                    maskiou_p = net.maskiou_net(masks.unsqueeze(1))
                     maskiou_p = torch.gather(maskiou_p, dim=1, index=classes.unsqueeze(1)).squeeze(1)
                     if cfg.rescore_mask:
                         if cfg.rescore_bbox:

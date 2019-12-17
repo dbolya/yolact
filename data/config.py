@@ -634,8 +634,12 @@ coco_base_config = Config({
     # Do not crop out the mask with bbox but slide a convnet on the image-size mask,
     # then use global pooling to get the final mask score
     'use_maskiou': False,
+    
+    # Archecture for the mask iou network. A (num_classes-1, 1, {}) layer is appended to the end.
     'maskiou_net': [],
-    'remove_small_gt_mask': -1,
+
+    # Discard predicted masks whose area is less than this
+    'discard_mask_area': -1,
 
     'maskiou_alpha': 1.0,
     'rescore_mask': False,
@@ -779,12 +783,12 @@ yolact_plus_base_config = yolact_base_config.copy({
     }),
 
     'use_maskiou': True,
-    'maskiou_net': [(8, 3, {'stride': 2}), (16, 3, {'stride': 2}), (32, 3, {'stride': 2}), (64, 3, {'stride': 2}), (128, 3, {'stride': 2}), (80, 1, {})],
+    'maskiou_net': [(8, 3, {'stride': 2}), (16, 3, {'stride': 2}), (32, 3, {'stride': 2}), (64, 3, {'stride': 2}), (128, 3, {'stride': 2})],
     'maskiou_alpha': 25,
     'rescore_bbox': False,
     'rescore_mask': True,
 
-    'remove_small_gt_mask': 5*5,
+    'discard_mask_area': 5*5,
 })
 
 yolact_plus_resnet50_config = yolact_plus_base_config.copy({

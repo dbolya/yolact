@@ -138,19 +138,10 @@ class NetLoss(nn.Module):
 
         self.net = net
         self.criterion = criterion
-        if cfg.use_maskiou:
-            self.maskiou_net = net.get_maskiou_net()
     
     def forward(self, images, targets, masks, num_crowds):
         preds = self.net(images)
-
-        if cfg.use_maskiou:
-            losses, maskiou_targets = self.criterion(preds, targets, masks, num_crowds)
-            maskiou_net_input, maskiou_t, label_t = maskiou_targets
-            loss_i = self.maskiou_net(maskiou_net_input, target=[maskiou_t, label_t])
-            losses['I'] = loss_i
-        else:
-            losses = self.criterion(preds, targets, masks, num_crowds)
+        losses = self.criterion(self.net, preds, targets, masks, num_crowds)
         return losses
 
 class CustomDataParallel(nn.DataParallel):

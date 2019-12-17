@@ -47,7 +47,7 @@ class MultiBoxLoss(nn.Module):
             self.class_instances = None
             self.total_instances = 0
 
-    def forward(self, predictions, targets, masks, num_crowds):
+    def forward(self, net, predictions, targets, masks, num_crowds):
         """Multibox Loss
         Args:
             predictions (tuple): A tuple containing loc preds, conf preds,
@@ -183,6 +183,10 @@ class MultiBoxLoss(nn.Module):
             else:
                 losses['C'] = self.ohem_conf_loss(conf_data, conf_t, pos, batch_size)
 
+        # Mask IoU Loss
+        if cfg.use_maskiou:
+            losses['I'] = self.mask_iou_loss(net, maskiou_targets)
+
         # These losses also don't depend on anchors
         if cfg.use_class_existence_loss:
             losses['E'] = self.class_existence_loss(predictions['classes'], class_existence_t)
@@ -206,10 +210,7 @@ class MultiBoxLoss(nn.Module):
         #  - D: Coefficient Diversity Loss
         #  - E: Class Existence Loss
         #  - S: Semantic Segmentation Loss
-        if cfg.use_maskiou:
-            return losses, maskiou_targets
-        else:
-            return losses
+        return losses
 
     def class_existence_loss(self, class_data, class_existence_t):
         return cfg.class_existence_alpha * F.binary_cross_entropy_with_logits(class_data, class_existence_t, reduction='sum')
@@ -614,9 +615,9 @@ class MultiBoxLoss(nn.Module):
                 
             if cfg.mask_proto_normalize_emulate_roi_pooling:
                 weight = mask_h * mask_w if cfg.mask_proto_crop else 1
-                pos_get_csize = center_size(pos_gt_box_t)
-                gt_box_width  = pos_get_csize[:, 2] * mask_w
-                gt_box_height = pos_get_csize[:, 3] * mask_h
+                pos_gt_csize = center_size(pos_gt_box_t)
+                gt_box_width  = pos_gt_csize[:, 2] * mask_w
+                gt_box_height = pos_gt_csize[:, 3] * mask_h
                 pre_loss = pre_loss.sum(dim=(0, 1)) / gt_box_width / gt_box_height * weight
 
             # If the number of masks were limited scale the loss accordingly
@@ -626,9 +627,9 @@ class MultiBoxLoss(nn.Module):
             loss_m += torch.sum(pre_loss)
 
             if cfg.use_maskiou:
-                if cfg.remove_small_gt_mask > 0:
+                if cfg.discard_mask_area > 0:
                     gt_mask_area = torch.sum(mask_t, dim=(0, 1))
-                    select = gt_mask_area > cfg.remove_small_gt_mask
+                    select = gt_mask_area > cfg.discard_mask_area
 
                     if torch.sum(select) < 1:
                         continue
@@ -675,3 +676,14 @@ class MultiBoxLoss(nn.Module):
         union = (area1 + area2) - intersection
         ret = intersection / union
         return ret
+
+    def mask_iou_loss(self, net, maskiou_targets):
+        maskiou_net_input, maskiou_t, label_t = maskiou_targets
+
+        maskiou_p = net.maskiou_net(maskiou_net_input)
+
+        label_t = label_t[:, None]
+        maskiou_p = torch.gather(maskiou_p, dim=1, index=label_t).squeeze()
+        loss_i = F.smooth_l1_loss(maskiou_p, maskiou_t, reduction='sum')
+        
+        return loss_i * cfg.maskiou_alpha

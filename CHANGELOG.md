@@ -4,6 +4,12 @@ This document will detail all changes I make.
 I don't know how I'm going to be versioning things yet, so you get dates for now.
 
 ```
+2019.12.16 (v1.2):
+  - Added YOLACT++ implementation, paper, and code.
+    - Added DCN support (need to compile CUDA kernels if you want to use them, see README).
+    - Added a mask rescoring network trained with mask iou.
+    - Added configs with more anchors.
+
 2019.12.06:
   - Made training much more stable (no more infs and hopefully fewer loss explosions) by ignoring
     augmented boxes with < 4px of height and width (this includes 0 area boxes which caused the inf).

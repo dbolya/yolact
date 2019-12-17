@@ -10,7 +10,6 @@ from collections import defaultdict
 
 from data.config import cfg, mask_type
 from layers import Detect
-from layers.mask_score import FastMaskIoUNet
 from layers.interpolate import InterpolateModule
 from backbone import construct_backbone
 
@@ -361,6 +360,20 @@ class FPN(ScriptModuleWrapper):
 
         return out
 
+class FastMaskIoUNet(ScriptModuleWrapper):
+
+    def __init__(self):
+        super().__init__()
+        input_channels = 1
+        last_layer = [(cfg.num_classes-1, 1, {})]
+        self.maskiou_net, _ = make_net(input_channels, cfg.maskiou_net + last_layer, include_last_relu=True)
+
+    def forward(self, x):
+        x = self.maskiou_net(x)
+        maskiou_p = F.max_pool2d(x, kernel_size=x.size()[2:]).squeeze(-1).squeeze(-1)
+
+        return maskiou_p
+
 
 
 class Yolact(nn.Module):
@@ -524,11 +537,6 @@ class Yolact(nn.Module):
                             module.bias.data[1:] = -np.log((1 - cfg.focal_loss_init_pi) / cfg.focal_loss_init_pi)
                     else:
                         module.bias.data.zero_()
-
-    def get_maskiou_net(self):
-        if cfg.use_maskiou:
-            return self.maskiou_net
-        return None
     
     def train(self, mode=True):
         super().train(mode)
@@ -657,7 +665,7 @@ class Yolact(nn.Module):
                 else:
                     pred_outs['conf'] = F.softmax(pred_outs['conf'], -1)
 
-            return self.detect(pred_outs)
+            return self.detect(pred_outs, self)
 
 
 
@@ -679,7 +687,6 @@ if __name__ == '__main__':
 
     # GPU
     net = net.cuda()
-    cudnn.benchmark = True
     torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
     x = torch.zeros((1, 3, cfg.max_size, cfg.max_size))
