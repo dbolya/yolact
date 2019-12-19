@@ -421,36 +421,14 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, num_crowd, image_id, de
             ('mask', lambda i,j: mask_iou_cache[i, j].item(), lambda i,j: crowd_mask_iou_cache[i,j].item())
         ]
 
-    global feature_classification
-
-    gt_boxes_npy = gt_boxes.cpu().numpy()
-
-    for i in range(bbox_iou_cache.size(0)):
-        max_iou, max_idx = bbox_iou_cache[i].max(dim=0)
-        j = max_idx.item()
-
-        if max_iou > 0.5 and scores[i] > 0.05:
-            feature_classification.append({
-                'score': scores[i],
-                'gt_box': gt_boxes_npy[j],
-                'gt_class': gt_classes[j],
-                'pred_class': classes[i],
-                'pred_box': boxes_cpu[i],
-                'feats': feats['feats'][i],
-                'anchor': feats['anchor'][i],
-                'scale': feats['scale'][i],
-                'box_iou': max_iou.item(),
-                'mask_iou': mask_iou_cache[i, j].item(),
-                'ar': feats['ar'][i],
-                'image': image_id,
-            })
+    positive = [None for _ in range(num_pred)]
 
     timer.start('Main loop')
     for _class in set(classes + gt_classes):
         ap_per_iou = []
         num_gt_for_class = sum([1 for x in gt_classes if x == _class])
         
-        for iouIdx in range(len(iou_thresholds)):
+        for iouIdx in [0]: # range(len(iou_thresholds)):
             iou_threshold = iou_thresholds[iouIdx]
 
             for iou_type, iou_func, crowd_func in iou_types:
@@ -478,6 +456,8 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, num_crowd, image_id, de
                     if max_match_idx >= 0:
                         gt_used[max_match_idx] = True
                         ap_obj.push(scores[i], True)
+                        if iouIdx == 0:
+                            positive[i] = True
                     else:
                         # If the detection matches a crowd, we can just ignore it
                         matched_crowd = False
@@ -498,7 +478,33 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, num_crowd, image_id, de
                         # begin with, but accuracy is of the utmost importance.
                         if not matched_crowd:
                             ap_obj.push(scores[i], False)
+                            if iouIdx == 0:
+                                positive[i] = False
     timer.stop('Main loop')
+
+    global feature_classification
+
+    gt_boxes_npy = gt_boxes.cpu().numpy()
+
+    for i in range(num_pred):
+        max_iou, max_idx = bbox_iou_cache[i].max(dim=0)
+        j = max_idx.item()
+
+        feature_classification.append({
+            'score': scores[i],
+            'gt_box': gt_boxes_npy[j],
+            'gt_class': gt_classes[j],
+            'pred_class': classes[i],
+            'pred_box': boxes_cpu[i],
+            'feats': feats['feats'][i],
+            'anchor': feats['anchor'][i],
+            'scale': feats['scale'][i],
+            'box_iou': max_iou.item(),
+            'mask_iou': mask_iou_cache[i, j].item(),
+            'ar': feats['ar'][i],
+            'image': image_id,
+            'positive': positive[i]
+        })
 
 
 class APDataObject:
