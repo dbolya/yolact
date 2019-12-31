@@ -4,6 +4,7 @@ from utils import timer
 
 from data import cfg
 
+@torch.jit.script
 def point_form(boxes):
     """ Convert prior_boxes to (xmin, ymin, xmax, ymax)
     representation for comparison to point form ground truth data.
@@ -16,6 +17,7 @@ def point_form(boxes):
                      boxes[:, :2] + boxes[:, 2:]/2), 1)  # xmax, ymax
 
 
+@torch.jit.script
 def center_size(boxes):
     """ Convert prior_boxes to (cx, cy, w, h)
     representation for comparison to center-size form ground truth data.
@@ -27,7 +29,7 @@ def center_size(boxes):
     return torch.cat(( (boxes[:, 2:] + boxes[:, :2])/2,     # cx, cy
                         boxes[:, 2:] - boxes[:, :2]  ), 1)  # w, h
 
-
+@torch.jit.script
 def intersect(box_a, box_b):
     """ We resize both tensors to [A,B,2] without new malloc:
     [A,2] -> [A,1,2] -> [A,B,2]
@@ -50,7 +52,7 @@ def intersect(box_a, box_b):
     return inter[:, :, :, 0] * inter[:, :, :, 1]
 
 
-def jaccard(box_a, box_b, iscrowd=False):
+def jaccard(box_a, box_b, iscrowd:bool=False):
     """Compute the jaccard overlap of two sets of boxes.  The jaccard overlap
     is simply the intersection over union of two boxes.  Here we operate on
     ground truth boxes and default boxes. If iscrowd=True, put the crowd in box_b.
@@ -77,6 +79,51 @@ def jaccard(box_a, box_b, iscrowd=False):
 
     out = inter / area_a if iscrowd else inter / union
     return out if use_batch else out.squeeze(0)
+
+def elemwise_box_iou(box_a, box_b):
+    """ Does the same as above but instead of pairwise, elementwise along the inner dimension. """
+    max_xy = torch.min(box_a[:, 2:], box_b[:, 2:])
+    min_xy = torch.max(box_a[:, :2], box_b[:, :2])
+    inter = torch.clamp((max_xy - min_xy), min=0)
+    inter = inter[:, 0] * inter[:, 1]
+
+    area_a = (box_a[:, 2] - box_a[:, 0]) * (box_a[:, 3] - box_a[:, 1])
+    area_b = (box_b[:, 2] - box_b[:, 0]) * (box_b[:, 3] - box_b[:, 1])
+
+    union = area_a + area_b - inter
+    union = torch.clamp(union, min=0.1)
+
+    # Return value is [n] for inputs [n, 4]
+    return torch.clamp(inter / union, max=1)
+
+def mask_iou(masks_a, masks_b, iscrowd=False):
+    """
+    Computes the pariwise mask IoU between two sets of masks of size [a, h, w] and [b, h, w].
+    The output is of size [a, b].
+
+    Wait I thought this was "box_utils", why am I putting this in here?
+    """
+
+    masks_a = masks_a.view(masks_a.size(0), -1)
+    masks_b = masks_b.view(masks_b.size(0), -1)
+
+    intersection = masks_a @ masks_b.t()
+    area_a = masks_a.sum(dim=1).unsqueeze(1)
+    area_b = masks_b.sum(dim=1).unsqueeze(0)
+
+    return intersection / (area_a + area_b - intersection) if not iscrowd else intersection / area_a
+
+def elemwise_mask_iou(masks_a, masks_b):
+    """ Does the same as above but instead of pairwise, elementwise along the outer dimension. """
+    masks_a = masks_a.view(-1, masks_a.size(-1))
+    masks_b = masks_b.view(-1, masks_b.size(-1))
+
+    intersection = (masks_a * masks_b).sum(dim=0)
+    area_a = masks_a.sum(dim=0)
+    area_b = masks_b.sum(dim=0)
+
+    # Return value is [n] for inputs [h, w, n]
+    return torch.clamp(intersection / torch.clamp(area_a + area_b - intersection, min=0.1), max=1)
 
 
 
@@ -129,25 +176,36 @@ def match(pos_thresh, neg_thresh, truths, priors, labels, crowd_boxes, loc_t, co
     Return:
         The matched indices corresponding to 1)location and 2)confidence preds.
     """
-    decoded_priors = decode(loc_data, priors) if cfg.use_prediction_matching else point_form(priors)
+    decoded_priors = decode(loc_data, priors, cfg.use_yolo_regressors) if cfg.use_prediction_matching else point_form(priors)
     
     # Size [num_objects, num_priors]
     overlaps = jaccard(truths, decoded_priors) if not cfg.use_change_matching else change(truths, decoded_priors)
 
-    # Size [num_objects] best prior for each ground truth
-    best_prior_overlap, best_prior_idx = overlaps.max(1)
     # Size [num_priors] best ground truth for each prior
     best_truth_overlap, best_truth_idx = overlaps.max(0)
-    
-    # For the best prior for each gt object, set its overlap to 2. This ensures
-    # that it won't get thresholded out in the threshold step even if the IoU is
-    # under the negative threshold. This is because we want at least one anchor
-    # to match with each ground truth or else we'd be wasting training data.
-    best_truth_overlap.index_fill_(0, best_prior_idx, 2)
 
-    # Set the index of the pair (prior, gt) we set the overlap for above.
-    for j in range(best_prior_idx.size(0)):
-        best_truth_idx[best_prior_idx[j]] = j
+    # We want to ensure that each gt gets used at least once so that we don't
+    # waste any training data. In order to do that, find the max overlap anchor
+    # with each gt, and force that anchor to use that gt.
+    for _ in range(overlaps.size(0)):
+        # Find j, the gt with the highest overlap with a prior
+        # In effect, this will loop through overlaps.size(0) in a "smart" order,
+        # always choosing the highest overlap first.
+        best_prior_overlap, best_prior_idx = overlaps.max(1)
+        j = best_prior_overlap.max(0)[1]
+
+        # Find i, the highest overlap anchor with this gt
+        i = best_prior_idx[j]
+
+        # Set all other overlaps with i to be -1 so that no other gt uses it
+        overlaps[:, i] = -1
+        # Set all other overlaps with j to be -1 so that this loop never uses j again
+        overlaps[j, :] = -1
+
+        # Overwrite i's score to be 2 so it doesn't get thresholded ever
+        best_truth_overlap[i] = 2
+        # Set the gt to be used for i to be j, overwriting whatever was there
+        best_truth_idx[i] = j
 
     matches = truths[best_truth_idx]            # Shape: [num_priors,4]
     conf = labels[best_truth_idx] + 1           # Shape: [num_priors]
@@ -164,13 +222,13 @@ def match(pos_thresh, neg_thresh, truths, priors, labels, crowd_boxes, loc_t, co
         # Set non-positives with crowd iou of over the threshold to be neutral.
         conf[(conf <= 0) & (best_crowd_overlap > cfg.crowd_iou_threshold)] = -1
 
-    loc = encode(matches, priors)
+    loc = encode(matches, priors, cfg.use_yolo_regressors)
     loc_t[idx]  = loc    # [num_priors,4] encoded offsets to learn
     conf_t[idx] = conf   # [num_priors] top class label for each prior
     idx_t[idx]  = best_truth_idx # [num_priors] indices for lookup
 
-
-def encode(matched, priors):
+@torch.jit.script
+def encode(matched, priors, use_yolo_regressors:bool=False):
     """
     Encode bboxes matched with each prior into the format
     produced by the network. See decode for more details on
@@ -183,7 +241,7 @@ def encode(matched, priors):
             outputted by the network (see decode). Size: [num_priors, 4]
     """
 
-    if cfg.use_yolo_regressors:
+    if use_yolo_regressors:
         # Exactly the reverse of what we did in decode
         # In fact encode(decode(x, p), p) should be x
         boxes = center_size(matched)
@@ -192,8 +250,6 @@ def encode(matched, priors):
             boxes[:, :2] - priors[:, :2],
             torch.log(boxes[:, 2:] / priors[:, 2:])
         ), 1)
-
-        return loc
     else:
         variances = [0.1, 0.2]
 
@@ -205,9 +261,12 @@ def encode(matched, priors):
         g_wh = (matched[:, 2:] - matched[:, :2]) / priors[:, 2:]
         g_wh = torch.log(g_wh) / variances[1]
         # return target for smooth_l1_loss
-        return torch.cat([g_cxcy, g_wh], 1)  # [num_priors,4]
+        loc = torch.cat([g_cxcy, g_wh], 1)  # [num_priors,4]
+        
+    return loc
 
-def decode(loc, priors):
+@torch.jit.script
+def decode(loc, priors, use_yolo_regressors:bool=False):
     """
     Decode predicted bbox coordinates using the same scheme
     employed by Yolov2: https://arxiv.org/pdf/1612.08242.pdf
@@ -234,14 +293,14 @@ def decode(loc, priors):
              form with size [num_priors, 4]
     """
 
-    if cfg.use_yolo_regressors:
+    if use_yolo_regressors:
         # Decoded boxes in center-size notation
         boxes = torch.cat((
             loc[:, :2] + priors[:, :2],
             priors[:, 2:] * torch.exp(loc[:, 2:])
         ), 1)
 
-        return point_form(boxes)
+        boxes = point_form(boxes)
     else:
         variances = [0.1, 0.2]
         
@@ -250,7 +309,8 @@ def decode(loc, priors):
             priors[:, 2:] * torch.exp(loc[:, 2:] * variances[1])), 1)
         boxes[:, :2] -= boxes[:, 2:] / 2
         boxes[:, 2:] += boxes[:, :2]
-        return boxes
+    
+    return boxes
 
 
 
@@ -265,89 +325,8 @@ def log_sum_exp(x):
     return torch.log(torch.sum(torch.exp(x-x_max), 1)) + x_max
 
 
-# Original author: Francisco Massa:
-# https://github.com/fmassa/object-detection.torch
-# Ported to PyTorch by Max deGroot (02/01/2017)
-def nms(boxes, scores, overlap=0.5, top_k=200, force_cpu=True):
-    """Apply non-maximum suppression at test time to avoid detecting too many
-    overlapping bounding boxes for a given object.
-    Args:
-        boxes: (tensor) The location preds for the img, Shape: [num_priors,4].
-        scores: (tensor) The class predscores for the img, Shape:[num_priors].
-        overlap: (float) The overlap thresh for suppressing unnecessary boxes.
-        top_k: (int) The Maximum number of box preds to consider.
-    Return:
-        The indices of the kept boxes with respect to num_priors.
-    """
-
-    cuda_enabled = boxes.is_cuda
-
-    if force_cpu:
-        boxes = boxes.cpu()
-        scores = scores.cpu()
-
-    timer.start('NMS')
-    keep = scores.new(scores.size(0)).zero_().long()
-    if boxes.numel() == 0:
-        return keep
-    x1 = boxes[:, 0]
-    y1 = boxes[:, 1]
-    x2 = boxes[:, 2]
-    y2 = boxes[:, 3]
-    area = torch.mul(x2 - x1, y2 - y1)
-    v, idx = scores.sort(0)  # sort in ascending order
-    # I = I[v >= 0.01]
-    idx = idx[-top_k:]  # indices of the top-k largest vals
-    xx1 = boxes.new()
-    yy1 = boxes.new()
-    xx2 = boxes.new()
-    yy2 = boxes.new()
-    w = boxes.new()
-    h = boxes.new()
-
-    # keep = torch.Tensor()
-    count = 0
-    while idx.numel() > 0:
-        i = idx[-1]  # index of current largest val
-        # keep.append(i)
-        keep[count] = i
-        count += 1
-        if idx.size(0) == 1:
-            break
-        idx = idx[:-1]  # remove kept element from view
-        # load bboxes of next highest vals
-        torch.index_select(x1, 0, idx, out=xx1)
-        torch.index_select(y1, 0, idx, out=yy1)
-        torch.index_select(x2, 0, idx, out=xx2)
-        torch.index_select(y2, 0, idx, out=yy2)
-        # store element-wise max with next highest score
-        xx1 = torch.clamp(xx1, min=x1[i])
-        yy1 = torch.clamp(yy1, min=y1[i])
-        xx2 = torch.clamp(xx2, max=x2[i])
-        yy2 = torch.clamp(yy2, max=y2[i])
-        w.resize_as_(xx2)
-        h.resize_as_(yy2)
-        w = xx2 - xx1
-        h = yy2 - yy1
-        # check sizes of xx1 and xx2.. after each iteration
-        w = torch.clamp(w, min=0.0)
-        h = torch.clamp(h, min=0.0)
-        inter = w*h
-        # IoU = i / (area(a) + area(b) - i)
-        rem_areas = torch.index_select(area, 0, idx)  # load remaining areas)
-        union = (rem_areas - inter) + area[i]
-        IoU = inter/union  # store result in iou
-        # keep only elements with an IoU <= overlap
-        idx = idx[IoU.le(overlap)]
-        
-    if cuda_enabled:
-        keep = keep.cuda()
-
-    timer.stop()
-    return keep, count
-
-
-def sanitize_coordinates(_x1, _x2, img_size, padding=0, cast=True):
+@torch.jit.script
+def sanitize_coordinates(_x1, _x2, img_size:int, padding:int=0, cast:bool=True):
     """
     Sanitizes the input coordinates so that x1 < x2, x1 != x2, x1 >= 0, and x2 <= image_size.
     Also converts from relative to absolute coordinates and casts the results to long tensors.
@@ -355,8 +334,8 @@ def sanitize_coordinates(_x1, _x2, img_size, padding=0, cast=True):
     If cast is false, the result won't be cast to longs.
     Warning: this does things in-place behind the scenes so copy if necessary.
     """
-    _x1 *= img_size
-    _x2 *= img_size
+    _x1 = _x1 * img_size
+    _x2 = _x2 * img_size
     if cast:
         _x1 = _x1.long()
         _x2 = _x2.long()
@@ -367,7 +346,9 @@ def sanitize_coordinates(_x1, _x2, img_size, padding=0, cast=True):
 
     return x1, x2
 
-def crop(masks, boxes, padding=1):
+
+@torch.jit.script
+def crop(masks, boxes, padding:int=1):
     """
     "Crop" predicted masks by zeroing out everything not in the predicted bbox.
     Vectorized by Chong (thanks Chong).
@@ -376,24 +357,21 @@ def crop(masks, boxes, padding=1):
         - masks should be a size [h, w, n] tensor of masks
         - boxes should be a size [n, 4] tensor of bbox coords in relative point form
     """
-    with torch.no_grad():
-        h, w, n = masks.size()
-        boxes = boxes.clone() # Some in-place stuff goes on here
-        x1, x2 = sanitize_coordinates(boxes[:, 0], boxes[:, 2], w, padding, cast=True)
-        y1, y2 = sanitize_coordinates(boxes[:, 1], boxes[:, 3], h, padding, cast=True)
+    h, w, n = masks.size()
+    x1, x2 = sanitize_coordinates(boxes[:, 0], boxes[:, 2], w, padding, cast=False)
+    y1, y2 = sanitize_coordinates(boxes[:, 1], boxes[:, 3], h, padding, cast=False)
 
-        rows = torch.arange(w, device=masks.device)[None, :, None].expand(h, w, n)
-        cols = torch.arange(h, device=masks.device)[:, None, None].expand(h, w, n)
-        
-        masks_left  = rows >= x1[None, None, :]
-        masks_right = rows <  x2[None, None, :]
-        masks_up    = cols >= y1[None, None, :]
-        masks_down  = cols <  y2[None, None, :]
-        
-        crop_mask = masks_left * masks_right * masks_up * masks_down
+    rows = torch.arange(w, device=masks.device, dtype=x1.dtype).view(1, -1, 1).expand(h, w, n)
+    cols = torch.arange(h, device=masks.device, dtype=x1.dtype).view(-1, 1, 1).expand(h, w, n)
+    
+    masks_left  = rows >= x1.view(1, 1, -1)
+    masks_right = rows <  x2.view(1, 1, -1)
+    masks_up    = cols >= y1.view(1, 1, -1)
+    masks_down  = cols <  y2.view(1, 1, -1)
+    
+    crop_mask = masks_left * masks_right * masks_up * masks_down
     
     return masks * crop_mask.float()
-
 
 
 def index2d(src, idx):

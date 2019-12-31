@@ -121,8 +121,8 @@ test_data_aug.py
 .idea/
 
 # temp checkout soln
-data/datasets/
-data/ssd_dataloader.py
+data/coco
+data/sbd
 
 # pylint
 .pylintrc
@@ -149,3 +149,11 @@ train.sh
 img/
 scripts/aws-ohio/
 scripts/aws3/
+data/config_dev.py
+data/coco/
+data/sbd/
+
+vid/
+vidres/
+
+_.py

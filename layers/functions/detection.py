@@ -1,16 +1,11 @@
 import torch
 import torch.nn.functional as F
-from ..box_utils import decode, nms, jaccard, index2d
+from ..box_utils import decode, jaccard, index2d
 from utils import timer
 
 from data import cfg, mask_type
 
 import numpy as np
-
-import pyximport
-pyximport.install(setup_args={"include_dirs":np.get_include()}, reload_support=True)
-
-from utils.cython_nms import nms as cnms
 
 
 class Detect(object):
@@ -31,10 +26,10 @@ class Detect(object):
             raise ValueError('nms_threshold must be non negative.')
         self.conf_thresh = conf_thresh
         
-        self.cross_class_nms = False
+        self.use_cross_class_nms = False
         self.use_fast_nms = False
 
-    def __call__(self, predictions):
+    def __call__(self, predictions, net):
         """
         Args:
              loc_data: (tensor) Loc preds from loc layers
@@ -77,8 +72,8 @@ class Detect(object):
 
                 if result is not None and proto_data is not None:
                     result['proto'] = proto_data[batch_idx]
-                
-                out.append(result)
+
+                out.append({'detection': result, 'net': net})
         
         return out
 
@@ -100,40 +95,46 @@ class Detect(object):
             return None
         
         if self.use_fast_nms:
-            boxes, masks, classes, scores = self.fast_nms(boxes, masks, scores, self.nms_thresh, self.top_k)
+            if self.use_cross_class_nms:
+                boxes, masks, classes, scores = self.cc_fast_nms(boxes, masks, scores, self.nms_thresh, self.top_k)
+            else:
+                boxes, masks, classes, scores = self.fast_nms(boxes, masks, scores, self.nms_thresh, self.top_k)
         else:
             boxes, masks, classes, scores = self.traditional_nms(boxes, masks, scores, self.nms_thresh, self.conf_thresh)
 
-        return {'box': boxes, 'mask': masks, 'class': classes, 'score': scores}
-    
+            if self.use_cross_class_nms:
+                print('Warning: Cross Class Traditional NMS is not implemented.')
 
-    def coefficient_nms(self, coeffs, scores, cos_threshold=0.9, top_k=400):
+        return {'box': boxes, 'mask': masks, 'class': classes, 'score': scores}
+
+
+    def cc_fast_nms(self, boxes, masks, scores, iou_threshold:float=0.5, top_k:int=200):
+        # Collapse all the classes into 1 
+        scores, classes = scores.max(dim=0)
+
         _, idx = scores.sort(0, descending=True)
         idx = idx[:top_k]
-        coeffs_norm = F.normalize(coeffs[idx], dim=1)
 
-        # Compute the pairwise cosine similarity between the coefficients
-        cos_similarity = coeffs_norm @ coeffs_norm.t()
+        boxes_idx = boxes[idx]
+
+        # Compute the pairwise IoU between the boxes
+        iou = jaccard(boxes_idx, boxes_idx)
         
         # Zero out the lower triangle of the cosine similarity matrix and diagonal
-        cos_similarity.triu_(diagonal=1)
+        iou.triu_(diagonal=1)
 
         # Now that everything in the diagonal and below is zeroed out, if we take the max
-        # of the cos similarity matrix along the columns, each column will represent the
-        # maximum cosine similarity between this element and every element with a higher
-        # score than this element.
-        cos_max, _ = torch.max(cos_similarity, dim=0)
+        # of the IoU matrix along the columns, each column will represent the maximum IoU
+        # between this element and every element with a higher score than this element.
+        iou_max, _ = torch.max(iou, dim=0)
 
-        # Now just filter out the ones higher than the threshold
-        idx_out = idx[cos_max <= cos_threshold]
-
-
-        # new_mask_norm = F.normalize(masks[idx_out], dim=1)
-        # print(new_mask_norm[:5] @ new_mask_norm[:5].t())
+        # Now just filter out the ones greater than the threshold, i.e., only keep boxes that
+        # don't have a higher scoring box that would supress it in normal NMS.
+        idx_out = idx[iou_max <= iou_threshold]
         
-        return idx_out, idx_out.size(0)
+        return boxes[idx_out], masks[idx_out], classes[idx_out], scores[idx_out]
 
-    def fast_nms(self, boxes, masks, scores, iou_threshold=0.5, top_k=200, second_threshold=False):
+    def fast_nms(self, boxes, masks, scores, iou_threshold:float=0.5, top_k:int=200, second_threshold:bool=False):
         scores, idx = scores.sort(1, descending=True)
 
         idx = idx[:, :top_k].contiguous()
@@ -178,7 +179,12 @@ class Detect(object):
 
         return boxes, masks, classes, scores
 
-    def traditional_nms(self, boxes, scores, iou_threshold=0.5, conf_thresh=0.05):
+    def traditional_nms(self, boxes, masks, scores, iou_threshold=0.5, conf_thresh=0.05):
+        import pyximport
+        pyximport.install(setup_args={"include_dirs":np.get_include()}, reload_support=True)
+
+        from utils.cython_nms import nms as cnms
+
         num_classes = scores.size(0)
 
         idx_lst = []
@@ -186,7 +192,7 @@ class Detect(object):
         scr_lst = []
 
         # Multiplying by max_size is necessary because of how cnms computes its area and intersections
-        boxes = boxes * cfg.mask_size
+        boxes = boxes * cfg.max_size
 
         for _cls in range(num_classes):
             cls_scores = scores[_cls, :]
@@ -218,4 +224,5 @@ class Detect(object):
         idx = idx[idx2]
         classes = classes[idx2]
 
-        return boxes[idx], masks[idx], classes, scores
+        # Undo the multiplication above
+        return boxes[idx] / cfg.max_size, masks[idx], classes, scores

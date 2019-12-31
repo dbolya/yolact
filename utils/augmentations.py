@@ -4,6 +4,7 @@ import cv2
 import numpy as np
 import types
 from numpy import random
+from math import sqrt
 
 from data import cfg, MEANS, STD
 
@@ -126,31 +127,18 @@ class Pad(object):
         return expand_image, masks, boxes, labels
 
 class Resize(object):
-    """
-    The same resizing scheme as used in faster R-CNN
-    https://arxiv.org/pdf/1506.01497.pdf
-
-    We resize the image so that the shorter side is min_size.
-    If the longer side is then over max_size, we instead resize
-    the image so the long side is max_size.
-    """
+    """ If preserve_aspect_ratio is true, this resizes to an approximate area of max_size * max_size """
 
     @staticmethod
-    def faster_rcnn_scale(width, height, min_size, max_size):
-        min_scale = min_size / min(width, height)
-        width  *= min_scale
-        height *= min_scale
-
-        max_scale = max_size / max(width, height)
-        if max_scale < 1: # If a size is greater than max_size
-            width  *= max_scale
-            height *= max_scale
-        
-        return int(width), int(height)
+    def calc_size_preserve_ar(img_w, img_h, max_size):
+        """ I mathed this one out on the piece of paper. Resulting width*height = approx max_size^2 """
+        ratio = sqrt(img_w / img_h)
+        w = max_size * ratio
+        h = max_size / ratio
+        return int(w), int(h)
 
     def __init__(self, resize_gt=True):
         self.resize_gt = resize_gt
-        self.min_size = cfg.min_size
         self.max_size = cfg.max_size
         self.preserve_aspect_ratio = cfg.preserve_aspect_ratio
 
@@ -158,12 +146,12 @@ class Resize(object):
         img_h, img_w, _ = image.shape
         
         if self.preserve_aspect_ratio:
-            width, height = Resize.faster_rcnn_scale(img_w, img_h, self.min_size, self.max_size)
+            width, height = Resize.calc_size_preserve_ar(img_w, img_h, self.max_size)
         else:
             width, height = self.max_size, self.max_size
 
         image = cv2.resize(image, (width, height))
-        
+
         if self.resize_gt:
             # Act like each object is a color channel
             masks = masks.transpose((1, 2, 0))
@@ -178,6 +166,16 @@ class Resize(object):
             # Scale bounding boxes (which are currently absolute coordinates)
             boxes[:, [0, 2]] *= (width  / img_w)
             boxes[:, [1, 3]] *= (height / img_h)
+
+        # Discard boxes that are smaller than we'd like
+        w = boxes[:, 2] - boxes[:, 0]
+        h = boxes[:, 3] - boxes[:, 1]
+
+        keep = (w > cfg.discard_box_width) * (h > cfg.discard_box_height)
+        masks = masks[keep]
+        boxes = boxes[keep]
+        labels['labels'] = labels['labels'][keep]
+        labels['num_crowds'] = (labels['labels'] < 0).sum()
 
         return image, masks, boxes, labels
 
@@ -453,6 +451,30 @@ class RandomMirror(object):
         return image, masks, boxes, labels
 
 
+class RandomFlip(object):
+    def __call__(self, image, masks, boxes, labels):
+        height , _ , _ = image.shape
+        if random.randint(2):
+            image = image[::-1, :]
+            masks = masks[:, ::-1, :]
+            boxes = boxes.copy()
+            boxes[:, 1::2] = height - boxes[:, 3::-2]
+        return image, masks, boxes, labels
+
+
+class RandomRot90(object):
+    def __call__(self, image, masks, boxes, labels):
+        old_height , old_width , _ = image.shape
+        k = random.randint(4)
+        image = np.rot90(image,k)
+        masks = np.array([np.rot90(mask,k) for mask in masks])
+        boxes = boxes.copy()
+        for _ in range(k):
+            boxes = np.array([[box[1], old_width - 1 - box[2], box[3], old_width - 1 - box[0]] for box in boxes])
+            old_width, old_height = old_height, old_width
+        return image, masks, boxes, labels
+
+
 class SwapChannels(object):
     """Transforms a tensorized image by swapping the channels in the order
      specified in the swap tuple.
@@ -583,7 +605,6 @@ class BaseTransform(object):
         self.augment = Compose([
             ConvertFromInts(),
             Resize(resize_gt=False),
-            Pad(cfg.max_size, cfg.max_size, mean, pad_gt=False),
             BackboneTransform(cfg.backbone.transform, mean, std, 'BGR')
         ])
 
@@ -592,25 +613,34 @@ class BaseTransform(object):
 
 import torch.nn.functional as F
 
-class FastBaseTransform(object):
+class FastBaseTransform(torch.nn.Module):
     """
     Transform that does all operations on the GPU for super speed.
     This doesn't suppport a lot of config settings and should only be used for production.
     Maintain this as necessary.
     """
 
-    def __init__(self, ):
+    def __init__(self):
+        super().__init__()
+
         self.mean = torch.Tensor(MEANS).float().cuda()[None, :, None, None]
         self.std  = torch.Tensor( STD ).float().cuda()[None, :, None, None]
         self.transform = cfg.backbone.transform
 
-    def __call__(self, img):
+    def forward(self, img):
+        self.mean = self.mean.to(img.device)
+        self.std  = self.std.to(img.device)
+        
         # img assumed to be a pytorch BGR image with channel order [n, h, w, c]
         if cfg.preserve_aspect_ratio:
-            raise NotImplementedError
+            _, h, w, _ = img.size()
+            img_size = Resize.calc_size_preserve_ar(w, h, cfg.max_size)
+            img_size = (img_size[1], img_size[0]) # Pytorch needs h, w
+        else:
+            img_size = (cfg.max_size, cfg.max_size)
 
         img = img.permute(0, 3, 1, 2).contiguous()
-        img = F.interpolate(img, (cfg.max_size, cfg.max_size), mode='bilinear', align_corners=False)
+        img = F.interpolate(img, img_size, mode='bilinear', align_corners=False)
 
         if self.transform.normalize:
             img = (img - self.mean) / self.std
@@ -645,8 +675,10 @@ class SSDAugmentation(object):
             enable_if(cfg.augment_expand, Expand(mean)),
             enable_if(cfg.augment_random_sample_crop, RandomSampleCrop()),
             enable_if(cfg.augment_random_mirror, RandomMirror()),
+            enable_if(cfg.augment_random_flip, RandomFlip()),
+            enable_if(cfg.augment_random_flip, RandomRot90()),
             Resize(),
-            Pad(cfg.max_size, cfg.max_size, mean),
+            enable_if(not cfg.preserve_aspect_ratio, Pad(cfg.max_size, cfg.max_size, mean)),
             ToPercentCoords(),
             PrepareMasks(cfg.mask_size, cfg.use_gt_bboxes),
             BackboneTransform(cfg.backbone.transform, mean, std, 'BGR')

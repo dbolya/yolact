@@ -6,6 +6,15 @@ _start_times = defaultdict(lambda: -1)
 _disabled_names = set()
 _timer_stack = []
 _running_timer = None
+_disable_all = False
+
+def disable_all():
+	global _disable_all
+	_disable_all = True
+
+def enable_all():
+	global _disable_all
+	_disable_all = False
 
 def disable(fn_name):
 	""" Disables the given function name fom being considered for the average or outputted in print_stats. """
@@ -29,8 +38,11 @@ def start(fn_name, use_stack=True):
 	Note: If use_stack is True, only one timer can be active at a time.
 	      Once you stop this timer, the previous one will start again.
 	"""
-	global _running_timer
+	global _running_timer, _disable_all
 	
+	if _disable_all:
+		return
+
 	if use_stack:
 		if _running_timer is not None:
 			stop(_running_timer, use_stack=False)
@@ -48,7 +60,10 @@ def stop(fn_name=None, use_stack=True):
 
 	If use_stack is False, this will just stop timing the timer fn_name.
 	"""
-	global _running_timer
+	global _running_timer, _disable_all
+
+	if _disable_all:
+		return
 
 	if use_stack:
 		if _running_timer is not None:
