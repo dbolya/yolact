@@ -1,0 +1,15 @@
+# Installs dependencies for YOLACT managed by Anaconda. 
+name: yolact-env
+dependencies:
+  - python>=3.0
+  - pip
+  - pytorch >= 1.0.1
+  - torchvision
+  - cython
+  - pip:
+    - cython
+    - opencv-python 
+    - pillow
+    - pycocotools 
+    - matplotlib 
+
