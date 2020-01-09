@@ -1,4 +1,6 @@
 # Installs dependencies for YOLACT managed by Anaconda. 
+# TODO: you must additionally install nVidia drivers, eg. on linux 
+# `apt install nvidia-driver-435`
 name: yolact-env
 dependencies:
   - python>=3.0
