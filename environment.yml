@@ -9,7 +9,7 @@ dependencies:
   - pip:
     - cython
     - opencv-python 
-    - pillow
+    - pillow==6.2.1 # bug PILLOW_VERSION in torchvision, must be < 7.0 until torchvision is upgraded
     - pycocotools 
     - matplotlib 
 
