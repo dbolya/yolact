@@ -1,17 +1,22 @@
 # Installs dependencies for YOLACT managed by Anaconda. 
-# TODO: you must additionally install nVidia drivers, eg. on linux 
-# `apt install nvidia-driver-435`
+# TODO: you must additionally install nVidia drivers and CUDA, eg. on linux 
+# `apt install cuda-10-0` from https://developer.nvidia.com/cuda-10.0-download-archive 
 name: yolact-env
+prefix: /home/mmm/.conda/envs/yolact-env
+channels:
+        #  - pytorch
+  - defaults
 dependencies:
-  - python>=3.0
+  - python==3.7
   - pip
-  - pytorch >= 1.0.1
-  - torchvision
   - cython
+  - torchvision
+  - pytorch-gpu>=1.0 # you could also use pytorch (without -gpu) if you want to run on CPU and don't have an nVidia card
+  - cudatoolkit>=10.0 #Note: cudatoolkit version (ie. 10.0.0 must exactly match the cuda you've installed on your system)
   - pip:
-    - cython
     - opencv-python 
     - pillow==6.2.1 # bug PILLOW_VERSION in torchvision, must be < 7.0 until torchvision is upgraded
+      #  - torchvision
     - pycocotools 
     - matplotlib 
     - PyQt5 # needed on KDE/Qt envs
