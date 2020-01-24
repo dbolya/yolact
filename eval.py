@@ -652,10 +652,11 @@ def evalvideo(net:Yolact, path:str, out_path:str=None):
     target_fps   = round(vid.get(cv2.CAP_PROP_FPS))
     frame_width  = round(vid.get(cv2.CAP_PROP_FRAME_WIDTH))
     frame_height = round(vid.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    num_frames   = round(vid.get(cv2.CAP_PROP_FRAME_COUNT))
     
     if is_webcam:
         num_frames = float('inf')
+    else:
+        num_frames = round(vid.get(cv2.CAP_PROP_FRAME_COUNT))
 
     net = CustomDataParallel(net).cuda()
     transform = torch.nn.DataParallel(FastBaseTransform()).cuda()
@@ -787,7 +788,7 @@ def evalvideo(net:Yolact, path:str, out_path:str=None):
             traceback.print_exc()
 
 
-    extract_frame = lambda x, i: (x[0][i] if x[1][i] is None else x[0][i].to(x[1][i]['detection']['box'].device), [x[1][i]])
+    extract_frame = lambda x, i: (x[0][i] if x[1][i]['detection'] is None else x[0][i].to(x[1][i]['detection']['box'].device), [x[1][i]])
 
     # Prime the network on the first frame because I do some thread unsafe things otherwise
     print('Initializing model... ', end='')

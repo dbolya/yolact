@@ -339,7 +339,7 @@ def train():
                 if args.log:
                     precision = 5
                     loss_info = {k: round(losses[k].item(), precision) for k in losses}
-                    loss_info['T'] = round(losses[k].item(), precision)
+                    loss_info['T'] = round(loss.item(), precision)
 
                     if args.log_gpu:
                         log.log_gpu_stats = (iteration % 10 == 0) # nvidia-smi is sloooow
