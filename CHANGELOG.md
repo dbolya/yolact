@@ -6,6 +6,7 @@ I don't know how I'm going to be versioning things yet, so you get dates for now
 ```
 2020.01.23:
   - Fixed the video playback crashing if there's nothing in the scene (fixes #266).
+  - Fixed the logger logging the last loss as total loss instead of the actual total (fixes #254).
 
 2019.12.16 (v1.2):
   - Added YOLACT++ implementation, paper, and code.
