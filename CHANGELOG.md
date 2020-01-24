@@ -4,6 +4,8 @@ This document will detail all changes I make.
 I don't know how I'm going to be versioning things yet, so you get dates for now.
 
 ```
+2020.01.24:
+  - Fixed the conv layer detection during initialization to work with pytorch 1.4 (fixes #292). 
 2020.01.23:
   - Fixed the video playback crashing if there's nothing in the scene (fixes #266).
   - Fixed the logger logging the last loss as total loss instead of the actual total (fixes #254).

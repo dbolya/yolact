@@ -507,16 +507,24 @@ class Yolact(nn.Module):
         for name, module in self.named_modules():
             # See issue #127 for why we need such a complicated condition if the module is a WeakScriptModuleProxy
             # Broke in 1.3 (see issue #175), WeakScriptModuleProxy was turned into just ScriptModule.
+            # Broke in 1.4 (see issue #292), where RecursiveScriptModule is the new star of the show.
             # Note that this might break with future pytorch updates, so let me know if it does
-            is_script_conv = 'Script' in type(module).__name__ \
-                and all_in(module.__dict__['_constants_set'], conv_constants) \
-                and all_in(conv_constants, module.__dict__['_constants_set'])
+            is_script_conv = False
+            if 'Script' in type(module).__name__:
+                # 1.4 workaround: now there's an original_name member so just use that
+                if hasattr(module, 'original_name'):
+                    is_script_conv = 'Conv' in module.original_name
+                # 1.3 workaround: check if this has the same constants as a conv module
+                else:
+                    is_script_conv = (
+                        all_in(module.__dict__['_constants_set'], conv_constants)
+                        and all_in(conv_constants, module.__dict__['_constants_set']))
             
             is_conv_layer = isinstance(module, nn.Conv2d) or is_script_conv
-            
+
             if is_conv_layer and module not in self.backbone.backbone_modules:
                 nn.init.xavier_uniform_(module.weight.data)
-                
+
                 if module.bias is not None:
                     if cfg.use_focal_loss and 'conf_layer' in name:
                         if not cfg.use_sigmoid_focal_loss:
