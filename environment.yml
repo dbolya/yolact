@@ -11,7 +11,7 @@ dependencies:
   - pip
   - cython
   - torchvision
-  - pytorch-gpu>=1.0 # you could also use pytorch (without -gpu) if you want to run on CPU and don't have an nVidia card
+  - pytorch-gpu>=1.0.1 # you could also use pytorch (without -gpu) if you want to run on CPU and don't have an nVidia card
   - cudatoolkit>=10.0 #Note: cudatoolkit version (ie. 10.0.0 must exactly match the cuda you've installed on your system)
   - pip:
     - opencv-python 
