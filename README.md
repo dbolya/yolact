@@ -29,19 +29,23 @@ Some examples from our YOLACT base model (33.5 fps on a Titan Xp and 29.8 mAP on
 ![Example 2](data/yolact_example_2.png)
 
 # Installation
- - Set up a Python3 environment.
- - Install [Pytorch](http://pytorch.org/) 1.0.1 (or higher) and TorchVision.
- - Install some other packages:
-   ```Shell
-   # Cython needs to be installed before pycocotools
-   pip install cython
-   pip install opencv-python pillow pycocotools matplotlib 
-   ```
  - Clone this repository and enter it:
    ```Shell
    git clone https://github.com/dbolya/yolact.git
    cd yolact
    ```
+ - Set up the environment using one of the following methods:
+   - Using [Anaconda](https://www.anaconda.com/distribution/)
+     - Run `conda env create -f environment.yml`
+   - Manually with pip
+     - Set up a Python3 environment (e.g., using virtenv).
+     - Install [Pytorch](http://pytorch.org/) 1.0.1 (or higher) and TorchVision.
+     - Install some other packages:
+       ```Shell
+       # Cython needs to be installed before pycocotools
+       pip install cython
+       pip install opencv-python pillow pycocotools matplotlib 
+       ```
  - If you'd like to train YOLACT, download the COCO dataset and the 2014/2017 annotations. Note that this script will take a while and dump 21gb of files into `./data/coco`.
    ```Shell
    sh data/scripts/COCO.sh
