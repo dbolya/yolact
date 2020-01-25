@@ -90,7 +90,8 @@ if args.dataset is not None:
 
 if args.autoscale and args.batch_size != 8:
     factor = args.batch_size / 8
-    print('Scaling parameters by %.2f to account for a batch size of %d.' % (factor, args.batch_size))
+    if __name__ == '__main__':
+        print('Scaling parameters by %.2f to account for a batch size of %d.' % (factor, args.batch_size))
 
     cfg.lr *= factor
     cfg.max_iter //= factor
@@ -112,7 +113,8 @@ if torch.cuda.device_count() == 0:
     exit(-1)
 
 if args.batch_size // torch.cuda.device_count() < 6:
-    print('Per-GPU batch size is less than the recommended limit for batch norm. Disabling batch norm.')
+    if __name__ == '__main__':
+        print('Per-GPU batch size is less than the recommended limit for batch norm. Disabling batch norm.')
     cfg.freeze_bn = True
 
 loss_types = ['B', 'C', 'M', 'P', 'D', 'E', 'S', 'I']
