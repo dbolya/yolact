@@ -4,6 +4,8 @@ This document will detail all changes I make.
 I don't know how I'm going to be versioning things yet, so you get dates for now.
 
 ```
+2020.01.25:
+  - Fixed the mask IoU branch crashing when all masks in a batch are discarded (fixes #302, #259).
 2020.01.24:
   - Fixed the conv layer detection during initialization to work with pytorch 1.4 (fixes #292). 
 2020.01.23:

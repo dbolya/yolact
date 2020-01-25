@@ -184,7 +184,7 @@ class MultiBoxLoss(nn.Module):
                 losses['C'] = self.ohem_conf_loss(conf_data, conf_t, pos, batch_size)
 
         # Mask IoU Loss
-        if cfg.use_maskiou:
+        if cfg.use_maskiou and maskiou_targets is not None:
             losses['I'] = self.mask_iou_loss(net, maskiou_targets)
 
         # These losses also don't depend on anchors
@@ -653,6 +653,10 @@ class MultiBoxLoss(nn.Module):
             losses['D'] = loss_d
 
         if cfg.use_maskiou:
+            # discard_mask_area discarded every mask in the batch, so nothing to do here
+            if len(maskiou_t_list) == 0:
+                return losses, None
+
             maskiou_t = torch.cat(maskiou_t_list)
             label_t = torch.cat(label_t_list)
             maskiou_net_input = torch.cat(maskiou_net_input_list)
