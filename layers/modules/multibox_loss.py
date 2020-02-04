@@ -687,7 +687,8 @@ class MultiBoxLoss(nn.Module):
         maskiou_p = net.maskiou_net(maskiou_net_input)
 
         label_t = label_t[:, None]
-        maskiou_p = torch.gather(maskiou_p, dim=1, index=label_t).squeeze()
+        maskiou_p = torch.gather(maskiou_p, dim=1, index=label_t).view(-1)
+
         loss_i = F.smooth_l1_loss(maskiou_p, maskiou_t, reduction='sum')
         
         return loss_i * cfg.maskiou_alpha
