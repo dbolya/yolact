@@ -396,8 +396,19 @@ class Yolact(nn.Module):
         - pred_aspect_ratios: A list of lists of aspect ratios with len(selected_layers) (see PredictionModule)
     """
 
-    def __init__(self):
+    def __init__(self, 
+                 config_name="yolact_base_config",
+                 ):
+        """
+        @param config_name: string name of used config, choose from ./data/config.py, default "yolact_base"
+        """
         super().__init__()
+
+        #set (custom) config
+        from data.config import set_cfg
+        cfg = set_cfg(str(config_name))
+        self.cfg = cfg
+
 
         self.backbone = construct_backbone(cfg.backbone)
 
@@ -469,6 +480,16 @@ class Yolact(nn.Module):
         # For use in evaluation
         self.detect = Detect(cfg.num_classes, bkg_label=0, top_k=cfg.nms_top_k,
             conf_thresh=cfg.nms_conf_thresh, nms_thresh=cfg.nms_thresh)
+
+
+        # set default backbone weights
+        self.init_weights(backbone_path='weights/' + cfg.backbone.path)
+
+        # GPU
+        #TODO try half: net = net.half()
+        self.cuda()
+        torch.set_default_tensor_type('torch.cuda.FloatTensor')
+
 
     def save_weights(self, path):
         """ Saves the model's weights using compression because the file sizes were getting too big. """
@@ -683,19 +704,15 @@ if __name__ == '__main__':
     from utils.functions import init_console
     init_console()
 
+    # initialize yolact
+    net = Yolact()
+
     # Use the first argument to set the config if you want
     import sys
     if len(sys.argv) > 1:
-        from data.config import set_cfg
-        set_cfg(sys.argv[1])
+      net = Yolact(config_name=sys.argv[1])
 
-    net = Yolact()
     net.train()
-    net.init_weights(backbone_path='weights/' + cfg.backbone.path)
-
-    # GPU
-    net = net.cuda()
-    torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
     x = torch.zeros((1, 3, cfg.max_size, cfg.max_size))
     y = net(x)

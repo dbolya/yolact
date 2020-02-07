@@ -819,6 +819,7 @@ def set_cfg(config_name:str):
 
     if cfg.name is None:
         cfg.name = config_name.split('_config')[0]
+    return cfg
 
 def set_dataset(dataset_name:str):
     """ Sets the dataset of the current config. """
