@@ -1,22 +1,22 @@
 import torch, torchvision
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.backends.cudnn as cudnn
 from torchvision.models.resnet import Bottleneck
 import numpy as np
-
-from collections import defaultdict
 
 from data.config import mask_type
 from layers import Detect
 from layers.interpolate import InterpolateModule
 from backbone import construct_backbone
 
-import torch.backends.cudnn as cudnn
 from utils import timer
 from utils.functions import MovingAverage, make_net
 
 #locally defined modules
-from layers.modules.prediction import PredictionModule, FastMaskIoUNet
+from layers.modules.prediction import PredictionModule
+from layers.modules.fast_mask_iou import FastMaskIoUNet
+from layers.modules.fpn import FPN 
 
 # This is required for Pytorch 1.0.1 on Windows to initialize Cuda on some driver versions.
 # See the bug report here: https://github.com/pytorch/pytorch/issues/17108
@@ -63,9 +63,9 @@ class Yolact(nn.Module):
             self.freeze_bn()
 
         # Compute mask_dim here and add it back to the config. Make sure Yolact's constructor is called early!
-        if cfg.mask_type == cfg.mask_type.direct:
+        if cfg.mask_type == mask_type.direct:
             cfg.mask_dim = cfg.mask_size**2
-        elif cfg.mask_type == cfg.mask_type.lincomb:
+        elif cfg.mask_type == mask_type.lincomb:
             if cfg.mask_proto_use_grid:
                 self.grid = torch.Tensor(np.load(cfg.mask_proto_grid_file))
                 self.num_grids = self.grid.size(0)
@@ -94,7 +94,7 @@ class Yolact(nn.Module):
 
         if cfg.fpn is not None:
             # Some hacky rewiring to accomodate the FPN
-            self.fpn = FPN([src_channels[i] for i in self.selected_layers])
+            self.fpn = FPN([src_channels[i] for i in self.selected_layers], config=self.cfg)
             self.selected_layers = list(range(len(self.selected_layers) + cfg.fpn.num_downsample))
             src_channels = [cfg.fpn.num_features] * len(self.selected_layers)
 
@@ -194,7 +194,7 @@ class Yolact(nn.Module):
                 nn.init.xavier_uniform_(module.weight.data)
 
                 if module.bias is not None:
-                    if cfg.use_focal_loss and 'conf_layer' in name:
+                    if self.cfg.use_focal_loss and 'conf_layer' in name:
                         if not cfg.use_sigmoid_focal_loss:
                             # Initialize the last layer as in the focal loss paper.
                             # Because we use softmax and not sigmoid, I had to derive an alternate expression
@@ -217,7 +217,7 @@ class Yolact(nn.Module):
     def train(self, mode=True):
         super().train(mode)
 
-        if cfg.freeze_bn:
+        if self.cfg.freeze_bn:
             self.freeze_bn()
 
     def freeze_bn(self, enable=False):
@@ -238,14 +238,14 @@ class Yolact(nn.Module):
         with timer.env('backbone'):
             outs = self.backbone(x)
 
-        if cfg.fpn is not None:
+        if self.cfg.fpn is not None:
             with timer.env('fpn'):
                 # Use backbone.selected_layers because we overwrote self.selected_layers
                 outs = [outs[i] for i in cfg.backbone.selected_layers]
                 outs = self.fpn(outs)
 
         proto_out = None
-        if cfg.mask_type == mask_type.lincomb and cfg.eval_mask_branch:
+        if self.cfg.mask_type == mask_type.lincomb and self.cfg.eval_mask_branch:
             with timer.env('proto'):
                 proto_x = x if self.proto_src is None else outs[self.proto_src]
                 
@@ -254,24 +254,25 @@ class Yolact(nn.Module):
                     proto_x = torch.cat([proto_x, grids], dim=1)
 
                 proto_out = self.proto_net(proto_x)
-                proto_out = cfg.mask_proto_prototype_activation(proto_out)
+                proto_out = self.cfg.mask_proto_prototype_activation(proto_out)
 
-                if cfg.mask_proto_prototypes_as_features:
+                if self.cfg.mask_proto_prototypes_as_features:
                     # Clone here because we don't want to permute this, though idk if contiguous makes this unnecessary
                     proto_downsampled = proto_out.clone()
 
-                    if cfg.mask_proto_prototypes_as_features_no_grad:
+                    if self.cfg.mask_proto_prototypes_as_features_no_grad:
                         proto_downsampled = proto_out.detach()
                 
                 # Move the features last so the multiplication is easy
                 proto_out = proto_out.permute(0, 2, 3, 1).contiguous()
 
-                if cfg.mask_proto_bias:
+                if self.cfg.mask_proto_bias:
                     bias_shape = [x for x in proto_out.size()]
                     bias_shape[-1] = 1
                     proto_out = torch.cat([proto_out, torch.ones(*bias_shape)], -1)
 
 
+        cfg = self.cfg
         with timer.env('pred_heads'):
             pred_outs = { 'loc': [], 'conf': [], 'mask': [], 'priors': [] }
 

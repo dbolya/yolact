@@ -6,6 +6,7 @@ import torch.nn.functional as F
 
 from itertools import product
 from math import sqrt
+from collections import defaultdict
 
 # local imports
 from utils import timer
