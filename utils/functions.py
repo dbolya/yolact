@@ -6,6 +6,8 @@ from collections import deque
 from pathlib import Path
 from layers.interpolate import InterpolateModule
 
+from .layers.modules.concat import Concat
+
 class MovingAverage():
     """ Keeps an average window of the specified number of items. """
 
