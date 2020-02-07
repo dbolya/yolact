@@ -1,5 +1,16 @@
-import torch, torchvision
-import torch.nn
+import torch
+import torchvision
+from torch import nn
+from torchvision.models.resnet import Bottleneck
+import torch.nn.functional as F
+
+from itertools import product
+from math import sqrt
+
+# local imports
+from utils import timer
+from utils.functions import make_net
+from data.config import mask_type
 
 class PredictionModule(nn.Module):
     """
@@ -27,9 +38,14 @@ class PredictionModule(nn.Module):
                          from parent instead of from this module.
     """
     
-    def __init__(self, in_channels, out_channels=1024, aspect_ratios=[[1]], scales=[1], parent=None, index=0):
+    def __init__(self, in_channels, cfg, out_channels=1024, aspect_ratios=[[1]], scales=[1], parent=None, index=0):
+        """
+        @param cfg - config, passed from Yolact class
+        """
         super().__init__()
 
+        self.cfg = cfg
+        self.prior_cache = defaultdict(lambda: None)
         self.num_classes = cfg.num_classes
         self.mask_dim    = cfg.mask_dim # Defined by Yolact
         self.num_priors  = sum(len(x)*len(scales) for x in aspect_ratios)
@@ -104,7 +120,8 @@ class PredictionModule(nn.Module):
         
         conv_h = x.size(2)
         conv_w = x.size(3)
-        
+
+        cfg = self.cfg
         if cfg.extra_head_net is not None:
             x = src.upfeature(x)
         
@@ -126,52 +143,52 @@ class PredictionModule(nn.Module):
         bbox = src.bbox_layer(bbox_x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, 4)
         conf = src.conf_layer(conf_x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, self.num_classes)
         
-        if cfg.eval_mask_branch:
+        if self.cfg.eval_mask_branch:
             mask = src.mask_layer(mask_x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, self.mask_dim)
         else:
             mask = torch.zeros(x.size(0), bbox.size(1), self.mask_dim, device=bbox.device)
 
-        if cfg.use_mask_scoring:
+        if self.cfg.use_mask_scoring:
             score = src.score_layer(x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, 1)
 
-        if cfg.use_instance_coeff:
+        if self.cfg.use_instance_coeff:
             inst = src.inst_layer(x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, cfg.num_instance_coeffs)    
 
         # See box_utils.decode for an explanation of this
-        if cfg.use_yolo_regressors:
+        if self.cfg.use_yolo_regressors:
             bbox[:, :, :2] = torch.sigmoid(bbox[:, :, :2]) - 0.5
             bbox[:, :, 0] /= conv_w
             bbox[:, :, 1] /= conv_h
 
-        if cfg.eval_mask_branch:
-            if cfg.mask_type == mask_type.direct:
+        if self.cfg.eval_mask_branch:
+            if self.cfg.mask_type == mask_type.direct:
                 mask = torch.sigmoid(mask)
-            elif cfg.mask_type == mask_type.lincomb:
-                mask = cfg.mask_proto_coeff_activation(mask)
+            elif self.cfg.mask_type == mask_type.lincomb:
+                mask = self.cfg.mask_proto_coeff_activation(mask)
 
-                if cfg.mask_proto_coeff_gate:
+                if self.cfg.mask_proto_coeff_gate:
                     gate = src.gate_layer(x).permute(0, 2, 3, 1).contiguous().view(x.size(0), -1, self.mask_dim)
                     mask = mask * torch.sigmoid(gate)
 
-        if cfg.mask_proto_split_prototypes_by_head and cfg.mask_type == mask_type.lincomb:
+        if self.cfg.mask_proto_split_prototypes_by_head and self.cfg.mask_type == mask_type.lincomb:
             mask = F.pad(mask, (self.index * self.mask_dim, (self.num_heads - self.index - 1) * self.mask_dim), mode='constant', value=0)
         
         priors = self.make_priors(conv_h, conv_w, x.device)
 
         preds = { 'loc': bbox, 'conf': conf, 'mask': mask, 'priors': priors }
 
-        if cfg.use_mask_scoring:
+        if self.cfg.use_mask_scoring:
             preds['score'] = score
 
-        if cfg.use_instance_coeff:
+        if self.cfg.use_instance_coeff:
             preds['inst'] = inst
         
         return preds
 
     def make_priors(self, conv_h, conv_w, device):
         """ Note that priors are [x,y,width,height] where (x,y) is the center of the box. """
-        global prior_cache
         size = (conv_h, conv_w)
+        cfg = self.cfg
 
         with timer.env('makepriors'):
             if self.last_img_size != (cfg._tmp_img_w, cfg._tmp_img_h):
@@ -206,15 +223,15 @@ class PredictionModule(nn.Module):
                 self.priors.requires_grad = False
                 self.last_img_size = (cfg._tmp_img_w, cfg._tmp_img_h)
                 self.last_conv_size = (conv_w, conv_h)
-                prior_cache[size] = None
+                self.prior_cache[size] = None
             elif self.priors.device != device:
                 # This whole weird situation is so that DataParalell doesn't copy the priors each iteration
-                if prior_cache[size] is None:
-                    prior_cache[size] = {}
+                if self.prior_cache[size] is None:
+                    self.prior_cache[size] = {}
                 
                 if device not in prior_cache[size]:
-                    prior_cache[size][device] = self.priors.to(device)
+                    self.prior_cache[size][device] = self.priors.to(device)
 
-                self.priors = prior_cache[size][device]
+                self.priors = self.prior_cache[size][device]
         
         return self.priors
