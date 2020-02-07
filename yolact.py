@@ -235,6 +235,7 @@ class Yolact(nn.Module):
     def forward(self, x):
         """ The input should be of size [batch_size, 3, img_h, img_w] """
         _, _, img_h, img_w = x.size()
+        cfg = self.cfg
         cfg._tmp_img_h = img_h
         cfg._tmp_img_w = img_w
         
@@ -363,6 +364,7 @@ if __name__ == '__main__':
     if len(sys.argv) > 1:
       net = Yolact(config_name=sys.argv[1])
 
+    cfg = net.cfg
     net.train()
 
     x = torch.zeros((1, 3, cfg.max_size, cfg.max_size))
