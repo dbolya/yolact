@@ -12,6 +12,7 @@ from backbone import construct_backbone
 
 from utils import timer
 from utils.functions import MovingAverage, make_net
+from data.config import Config, mask_type
 
 #locally defined modules
 from layers.modules.prediction import PredictionModule
@@ -52,10 +53,11 @@ class Yolact(nn.Module):
         super().__init__()
 
         #set (custom) config
+        ## FIXME set_cfg does not work? For now set directly
         from data.config import set_cfg
         cfg = set_cfg(str(config_name))
         self.cfg = cfg
-
+        
 
         self.backbone = construct_backbone(cfg.backbone)
 
@@ -63,9 +65,10 @@ class Yolact(nn.Module):
             self.freeze_bn()
 
         # Compute mask_dim here and add it back to the config. Make sure Yolact's constructor is called early!
-        if cfg.mask_type == mask_type.direct:
+        from data.config import mask_type_DIRECT, mask_type_LINCOMB
+        if cfg.mask_type == mask_type_DIRECT: #FIXME: mask_type.direct:
             cfg.mask_dim = cfg.mask_size**2
-        elif cfg.mask_type == mask_type.lincomb:
+        elif cfg.mask_type == mask_type_LINCOMB: #FIXME: mask_type.lincomb:
             if cfg.mask_proto_use_grid:
                 self.grid = torch.Tensor(np.load(cfg.mask_proto_grid_file))
                 self.num_grids = self.grid.size(0)
@@ -108,7 +111,7 @@ class Yolact(nn.Module):
             if cfg.share_prediction_module and idx > 0:
                 parent = self.prediction_layers[0]
 
-            pred = PredictionModule(src_channels[layer_idx], src_channels[layer_idx],
+            pred = PredictionModule(src_channels[layer_idx], self.cfg, src_channels[layer_idx],
                                     aspect_ratios = cfg.backbone.pred_aspect_ratios[idx],
                                     scales        = cfg.backbone.pred_scales[idx],
                                     parent        = parent,
@@ -153,7 +156,7 @@ class Yolact(nn.Module):
         
             # Also for backward compatibility with v1.0 weights, do this check
             if key.startswith('fpn.downsample_layers.'):
-                if self.cfg.fpn is not None and int(key.split('.')[2]) >= cfg.fpn.num_downsample:
+                if self.cfg.fpn is not None and int(key.split('.')[2]) >= self.cfg.fpn.num_downsample:
                     del state_dict[key]
         self.load_state_dict(state_dict)
 

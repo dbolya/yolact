@@ -11,7 +11,7 @@ from collections import defaultdict
 # local imports
 from utils import timer
 from utils.functions import make_net
-from data.config import mask_type
+from data.config import mask_type, Config
 
 class PredictionModule(nn.Module):
     """
@@ -39,7 +39,7 @@ class PredictionModule(nn.Module):
                          from parent instead of from this module.
     """
     
-    def __init__(self, in_channels, cfg, out_channels=1024, aspect_ratios=[[1]], scales=[1], parent=None, index=0):
+    def __init__(self, in_channels:int, cfg:Config, out_channels:int=1024, aspect_ratios=[[1]], scales=[1], parent=None, index=0):
         """
         @param cfg - config, passed from Yolact class
         """
