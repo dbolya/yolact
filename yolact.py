@@ -5,7 +5,7 @@ import torch.backends.cudnn as cudnn
 from torchvision.models.resnet import Bottleneck
 import numpy as np
 
-from data.config import mask_type
+from data.config import mask_type, set_cfg
 from layers import Detect
 from layers.interpolate import InterpolateModule
 from backbone import construct_backbone
@@ -53,8 +53,6 @@ class Yolact(nn.Module):
         super().__init__()
 
         #set (custom) config
-        ## FIXME set_cfg does not work? For now set directly
-        from data.config import set_cfg
         cfg = set_cfg(str(config_name))
         self.cfg = cfg
         
