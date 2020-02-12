@@ -75,10 +75,9 @@ class Yolact(nn.Module):
             self.freeze_bn()
 
         # Compute mask_dim here and add it back to the config. Make sure Yolact's constructor is called early!
-        from data.config import mask_type_DIRECT, mask_type_LINCOMB
-        if cfg.mask_type == mask_type_DIRECT: #FIXME: mask_type.direct:
+        if cfg.mask_type == mask_type.direct:
             cfg.mask_dim = cfg.mask_size**2
-        elif cfg.mask_type == mask_type_LINCOMB: #FIXME: mask_type.lincomb:
+        elif cfg.mask_type == mask_type.lincomb:
             if cfg.mask_proto_use_grid:
                 self.grid = torch.Tensor(np.load(cfg.mask_proto_grid_file))
                 self.num_grids = self.grid.size(0)

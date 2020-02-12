@@ -303,9 +303,6 @@ vgg16_backbone = backbone_base.copy({
 
 
 # ----------------------- MASK BRANCH TYPES ----------------------- #
-#FIXME cannot import mask_type ?
-mask_type_DIRECT = 0
-mask_type_LINCOMB = 1
 mask_type = Config({
     # Direct produces masks directly as the output of each pred module.
     # This is denoted as fc-mask in the paper.
