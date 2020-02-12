@@ -46,9 +46,11 @@ class Yolact(nn.Module):
 
     def __init__(self, 
                  config_name="yolact_base_config",
+                 device_type="gpu"
                  ):
         """
         @param config_name: string name of used config, choose from ./data/config.py, default "yolact_base"
+        @param device_type: string, type of devices used, choose from "gpu","cpu","tpu". Default "gpu".
         """
         super().__init__()
 
@@ -135,8 +137,12 @@ class Yolact(nn.Module):
 
         # GPU
         #TODO try half: net = net.half()
-        self.cuda()
-        torch.set_default_tensor_type('torch.cuda.FloatTensor')
+        assert(device_type == "gpu" or device_type == "cpu" or device_type == "tpu")
+        assert(device_type != "tpu"), "TPU not yet supported!"
+        self.device_type = device_type
+        if self.device_type == "gpu":
+          self.cuda()
+          torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
 
     def save_weights(self, path):
