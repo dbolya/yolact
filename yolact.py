@@ -54,10 +54,20 @@ class Yolact(nn.Module):
         """
         super().__init__()
 
-        #set (custom) config
+        ## set (custom) config
         cfg = set_cfg(str(config_name))
         self.cfg = cfg
         
+        ## GPU
+        #TODO try half: net = net.half()
+        assert(device_type == "gpu" or device_type == "cpu" or device_type == "tpu")
+        assert(device_type != "tpu"), "TPU not yet supported!"
+        self.device_type = device_type
+        if self.device_type == "gpu":
+          self.cuda()
+          torch.set_default_tensor_type('torch.cuda.FloatTensor')
+
+
 
         self.backbone = construct_backbone(cfg.backbone)
 
@@ -135,16 +145,7 @@ class Yolact(nn.Module):
         # set default backbone weights
         self.init_weights(backbone_path='weights/' + cfg.backbone.path)
 
-        # GPU
-        #TODO try half: net = net.half()
-        assert(device_type == "gpu" or device_type == "cpu" or device_type == "tpu")
-        assert(device_type != "tpu"), "TPU not yet supported!"
-        self.device_type = device_type
-        if self.device_type == "gpu":
-          self.cuda()
-          torch.set_default_tensor_type('torch.cuda.FloatTensor')
-
-
+       
     def save_weights(self, path):
         """ Saves the model's weights using compression because the file sizes were getting too big. """
         torch.save(self.state_dict(), path)
