@@ -28,6 +28,7 @@ from PIL import Image
 
 import matplotlib.pyplot as plt
 import cv2
+import requests
 
 def str2bool(v):
     if v.lower() in ('yes', 'true', 't', 'y', '1'):
@@ -1045,6 +1046,63 @@ def print_maps(all_maps):
     print()
 
 
+def download_file_from_google_drive(id, destination):
+    #https://stackoverflow.com/a/39225039/7036639
+    def get_confirm_token(response):
+        for key, value in response.cookies.items():
+            if key.startswith('download_warning'):
+                return value
+        return None
+
+    def save_response_content(response, destination):
+        CHUNK_SIZE = 32768
+        with open(destination, "wb") as f:
+            for chunk in response.iter_content(CHUNK_SIZE):
+                if chunk: # filter out keep-alive new chunks
+                    f.write(chunk)
+
+    URL = "https://docs.google.com/uc?export=download"
+    session = requests.Session()
+    response = session.get(URL, params = { 'id' : id }, stream = True)
+    token = get_confirm_token(response)
+    if token:
+        params = { 'id' : id, 'confirm' : token }
+        response = session.get(URL, params = params, stream = True)
+    save_response_content(response, destination)
+
+
+def check_model(model_path):
+    model_path = str(model_path)
+    print(model_path)
+
+    model_url_dict = {"yolact_resnet50_54_800000.pth": "1yp7ZbbDwvMiFJEq4ptVKTYTI2VeRDXl0",
+                      "yolact_darknet53_54_800000.pth": "1dukLrTzZQEuhzitGkHaGjphlmRJOjVnP",
+                      "yolact_base_54_800000.pth": "1UYy3dMapbH1BnmtZU4WH1zbYgOzzHHf_",
+                      "yolact_im700_54_800000.pth": "1lE4Lz5p25teiXV-6HdTiOJSnS7u7GBzg",
+                      "yolact_plus_resnet50_54_800000.pth": "1ZPu1YR2UzGHQD0o1rEqy-j5bmEm3lbyP",
+                      "yolact_plus_base_54_800000.pth": "15id0Qq5eqRbkD-N3ZjDZXdCvRyIaHpFB"
+                      }
+
+    if not os.path.isfile(model_path):
+        print("Model not found, trying to download it...")
+        url = ''
+
+        # Create folder if missing
+        folder=os.path.dirname(model_path)
+        if not os.path.exists(folder):
+            os.makedirs(folder)
+
+        # Look for the model URL from the known models
+        for model_candidate in model_url_dict:
+            if model_candidate in model_path:
+                url = model_url_dict[model_candidate]
+                break
+        if url == '':
+            print("No candidate for download found")
+            exit(1)
+        output = model_path
+        download_file_from_google_drive(url, output)
+
 
 if __name__ == '__main__':
     parse_args()
@@ -1058,6 +1116,7 @@ if __name__ == '__main__':
         args.trained_model = SavePath.get_latest('weights/', cfg.name)
 
     if args.config is None:
+        check_model(args.trained_model)
         model_path = SavePath.from_str(args.trained_model)
         # TODO: Bad practice? Probably want to do a name lookup instead.
         args.config = model_path.model_name + '_config'
