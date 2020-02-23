@@ -14,6 +14,7 @@ from setuptools import setup
 
 requirements = ["torch", "torchvision"]
 
+
 def get_extensions():
     this_dir = os.path.dirname(os.path.abspath(__file__))
     extensions_dir = os.path.join(this_dir, "src")
@@ -38,7 +39,7 @@ def get_extensions():
             "-D__CUDA_NO_HALF2_OPERATORS__",
         ]
     else:
-        raise NotImplementedError('Cuda is not available')
+        raise NotImplementedError("Cuda is not available")
 
     sources = [os.path.join(extensions_dir, s) for s in sources]
     include_dirs = [extensions_dir]
@@ -52,6 +53,7 @@ def get_extensions():
         )
     ]
     return ext_modules
+
 
 setup(
     name="DCNv2",
