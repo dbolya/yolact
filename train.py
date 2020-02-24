@@ -24,6 +24,8 @@ import datetime
 # Oof
 import eval as eval_script
 
+# APEX Automated Mix Precision for 16 bit computation
+
 
 def str2bool(v):
     return v.lower() in ("yes", "true", "t", "1")
@@ -330,9 +332,15 @@ def train():
             )
             exit(-1)
 
-    net = CustomDataParallel(NetLoss(net, criterion))
     if args.cuda:
         net = net.cuda()
+    if cfg.use_amp:
+        from apex import amp
+
+        if not args.cuda:
+            raise ValueError("amp must be used with CUDA")
+        net, optimizer = amp.initialize(net, optimizer, opt_level="O1")
+    net = CustomDataParallel(NetLoss(net, criterion))
 
     # Initialize everything
     if not cfg.freeze_bn:
@@ -437,7 +445,11 @@ def train():
                 # all_loss = sum([v.mean() for v in losses.values()])
 
                 # Backprop
-                loss.backward()  # Do this to free up vram even if loss is not finite
+                if cfg.use_amp:
+                    with amp.scale_loss(loss, optimizer) as scaled_loss:
+                        scaled_loss.backward()
+                else:
+                    loss.backward()  # Do this to free up vram even if loss is not finite
                 if torch.isfinite(loss).item():
                     optimizer.step()
 

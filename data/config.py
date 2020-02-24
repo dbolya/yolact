@@ -768,6 +768,8 @@ coco_base_config = Config(
         "rescore_mask": False,
         "rescore_bbox": False,
         "maskious_to_train": -1,
+        # Additional Settings
+        "use_amp": True,
     }
 )
 
