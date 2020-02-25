@@ -109,12 +109,6 @@ class COCODetection(data.Dataset):
         img_id = self.ids[index]
 
         if self.has_gt:
-            # What is this and why is this here? The targets are being loaded 2 lines down and that
-            # overwrites this, so why oh why is this here? What's the cause of this madness?
-            # But I can't risk it breaking things, so it stays. Is it mercy? No. It's fear.
-            target = self.coco.imgToAnns[img_id]
-            
-            
             ann_ids = self.coco.getAnnIds(imgIds=img_id)
 
             # Target has {'segmentation', 'area', iscrowd', 'image_id', 'bbox', 'category_id'}
