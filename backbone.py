@@ -5,7 +5,7 @@ import pickle
 from collections import OrderedDict
 
 try:
-    from dcn_v2 import DCN
+    from dcn_v2 import DCN, set_amp
 except ImportError:
 
     def DCN(*args, **kwdargs):
@@ -541,8 +541,9 @@ class VGGBackbone(nn.Module):
         self.layers.append(layer)
 
 
-def construct_backbone(cfg):
+def construct_backbone(cfg, use_amp):
     """ Constructs a backbone given a backbone config object (see config.py). """
+    set_amp(use_amp)
     backbone = cfg.type(*cfg.args)
 
     # Add downsampling layers until we reach the number we need

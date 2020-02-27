@@ -12,6 +12,13 @@ from torch.autograd.function import once_differentiable
 
 import _ext as _backend
 
+use_amp = False
+
+
+def set_amp(amp):
+    global use_amp
+    use_amp = amp
+
 
 class _DCNv2(Function):
     @staticmethod
@@ -27,6 +34,13 @@ class _DCNv2(Function):
         dilation,
         deformable_groups,
     ):
+        if use_amp:
+            input = input.float()
+            offset = offset.float()
+            mask = mask.float()
+            weight = weight.float()
+            bias = bias.float()
+
         ctx.stride = _pair(stride)
         ctx.padding = _pair(padding)
         ctx.dilation = _pair(dilation)
@@ -49,11 +63,17 @@ class _DCNv2(Function):
             ctx.deformable_groups,
         )
         ctx.save_for_backward(input, offset, mask, weight, bias)
+
+        if use_amp:
+            return output.half()
         return output
 
     @staticmethod
     @once_differentiable
     def backward(ctx, grad_output):
+        if use_amp:
+            grad_output = grad_output.float()
+
         input, offset, mask, weight, bias = ctx.saved_tensors
         (
             grad_input,
@@ -78,6 +98,13 @@ class _DCNv2(Function):
             ctx.dilation[1],
             ctx.deformable_groups,
         )
+
+        if use_amp:
+            grad_input = grad_input.half()
+            grad_offset = grad_offset.half()
+            grad_mask = grad_mask.half()
+            grad_weight = grad_weight.half()
+            grad_bias = grad_bias.half()
 
         return (
             grad_input,
@@ -223,6 +250,11 @@ class _DCNv2Pooling(Function):
         sample_per_part=4,
         trans_std=0.0,
     ):
+        if use_amp:
+            input = input.float()
+            roi = roi.float()
+            offset = offset.float()
+
         ctx.spatial_scale = spatial_scale
         ctx.no_trans = int(no_trans)
         ctx.output_dim = output_dim
@@ -246,11 +278,17 @@ class _DCNv2Pooling(Function):
             ctx.trans_std,
         )
         ctx.save_for_backward(input, rois, offset, output_count)
+
+        if use_amp:
+            return output.half()
         return output
 
     @staticmethod
     @once_differentiable
     def backward(ctx, grad_output):
+        if use_amp:
+            grad_output = grad_output.float()
+
         input, rois, offset, output_count = ctx.saved_tensors
         grad_input, grad_offset = _backend.dcn_v2_psroi_pooling_backward(
             grad_output,
@@ -268,6 +306,9 @@ class _DCNv2Pooling(Function):
             ctx.trans_std,
         )
 
+        if use_amp:
+            grad_input = grad_input.half()
+            grad_offset = grad_offset.half()
         return (
             grad_input,
             None,
