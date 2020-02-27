@@ -527,7 +527,8 @@ class Yolact(nn.Module):
     def __init__(self):
         super().__init__()
 
-        self.backbone = construct_backbone(cfg.backbone, cfg.use_amp)
+        # self.backbone = construct_backbone(cfg.backbone, cfg.use_amp)
+        self.backbone = construct_backbone(cfg.backbone)
 
         if cfg.freeze_bn:
             self.freeze_bn()

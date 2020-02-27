@@ -28,7 +28,7 @@ class Bottleneck(nn.Module):
         norm_layer=nn.BatchNorm2d,
         dilation=1,
         use_dcn=False,
-        use_amp=False,
+        # use_amp=False,
     ):
         super(Bottleneck, self).__init__()
         self.conv1 = nn.Conv2d(
@@ -44,7 +44,7 @@ class Bottleneck(nn.Module):
                 padding=dilation,
                 dilation=dilation,
                 deformable_groups=1,
-                use_amp=use_amp,
+                # use_amp=use_amp,
             )
             self.conv2.bias.data.zero_()
             self.conv2.conv_offset_mask.weight.data.zero_()
@@ -102,7 +102,7 @@ class ResNetBackbone(nn.Module):
         atrous_layers=[],
         block=Bottleneck,
         norm_layer=nn.BatchNorm2d,
-        use_amp=False,
+        # use_amp=False,
     ):
         super().__init__()
 
@@ -113,7 +113,7 @@ class ResNetBackbone(nn.Module):
         self.norm_layer = norm_layer
         self.dilation = 1
         self.atrous_layers = atrous_layers
-        self.use_amp = use_amp
+        # self.use_amp = use_amp
 
         # From torchvision.models.resnet.Resnet
         self.inplanes = 64
@@ -193,7 +193,7 @@ class ResNetBackbone(nn.Module):
                 self.norm_layer,
                 self.dilation,
                 use_dcn=use_dcn,
-                use_amp=self.use_amp,
+                # use_amp=self.use_amp,
             )
         )
         self.inplanes = planes * block.expansion
@@ -205,7 +205,7 @@ class ResNetBackbone(nn.Module):
                     planes,
                     norm_layer=self.norm_layer,
                     use_dcn=use_dcn,
-                    use_amp=self.use_amp,
+                    # use_amp=self.use_amp,
                 )
             )
         layer = nn.Sequential(*layers)
@@ -550,9 +550,11 @@ class VGGBackbone(nn.Module):
         self.layers.append(layer)
 
 
-def construct_backbone(cfg, use_amp):
+# def construct_backbone(cfg, use_amp):
+def construct_backbone(cfg):
     """ Constructs a backbone given a backbone config object (see config.py). """
-    backbone = cfg.type(*cfg.args, use_amp=use_amp)
+    # backbone = cfg.type(*cfg.args, use_amp=use_amp)
+    backbone = cfg.type(*cfg.args)
 
     # Add downsampling layers until we reach the number we need
     num_layers = max(cfg.selected_layers) + 1

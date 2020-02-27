@@ -26,14 +26,16 @@ class _DCNv2(Function):
         padding,
         dilation,
         deformable_groups,
-        use_amp,
+        # use_amp,
     ):
         ctx.stride = _pair(stride)
         ctx.padding = _pair(padding)
         ctx.dilation = _pair(dilation)
         ctx.kernel_size = _pair(weight.shape[2:4])
         ctx.deformable_groups = deformable_groups
-        ctx.use_amp = use_amp
+        # ctx.use_amp = use_amp
+        ctx.use_amp = True
+        use_amp = True
 
         if use_amp:
             input = input.float()
@@ -110,7 +112,7 @@ class _DCNv2(Function):
             None,
             None,
             None,
-            None,
+            # None,
         )
 
 
@@ -127,7 +129,7 @@ class DCNv2(nn.Module):
         padding,
         dilation=1,
         deformable_groups=1,
-        use_amp=False,
+        # use_amp=False,
     ):
         super(DCNv2, self).__init__()
         self.in_channels = in_channels
@@ -137,7 +139,8 @@ class DCNv2(nn.Module):
         self.padding = _pair(padding)
         self.dilation = _pair(dilation)
         self.deformable_groups = deformable_groups
-        self.use_amp = use_amp
+        # self.use_amp = use_amp
+        self.use_amp = True
 
         self.weight = nn.Parameter(
             torch.Tensor(out_channels, in_channels, *self.kernel_size)
@@ -172,7 +175,7 @@ class DCNv2(nn.Module):
             self.padding,
             self.dilation,
             self.deformable_groups,
-            self.use_amp,
+            # self.use_amp,
         )
         # add if amp here
 
@@ -187,7 +190,7 @@ class DCN(DCNv2):
         padding,
         dilation=1,
         deformable_groups=1,
-        use_amp=False,
+        # use_amp=False,
     ):
         super(DCN, self).__init__(
             in_channels,
@@ -197,9 +200,10 @@ class DCN(DCNv2):
             padding,
             dilation,
             deformable_groups,
-            use_amp,
+            # use_amp,
         )
-        self.use_amp = use_amp
+        # self.use_amp = use_amp
+        self.use_amp = True
         channels_ = (
             self.deformable_groups * 3 * self.kernel_size[0] * self.kernel_size[1]
         )
@@ -232,7 +236,7 @@ class DCN(DCNv2):
             self.padding,
             self.dilation,
             self.deformable_groups,
-            self.use_amp,
+            # self.use_amp,
         )
 
 
@@ -251,7 +255,7 @@ class _DCNv2Pooling(Function):
         part_size=None,
         sample_per_part=4,
         trans_std=0.0,
-        use_amp=False,
+        # use_amp=False,
     ):
         ctx.spatial_scale = spatial_scale
         ctx.no_trans = int(no_trans)
@@ -261,7 +265,8 @@ class _DCNv2Pooling(Function):
         ctx.part_size = pooled_size if part_size is None else part_size
         ctx.sample_per_part = sample_per_part
         ctx.trans_std = trans_std
-        ctx.use_amp = use_amp
+        # ctx.use_amp = use_amp
+        ctx.use_amp = True
 
         if use_amp:
             input = input.float()
@@ -323,7 +328,7 @@ class _DCNv2Pooling(Function):
             None,
             None,
             None,
-            None,
+            # None,
         )
 
 
@@ -341,7 +346,7 @@ class DCNv2Pooling(nn.Module):
         part_size=None,
         sample_per_part=4,
         trans_std=0.0,
-        use_amp=False,
+        # use_amp=False,
     ):
         super(DCNv2Pooling, self).__init__()
         self.spatial_scale = spatial_scale
@@ -352,7 +357,8 @@ class DCNv2Pooling(nn.Module):
         self.part_size = pooled_size if part_size is None else part_size
         self.sample_per_part = sample_per_part
         self.trans_std = trans_std
-        self.use_amp = use_amp
+        # self.use_amp = use_amp
+        self.use_amp = True
 
     def forward(self, input, rois, offset):
         assert input.shape[1] == self.output_dim
@@ -370,7 +376,7 @@ class DCNv2Pooling(nn.Module):
             self.part_size,
             self.sample_per_part,
             self.trans_std,
-            self.use_amp,
+            # self.use_amp,
         )
 
 
@@ -386,7 +392,7 @@ class DCNPooling(DCNv2Pooling):
         sample_per_part=4,
         trans_std=0.0,
         deform_fc_dim=1024,
-        use_amp=False,
+        # use_amp=False,
     ):
         super(DCNPooling, self).__init__(
             spatial_scale,
@@ -397,9 +403,10 @@ class DCNPooling(DCNv2Pooling):
             part_size,
             sample_per_part,
             trans_std,
-            use_amp,
+            # use_amp,
         )
-        self.use_amp = use_amp
+        # self.use_amp = use_amp
+        self.use_amp = True
 
         self.deform_fc_dim = deform_fc_dim
 
@@ -436,7 +443,7 @@ class DCNPooling(DCNv2Pooling):
                 self.part_size,
                 self.sample_per_part,
                 self.trans_std,
-                self.use_amp,
+                # self.use_amp,
             )
 
             # build mask and offset
@@ -460,7 +467,7 @@ class DCNPooling(DCNv2Pooling):
                     self.part_size,
                     self.sample_per_part,
                     self.trans_std,
-                    self.use_amp,
+                    # self.use_amp,
                 )
                 * mask
             )
@@ -477,6 +484,6 @@ class DCNPooling(DCNv2Pooling):
             self.part_size,
             self.sample_per_part,
             self.trans_std,
-            self.use_amp,
+            # self.use_amp,
         )
 
