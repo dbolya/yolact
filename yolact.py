@@ -26,11 +26,6 @@ use_jit = torch.cuda.device_count() <= 1
 if not use_jit:
     print("Multiple GPUs detected! Turning off JIT.")
 
-# AMP does not support TorchScript https://github.com/NVIDIA/apex/issues/303
-if cfg.use_amp:
-    use_jit = False
-    print("Using AMP, JIT disabled")
-
 ScriptModuleWrapper = torch.jit.ScriptModule if use_jit else nn.Module
 script_method_wrapper = torch.jit.script_method if use_jit else lambda fn, _rcn=None: fn
 
@@ -510,10 +505,10 @@ class Yolact(nn.Module):
 
     ██╗   ██╗ ██████╗ ██╗      █████╗  ██████╗████████╗
     ╚██╗ ██╔╝██╔═══██╗██║     ██╔══██╗██╔════╝╚══██╔══╝
-     ╚████╔╝ ██║   ██║██║     ███████║██║        ██║
-      ╚██╔╝  ██║   ██║██║     ██╔══██║██║        ██║
-       ██║   ╚██████╔╝███████╗██║  ██║╚██████╗   ██║
-       ╚═╝    ╚═════╝ ╚══════╝╚═╝  ╚═╝ ╚═════╝   ╚═╝
+     ╚████╔╝ ██║   ██║██║     ███████║██║        ██║   
+      ╚██╔╝  ██║   ██║██║     ██╔══██║██║        ██║   
+       ██║   ╚██████╔╝███████╗██║  ██║╚██████╗   ██║   
+       ╚═╝    ╚═════╝ ╚══════╝╚═╝  ╚═╝ ╚═════╝   ╚═╝ 
 
 
     You can set the arguments by changing them in the backbone config object in config.py.
@@ -527,7 +522,6 @@ class Yolact(nn.Module):
     def __init__(self):
         super().__init__()
 
-        # self.backbone = construct_backbone(cfg.backbone, cfg.use_amp)
         self.backbone = construct_backbone(cfg.backbone)
 
         if cfg.freeze_bn:

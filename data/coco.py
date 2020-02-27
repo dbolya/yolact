@@ -42,8 +42,7 @@ class COCOAnnotationTransform(object):
                 bbox = obj["bbox"]
                 label_idx = obj["category_id"]
                 if label_idx >= 0:
-                    # TODO: remove this after TACO testing
-                    label_idx = self.label_map[label_idx + 1] - 1
+                    label_idx = self.label_map[label_idx] - 1
                 final_box = list(
                     np.array([bbox[0], bbox[1], bbox[0] + bbox[2], bbox[1] + bbox[3]])
                     / scale
@@ -125,7 +124,7 @@ class COCODetection(data.Dataset):
             ann_ids = self.coco.getAnnIds(imgIds=img_id)
 
             # Target has {'segmentation', 'area', iscrowd', 'image_id', 'bbox', 'category_id'}
-            target = [x for x in self.coco.loadAnns(ann_ids) if x['image_id'] == img_id]
+            target = [x for x in self.coco.loadAnns(ann_ids) if x["image_id"] == img_id]
         else:
             target = []
 

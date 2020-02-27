@@ -325,82 +325,6 @@ pascal_sbd_dataset = dataset_base.copy(
     }
 )
 
-# TODO: Please remove this test dataset
-
-taco_dataset = dataset_base.copy(
-    {
-        "name": "TACO",
-        "train_images": "/home/rtx/arm/TACO/data",
-        "train_info": "/home/rtx/arm/TACO/data/annotations_0_train.json",
-        "valid_images": "/home/rtx/arm/TACO/data",
-        "valid_info": "/home/rtx/arm/TACO/data/annotations_0_val.json",
-        "has_gt": True,
-        "class_names": (
-            "Aluminium foil",
-            "Battery",
-            "Aluminium blister pack",
-            "Carded blister pack",
-            "Other plastic bottle",
-            "Clear plastic bottle",
-            "Glass bottle",
-            "Plastic bottle cap",
-            "Metal bottle cap",
-            "Broken glass",
-            "Food Can",
-            "Aerosol",
-            "Drink can",
-            "Toilet tube",
-            "Other carton",
-            "Egg carton",
-            "Drink carton",
-            "Corrugated carton",
-            "Meal carton",
-            "Pizza box",
-            "Paper cup",
-            "Disposable plastic cup",
-            "Foam cup",
-            "Glass cup",
-            "Other plastic cup",
-            "Food waste",
-            "Glass jar",
-            "Plastic lid",
-            "Metal lid",
-            "Other plastic",
-            "Magazine paper",
-            "Tissues",
-            "Wrapping paper",
-            "Normal paper",
-            "Paper bag",
-            "Plastified paper bag",
-            "Plastic film",
-            "Six pack rings",
-            "Garbage bag",
-            "Other plastic wrapper",
-            "Single-use carrier bag",
-            "Polypropylene bag",
-            "Crisp packet",
-            "Spread tub",
-            "Tupperware",
-            "Disposable food container",
-            "Foam food container",
-            "Other plastic container",
-            "Plastic glooves",
-            "Plastic utensils",
-            "Pop tab",
-            "Rope & strings",
-            "Scrap metal",
-            "Shoe",
-            "Squeezable tube",
-            "Plastic straw",
-            "Paper straw",
-            "Styrofoam piece",
-            "Unlabeled litter",
-            "Cigarette",
-        ),
-        # "label_map": {i: i for i in range(1, 61)},
-    }
-)
-
 
 # ----------------------- TRANSFORMS ----------------------- #
 
@@ -844,8 +768,6 @@ coco_base_config = Config(
         "rescore_mask": False,
         "rescore_bbox": False,
         "maskious_to_train": -1,
-        # Additional Settings
-        "use_amp": True,
     }
 )
 
