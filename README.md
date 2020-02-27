@@ -170,7 +170,7 @@ YOLACT now supports multiple GPUs seamlessly during training:
    - If you want to allocate the images per GPU specific for different GPUs, you can use `--batch_alloc=[alloc]` where [alloc] is a comma seprated list containing the number of images on each GPU. This must sum to `batch_size`.
 
 ## 16-bit Precision Support and Dynamic Loss-scaling
-YOLACT now supports the use of [NVidia's Apex AMP](https://github.com/NVIDIA/apex), enabling computation in FP16, while maintaining the weights in FP32. The use of dynamic loss scaling also prevents the obnoxious `Moving average ignored a value of inf/nan` error. The only drawback is that [Apex does not support `torch.jit`](https://github.com/NVIDIA/apex/issues/308)
+YOLACT now supports the use of [NVidia's Apex AMP](https://github.com/NVIDIA/apex), enabling computation in FP16, while maintaining the weights in FP32. The use of dynamic loss scaling also prevents the `Moving average ignored a value of inf/nan` error. The only drawback is that [Apex does not support `torch.jit`](https://github.com/NVIDIA/apex/issues/303).
 
 To enable Apex AMP support, set `use_amp` in `data/config.py` to `True`.
 
