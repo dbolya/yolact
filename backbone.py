@@ -113,6 +113,7 @@ class ResNetBackbone(nn.Module):
         self.norm_layer = norm_layer
         self.dilation = 1
         self.atrous_layers = atrous_layers
+        self.use_amp = use_amp
 
         # From torchvision.models.resnet.Resnet
         self.inplanes = 64
@@ -123,12 +124,7 @@ class ResNetBackbone(nn.Module):
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
         self._make_layer(
-            block,
-            64,
-            layers[0],
-            dcn_layers=dcn_layers[0],
-            dcn_interval=dcn_interval,
-            use_amp=use_amp,
+            block, 64, layers[0], dcn_layers=dcn_layers[0], dcn_interval=dcn_interval,
         )
         self._make_layer(
             block,
@@ -137,7 +133,6 @@ class ResNetBackbone(nn.Module):
             stride=2,
             dcn_layers=dcn_layers[1],
             dcn_interval=dcn_interval,
-            use_amp=use_amp,
         )
         self._make_layer(
             block,
@@ -146,7 +141,6 @@ class ResNetBackbone(nn.Module):
             stride=2,
             dcn_layers=dcn_layers[2],
             dcn_interval=dcn_interval,
-            use_amp=use_amp,
         )
         self._make_layer(
             block,
@@ -155,7 +149,6 @@ class ResNetBackbone(nn.Module):
             stride=2,
             dcn_layers=dcn_layers[3],
             dcn_interval=dcn_interval,
-            use_amp=use_amp,
         )
 
         # This contains every module that should be initialized by loading in pretrained weights.
@@ -165,14 +158,7 @@ class ResNetBackbone(nn.Module):
         self.backbone_modules = [m for m in self.modules() if isinstance(m, nn.Conv2d)]
 
     def _make_layer(
-        self,
-        block,
-        planes,
-        blocks,
-        stride=1,
-        dcn_layers=0,
-        dcn_interval=1,
-        use_amp=False,
+        self, block, planes, blocks, stride=1, dcn_layers=0, dcn_interval=1,
     ):
         """ Here one layer means a string of n Bottleneck blocks. """
         downsample = None
@@ -207,7 +193,7 @@ class ResNetBackbone(nn.Module):
                 self.norm_layer,
                 self.dilation,
                 use_dcn=use_dcn,
-                use_amp=use_amp,
+                use_amp=self.use_amp,
             )
         )
         self.inplanes = planes * block.expansion
@@ -219,7 +205,7 @@ class ResNetBackbone(nn.Module):
                     planes,
                     norm_layer=self.norm_layer,
                     use_dcn=use_dcn,
-                    use_amp=use_amp,
+                    use_amp=self.use_amp,
                 )
             )
         layer = nn.Sequential(*layers)
@@ -259,16 +245,10 @@ class ResNetBackbone(nn.Module):
         # Note: Using strict=False is berry scary. Triple check this.
         self.load_state_dict(state_dict, strict=False)
 
-    def add_layer(
-        self, conv_channels=1024, downsample=2, depth=1, block=Bottleneck, use_amp=False
-    ):
+    def add_layer(self, conv_channels=1024, downsample=2, depth=1, block=Bottleneck):
         """ Add a downsample layer to the backbone as per what SSD does. """
         self._make_layer(
-            block,
-            conv_channels // block.expansion,
-            blocks=depth,
-            stride=downsample,
-            use_amp=use_amp,
+            block, conv_channels // block.expansion, blocks=depth, stride=downsample,
         )
 
 
@@ -570,16 +550,13 @@ class VGGBackbone(nn.Module):
         self.layers.append(layer)
 
 
-def construct_backbone(cfg):
+def construct_backbone(cfg, use_amp):
     """ Constructs a backbone given a backbone config object (see config.py). """
-    backbone = cfg.type(*cfg.args)
+    backbone = cfg.type(*cfg.args, use_amp=use_amp)
 
     # Add downsampling layers until we reach the number we need
     num_layers = max(cfg.selected_layers) + 1
 
     while len(backbone.layers) < num_layers:
-        if cfg.use_amp:
-            backbone.add_layer(cfg.use_amp)
-        else:
-            backbone.add_layer()
+        backbone.add_layer()
     return backbone

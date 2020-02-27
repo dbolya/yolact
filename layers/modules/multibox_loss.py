@@ -75,7 +75,7 @@ class MultiBoxLoss(nn.Module):
 
             num_crowds (list<int>): Number of crowd annotations per batch. The crowd
                 annotations should be the last num_crowds elements of targets and masks.
-            
+
             * Only if mask_type == lincomb
         """
 
@@ -288,7 +288,10 @@ class MultiBoxLoss(nn.Module):
                     mode=interpolation_mode,
                     align_corners=False,
                 ).squeeze(0)
-                downsampled_masks = downsampled_masks.gt(0.5).float()
+                if cfg.use_amp:
+                    downsampled_masks = downsampled_masks.gt(0.5).half()
+                else:
+                    downsampled_masks = downsampled_masks.gt(0.5).float()
 
                 # Construct Semantic Segmentation
                 segment_t = torch.zeros_like(cur_segment, requires_grad=False)
@@ -298,8 +301,8 @@ class MultiBoxLoss(nn.Module):
                     )
 
             loss_s += F.binary_cross_entropy_with_logits(
-                cur_segment, segment_t, reduction="sum"
-            )
+                cur_segment.float(), segment_t.float(), reduction="sum"
+            ).half()
 
         return loss_s / mask_h / mask_w * cfg.semantic_segmentation_alpha
 
