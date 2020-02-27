@@ -2,10 +2,10 @@
 ```
     ██╗   ██╗ ██████╗ ██╗      █████╗  ██████╗████████╗
     ╚██╗ ██╔╝██╔═══██╗██║     ██╔══██╗██╔════╝╚══██╔══╝
-     ╚████╔╝ ██║   ██║██║     ███████║██║        ██║   
-      ╚██╔╝  ██║   ██║██║     ██╔══██║██║        ██║   
-       ██║   ╚██████╔╝███████╗██║  ██║╚██████╗   ██║   
-       ╚═╝    ╚═════╝ ╚══════╝╚═╝  ╚═╝ ╚═════╝   ╚═╝ 
+     ╚████╔╝ ██║   ██║██║     ███████║██║        ██║
+      ╚██╔╝  ██║   ██║██║     ██╔══██║██║        ██║
+       ██║   ╚██████╔╝███████╗██║  ██║╚██████╗   ██║
+       ╚═╝    ╚═════╝ ╚══════╝╚═╝  ╚═╝ ╚═════╝   ╚═╝
 ```
 
 A simple, fully convolutional model for real-time instance segmentation. This is the code for our papers:
@@ -44,7 +44,7 @@ Some examples from our YOLACT base model (33.5 fps on a Titan Xp and 29.8 mAP on
        ```Shell
        # Cython needs to be installed before pycocotools
        pip install cython
-       pip install opencv-python pillow pycocotools matplotlib 
+       pip install opencv-python pillow pycocotools matplotlib
        ```
  - If you'd like to train YOLACT, download the COCO dataset and the 2014/2017 annotations. Note that this script will take a while and dump 21gb of files into `./data/coco`.
    ```Shell
@@ -168,6 +168,11 @@ YOLACT now supports multiple GPUs seamlessly during training:
  - Then, simply set the batch size to `8*num_gpus` with the training commands above. The training script will automatically scale the hyperparameters to the right values.
    - If you have memory to spare you can increase the batch size further, but keep it a multiple of the number of GPUs you're using.
    - If you want to allocate the images per GPU specific for different GPUs, you can use `--batch_alloc=[alloc]` where [alloc] is a comma seprated list containing the number of images on each GPU. This must sum to `batch_size`.
+
+## 16-bit Precision Support and Dynamic Loss-scaling
+YOLACT now supports the use of [NVidia's Apex AMP](https://github.com/NVIDIA/apex), enabling computation in FP16, while maintaining the weights in FP32. The use of dynamic loss scaling also prevents the `Moving average ignored a value of inf/nan` error. The only drawback is that [Apex does not support `torch.jit`](https://github.com/NVIDIA/apex/issues/303).
+
+To enable Apex AMP support, set `use_amp` in `data/config.py` to `True`.
 
 ## Logging
 YOLACT now logs training and validation information by default. You can disable this with `--no_log`. A guide on how to visualize these logs is coming soon, but now you can look at `LogVizualizer` in `utils/logger.py` for help.

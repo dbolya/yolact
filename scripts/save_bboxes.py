@@ -7,27 +7,27 @@ import sys
 
 import numpy as np
 
-COCO_ROOT = osp.join('.', 'data/coco/')
+COCO_ROOT = osp.join(".", "data/coco/")
 
-annotation_file = 'instances_train2017.json'
-annotation_path = osp.join(COCO_ROOT, 'annotations/', annotation_file)
+annotation_file = "instances_train2017.json"
+annotation_path = osp.join(COCO_ROOT, "annotations/", annotation_file)
 
-dump_file = 'weights/bboxes.pkl'
+dump_file = "weights/bboxes.pkl"
 
-with open(annotation_path, 'r') as f:
-	annotations_json = json.load(f)
+with open(annotation_path, "r") as f:
+    annotations_json = json.load(f)
 
-annotations = annotations_json['annotations']
-images = annotations_json['images']
-images = {image['id']: image for image in images}
+annotations = annotations_json["annotations"]
+images = annotations_json["images"]
+images = {image["id"]: image for image in images}
 bboxes = []
 
 for ann in annotations:
-	image = images[ann['image_id']]
-	w,h = (image['width'], image['height'])
-	
-	if 'bbox' in ann:
-		bboxes.append([w, h] + ann['bbox'])
+    image = images[ann["image_id"]]
+    w, h = (image["width"], image["height"])
 
-with open(dump_file, 'wb') as f:
-	pickle.dump(bboxes, f)
+    if "bbox" in ann:
+        bboxes.append([w, h] + ann["bbox"])
+
+with open(dump_file, "wb") as f:
+    pickle.dump(bboxes, f)
