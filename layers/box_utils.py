@@ -48,8 +48,7 @@ def intersect(box_a, box_b):
                        box_b[:, :, 2:].unsqueeze(1).expand(n, A, B, 2))
     min_xy = torch.max(box_a[:, :, :2].unsqueeze(2).expand(n, A, B, 2),
                        box_b[:, :, :2].unsqueeze(1).expand(n, A, B, 2))
-    inter = torch.clamp((max_xy - min_xy), min=0)
-    return inter[:, :, :, 0] * inter[:, :, :, 1]
+    return torch.clamp(max_xy - min_xy, min=0).prod(3)  # inter
 
 
 def jaccard(box_a, box_b, iscrowd:bool=False):
