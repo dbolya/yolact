@@ -172,6 +172,16 @@ pascal_sbd_dataset = dataset_base.copy({
     'class_names': PASCAL_CLASSES,
 })
 
+pigs_dataset = dataset_base.copy({
+  'name': 'ODD - Pigs',
+  'train_info': './pigs/train/via_region_data.json',
+  'train_images': './pigs/train/',
+  'valid_info': './pig/val/via_region_data.json',
+  'valid_images': './pig/val/',
+  'class_names': ('pig'),
+  'label_map': { 1:  1 }
+})
+
 
 
 
@@ -765,6 +775,16 @@ yolact_resnet50_pascal_config = yolact_resnet50_config.copy({
         'pred_scales': [[32], [64], [128], [256], [512]],
         'use_square_anchors': False,
     })
+})
+
+yolact_resnet50_pigs_config = yolact_resnet50_config.copy({
+    'name': 'yolact_plus_resnet50_pigs',
+    # Dataset stuff
+    'dataset': pigs_dataset,
+    'num_classes': len(pigs_dataset.class_names) + 1,
+
+    # Image Size
+    'max_size': 512,
 })
 
 # ----------------------- YOLACT++ CONFIGS ----------------------- #
