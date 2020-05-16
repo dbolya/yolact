@@ -123,6 +123,7 @@ test_data_aug.py
 # temp checkout soln
 data/coco
 data/sbd
+data/cityscapes
 
 # pylint
 .pylintrc
