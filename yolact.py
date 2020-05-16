@@ -215,7 +215,6 @@ class PredictionModule(nn.Module):
         """ Note that priors are [x,y,width,height] where (x,y) is the center of the box. """
         global prior_cache
         size = (conv_h, conv_w)
-        assert(cfg.max_size > 350),"Segmentation does not work with too low-res images. Try providing input images with size atleast 350pix."
 
         with timer.env('makepriors'):
             if self.last_img_size != (cfg._tmp_img_w, cfg._tmp_img_h):
