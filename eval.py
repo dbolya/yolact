@@ -592,13 +592,13 @@ def badhash(x):
     x =  ((x >> 16) ^ x) & 0xFFFFFFFF
     return x
 
-def evalimage(net:Yolact, path:str, save_path:str=None, visualize:bool=False):
+def evalimage(net:Yolact, path:str, save_path:str=None):
     """
     Evaluate a single image given:
     @argument net - Yolact object, the network
     @argument path - (string) image path
     @argument save_path - (string, default None) where to output the labeled image.
-    @argument visualize - (bool, default False) display the image
+    @argument args.display - (uses the global congig --display) display the image
 
     @return the labeled image as numpy array
     """
@@ -609,7 +609,7 @@ def evalimage(net:Yolact, path:str, save_path:str=None, visualize:bool=False):
 
       img_numpy = prep_display(preds, frame, None, None, undo_transform=False)
     
-      if visualize:
+      if args.display:
         img_numpy = img_numpy[:, :, (2, 1, 0)]
         plt.imshow(img_numpy)
         plt.title(path)
