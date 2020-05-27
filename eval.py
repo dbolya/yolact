@@ -610,8 +610,7 @@ def evalimage(net:Yolact, path:str, save_path:str=None):
       img_numpy = prep_display(preds, frame, None, None, undo_transform=False)
     
       if args.display:
-        img_numpy = img_numpy[:, :, (2, 1, 0)]
-        plt.imshow(img_numpy)
+        plt.imshow(cv2.cvtColor(img_numpy, cv2.COLOR_BGR2RGB)) #matplotlib's imshow() needs image converted from BGR(cv2) to RGB(pyplot)
         plt.title(path)
         plt.show()
 
