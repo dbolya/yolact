@@ -9,6 +9,7 @@ from layers.output_utils import postprocess, undo_image_transformation
 import pycocotools
 
 from data import cfg, set_cfg, set_dataset
+from data.config import Config
 
 import numpy as np
 import torch
@@ -132,16 +133,27 @@ coco_cats = {} # Call prep_coco_cats to fill this
 coco_cats_inv = {}
 color_cache = defaultdict(lambda: {})
 
-def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, mask_alpha=0.45, fps_str=''):
+def prep_display(dets_out, img, h=None, w=None, undo_transform=True, class_color=False, mask_alpha=0.45, fps_str='', override_args:Config=None):
     """
-    Note: If undo_transform=False then im_h and im_w are allowed to be None.
+    process image by the network and display all the detections, features as requested by args (command line). 
+
+    Note: If undo_transform=False then h,w are allowed to be None.
+
+    @param override_args - (Config, default None) arguments, overrides args parsed from command-line. Useful when calling as API, where we
+    don't have cmd args. 
     """
     if undo_transform:
+        assert w is not None and h is not None, "with undo_transform=True, w,h params must be specified!"
         img_numpy = undo_image_transformation(img, w, h)
         img_gpu = torch.Tensor(img_numpy).cuda()
     else:
         img_gpu = img / 255.0
         h, w, _ = img.shape
+
+    global args
+    if override_args is not None:
+      #override the command line args by the given arguments (type Config)
+      args = override_args
     
     with timer.env('Postprocess'):
         save = cfg.rescore_bbox
@@ -607,7 +619,7 @@ def evalimage(net:Yolact, path:str, save_path:str=None):
       batch = FastBaseTransform()(frame.unsqueeze(0))
       preds = net(batch)
 
-      img_numpy = prep_display(preds, frame, None, None, undo_transform=False)
+      img_numpy = prep_display(preds, frame, undo_transform=False, override_args=args)
     
       if args.display:
         plt.imshow(cv2.cvtColor(img_numpy, cv2.COLOR_BGR2RGB)) #matplotlib's imshow() needs image converted from BGR(cv2) to RGB(pyplot)
@@ -720,7 +732,7 @@ def evalvideo(net:Yolact, path:str, out_path:str=None):
     def prep_frame(inp, fps_str):
         with torch.no_grad():
             frame, preds = inp
-            return prep_display(preds, frame, None, None, undo_transform=False, class_color=True, fps_str=fps_str)
+            return prep_display(preds, frame, undo_transform=False, class_color=True, fps_str=fps_str, override_args=args)
 
     frame_buffer = Queue()
     video_fps = 0
@@ -960,7 +972,7 @@ def evaluate(net:Yolact, dataset, train_mode=False):
                 preds = net(batch)
             # Perform the meat of the operation here depending on our mode.
             if args.display:
-                img_numpy = prep_display(preds, img, h, w)
+                img_numpy = prep_display(preds, img, h, w, override_args=args)
             elif args.benchmark:
                 prep_benchmark(preds, h, w)
             else:
