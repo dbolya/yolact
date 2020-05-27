@@ -592,22 +592,34 @@ def badhash(x):
     x =  ((x >> 16) ^ x) & 0xFFFFFFFF
     return x
 
-def evalimage(net:Yolact, path:str, save_path:str=None):
-    frame = torch.from_numpy(cv2.imread(path)).cuda().float()
-    batch = FastBaseTransform()(frame.unsqueeze(0))
-    preds = net(batch)
+def evalimage(net:Yolact, path:str, save_path:str=None, visualize:bool=False):
+    """
+    Evaluate a single image given:
+    @argument net - Yolact object, the network
+    @argument path - (string) image path
+    @argument save_path - (string, default None) where to output the labeled image.
+    @argument visualize - (bool, default False) display the image
 
-    img_numpy = prep_display(preds, frame, None, None, undo_transform=False)
+    @return the labeled image as numpy array
+    """
+    with torch.no_grad():
+      frame = torch.from_numpy(cv2.imread(path)).cuda().float()
+      batch = FastBaseTransform()(frame.unsqueeze(0))
+      preds = net(batch)
+
+      img_numpy = prep_display(preds, frame, None, None, undo_transform=False)
     
-    if save_path is None:
+      if visualize:
         img_numpy = img_numpy[:, :, (2, 1, 0)]
-
-    if save_path is None:
         plt.imshow(img_numpy)
         plt.title(path)
         plt.show()
-    else:
+
+      if save_path is not None:
         cv2.imwrite(save_path, img_numpy)
+
+      return img_numpy
+
 
 def evalimages(net:Yolact, input_folder:str, output_folder:str):
     if not os.path.exists(output_folder):
