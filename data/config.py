@@ -690,6 +690,7 @@ yolact_base_config = coco_base_config.copy({
     'mask_proto_src': 0,
     'mask_proto_net': [(256, 3, {'padding': 1})] * 3 + [(None, -2, {}), (256, 3, {'padding': 1})] + [(32, 1, {})],
     'mask_proto_normalize_emulate_roi_pooling': True,
+    'mask_proto_debug': False,
 
     # Other stuff
     'share_prediction_module': True,
