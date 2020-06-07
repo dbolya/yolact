@@ -4,7 +4,7 @@ from utils.augmentations import BaseTransform, FastBaseTransform, Resize
 from utils.functions import MovingAverage, ProgressBar
 from layers.box_utils import jaccard, center_size, mask_iou
 from utils import timer
-from utils.functions import SavePath
+from utils.functions import SavePath, download_file_from_google_drive
 from layers.output_utils import postprocess, undo_image_transformation
 import pycocotools
 
@@ -28,7 +28,6 @@ from PIL import Image
 
 import matplotlib.pyplot as plt
 import cv2
-import requests
 
 def str2bool(v):
     if v.lower() in ('yes', 'true', 't', 'y', '1'):
@@ -1044,31 +1043,6 @@ def print_maps(all_maps):
         print(make_row([iou_type] + ['%.2f' % x if x < 100 else '%.1f' % x for x in all_maps[iou_type].values()]))
     print(make_sep(len(all_maps['box']) + 1))
     print()
-
-
-def download_file_from_google_drive(id, destination):
-    #https://stackoverflow.com/a/39225039/7036639
-    def get_confirm_token(response):
-        for key, value in response.cookies.items():
-            if key.startswith('download_warning'):
-                return value
-        return None
-
-    def save_response_content(response, destination):
-        CHUNK_SIZE = 32768
-        with open(destination, "wb") as f:
-            for chunk in response.iter_content(CHUNK_SIZE):
-                if chunk: # filter out keep-alive new chunks
-                    f.write(chunk)
-
-    URL = "https://docs.google.com/uc?export=download"
-    session = requests.Session()
-    response = session.get(URL, params = { 'id' : id }, stream = True)
-    token = get_confirm_token(response)
-    if token:
-        params = { 'id' : id, 'confirm' : token }
-        response = session.get(URL, params = params, stream = True)
-    save_response_content(response, destination)
 
 
 def check_model(model_path):
