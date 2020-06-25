@@ -1,0 +1,1 @@
+from yolact.yolact import Yolact

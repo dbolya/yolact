@@ -6,7 +6,7 @@ import torch.utils.data as data
 import torch.nn.functional as F
 import cv2
 import numpy as np
-from .config import cfg
+from yolact.data.config import cfg
 from pycocotools import mask as maskUtils
 import random
 
