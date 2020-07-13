@@ -16,7 +16,7 @@ def gpu_info() -> list:
 
     lines = _run_cmd(['nvidia-smi'])
 
-    selected_lines = lines[7:7 + 4 * gpu_count]
+    selected_lines = lines[7:7 + 3 * gpu_count + 1]
     selected_lines = [s for s in selected_lines if 'MiB' in s]
 
     for i in range(gpu_count):
