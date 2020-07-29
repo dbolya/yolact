@@ -676,7 +676,7 @@ class SSDAugmentation(object):
             enable_if(cfg.augment_random_sample_crop, RandomSampleCrop()),
             enable_if(cfg.augment_random_mirror, RandomMirror()),
             enable_if(cfg.augment_random_flip, RandomFlip()),
-            enable_if(cfg.augment_random_flip, RandomRot90()),
+            enable_if(cfg.augment_random_rot90, RandomRot90()),
             Resize(),
             enable_if(not cfg.preserve_aspect_ratio, Pad(cfg.max_size, cfg.max_size, mean)),
             ToPercentCoords(),
