@@ -158,3 +158,5 @@ vid/
 vidres/
 
 _.py
+*.jpg
+*.png
