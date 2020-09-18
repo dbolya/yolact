@@ -57,7 +57,7 @@ class Segment:
     def predict(self, image_array: np.ndarray):
         """
         :image_path : image numpy array
-
+        Format of returned boxes is [x1,y1,x2,y2], individual centers are tuples
         :return entire mask, individual masks, boxes, centers
         """
         with torch.no_grad():
