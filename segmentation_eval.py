@@ -40,9 +40,12 @@ class Segment:
         cnts = cv2.findContours(gray.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         cnts = imutils.grab_contours(cnts)
         M = cv2.moments(cnts[0])
-        cX = int(M["m10"] / M["m00"])
-        cY = int(M["m01"] / M["m00"])
-        return cX, cY
+        try:
+            cX = int(M["m10"] / M["m00"])
+            cY = int(M["m01"] / M["m00"])
+            return cX, cY
+        except ZeroDivisionError:
+            pass
 
     @staticmethod
     def adjust_centers(center: tuple, box_coords: np.ndarray):
@@ -68,6 +71,8 @@ class Segment:
             net.eval()
             preds = net(batch)
             mask_entire, boxes = prep_display(preds, frame, None, None, undo_transform=False)
+            if len(boxes) < 1:
+                return mask_entire, None, None, None
             mask_dict = {}
             centers_dict = {}
             boxes_dict = {}
@@ -75,7 +80,10 @@ class Segment:
                 current_box = boxes[index]
                 mask_dict[index] = mask_entire[current_box[1]:current_box[3], current_box[0]:current_box[2]]
                 center = Segment.find_center(mask_dict[index])
-                adjusted_center = Segment.adjust_centers(center, current_box)
+                if not center:
+                    adjusted_center = None
+                else:
+                    adjusted_center = Segment.adjust_centers(center, current_box)
                 centers_dict[index] = adjusted_center
                 boxes_dict[index] = current_box
 
