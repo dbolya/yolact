@@ -54,6 +54,7 @@ class Segment:
     def predict(self, image_array: np.ndarray):
         """
         :image_path : image numpy array
+
         :return entire mask, individual masks, boxes, centers
         """
         with torch.no_grad():
@@ -62,7 +63,7 @@ class Segment:
             batch = FastBaseTransform()(frame.unsqueeze(0))
             net = Yolact()
             net.detect.use_fast_nms = True
-            net.detect.use_cross_class_nms = False
+            net.detect.use_cross_class_nms = True
             net.load_weights(self.weights)
             net.eval()
             preds = net(batch)
