@@ -22,13 +22,11 @@ except:
 class Segment:
     cfg.mask_proto_debug = False
 
-    def __init__(self, weights: str, image_path: str):
+    def __init__(self, weights: str):
         """
         :weights : weights file path
-        :image_path : image file path
         """
         self.weights = weights
-        self.image_path = image_path
         self.model_path = SavePath.from_str(weights)
         config = self.model_path.model_name + '_config'
         set_cfg(config)
@@ -53,13 +51,14 @@ class Segment:
         """
         return box_coords[0] + center[0], box_coords[1] + center[1]
 
-    def predict(self):
+    def predict(self, image_path: str):
         """
+        :image_path : image file path
         :return entire mask, individual masks, boxes, centers
         """
         with torch.no_grad():
             torch.set_default_tensor_type('torch.cuda.FloatTensor')
-            frame = torch.from_numpy(cv2.imread(self.image_path)).cuda().float()
+            frame = torch.from_numpy(cv2.imread(image_path)).cuda().float()
             batch = FastBaseTransform()(frame.unsqueeze(0))
             net = Yolact()
             net.detect.use_fast_nms = True
