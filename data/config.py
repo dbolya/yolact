@@ -53,7 +53,7 @@ COCO_LABEL_MAP = { 1:  1,  2:  2,  3:  3,  4:  4,  5:  5,  6:  6,  7:  7,  8:  8
                   62: 57, 63: 58, 64: 59, 65: 60, 67: 61, 70: 62, 72: 63, 73: 64,
                   74: 65, 75: 66, 76: 67, 77: 68, 78: 69, 79: 70, 80: 71, 81: 72,
                   82: 73, 84: 74, 85: 75, 86: 76, 87: 77, 88: 78, 89: 79, 90: 80}
-
+                  
 
 
 # ----------------------- CONFIG CLASS ----------------------- #
@@ -170,6 +170,19 @@ pascal_sbd_dataset = dataset_base.copy({
     'valid_info': './data/sbd/pascal_sbd_val.json',
 
     'class_names': PASCAL_CLASSES,
+})
+
+my_custom_dataset = dataset_base.copy({
+    'name': 'Ascodero',
+
+    'train_images': '/home/psycle/PsycleResearch/yolact/images/output_ascodero_train/JPEGImages',
+    'train_info':   '/home/psycle/PsycleResearch/yolact/images/output_ascodero_train/annotations.json',
+
+    'valid_images': '/home/psycle/PsycleResearch/yolact/images/output_ascodero_val/JPEGImages',
+    'valid_info':   '/home/psycle/PsycleResearch/yolact/images/output_ascodero_val/annotations.json',
+
+    'has_gt': True,
+    'class_names': ('cuivre')
 })
 
 
@@ -657,8 +670,8 @@ yolact_base_config = coco_base_config.copy({
     'name': 'yolact_base',
 
     # Dataset stuff
-    'dataset': coco2017_dataset,
-    'num_classes': len(coco2017_dataset.class_names) + 1,
+    'dataset': my_custom_dataset,
+    'num_classes': len(my_custom_dataset.class_names) + 1,
 
     # Image Size
     'max_size': 550,
@@ -668,7 +681,7 @@ yolact_base_config = coco_base_config.copy({
     'max_iter': 800000,
     
     # Backbone Settings
-    'backbone': resnet101_backbone.copy({
+    'backbone': resnet50_backbone.copy({
         'selected_layers': list(range(1, 4)),
         'use_pixel_scales': True,
         'preapply_sqrt': False,
