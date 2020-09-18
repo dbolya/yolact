@@ -17,7 +17,7 @@ def run():
     cv2.namedWindow("test")
     while True:
         img = camera.get_image()
-        mask_entire, _, _, _ = prediction.predict(img)
+        mask_entire, _, _, _ = prediction.predict(mask_entire)
         cv2.imshow("test", img)
         # Quit
         if cv2.waitKey(1) == ord('q'):
