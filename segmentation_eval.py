@@ -51,14 +51,14 @@ class Segment:
         """
         return box_coords[0] + center[0], box_coords[1] + center[1]
 
-    def predict(self, image_path: str):
+    def predict(self, image_array: np.ndarray):
         """
-        :image_path : image file path
+        :image_path : image numpy array
         :return entire mask, individual masks, boxes, centers
         """
         with torch.no_grad():
             torch.set_default_tensor_type('torch.cuda.FloatTensor')
-            frame = torch.from_numpy(cv2.imread(image_path)).cuda().float()
+            frame = torch.from_numpy(image_array).cuda().float()
             batch = FastBaseTransform()(frame.unsqueeze(0))
             net = Yolact()
             net.detect.use_fast_nms = True
