@@ -6,7 +6,7 @@ import types
 from numpy import random
 from math import sqrt
 
-from data import cfg, MEANS, STD
+from yolact.data import cfg, MEANS, STD
 
 
 def intersect(box_a, box_b):
