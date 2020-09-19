@@ -5,6 +5,6 @@ setup(name='yolact',
       author="Psycle Research",
       description="Fork of yolact",
       url="https://github.com/PsycleResearch/yolact",
-      packages=['yolact', 'yolact.utils', 'yolact.data', 'yolact.layers'],
+      packages=['yolact', 'yolact.utils', 'yolact.data', 'yolact.layers', 'yolact.layers.functions'],
       python_requires='>=3.6'
       )
