@@ -230,13 +230,11 @@ If you use YOLACT or this code base in your work, please cite
 
 For YOLACT++, please cite
 ```
-@misc{yolact-plus-arxiv2019,
-  title         = {YOLACT++: Better Real-time Instance Segmentation},
-  author        = {Daniel Bolya and Chong Zhou and Fanyi Xiao and Yong Jae Lee},
-  year          = {2019},
-  eprint        = {1912.06218},
-  archivePrefix = {arXiv},
-  primaryClass  = {cs.CV}
+@article{yolact-plus-tpami2020,
+  author  = {Daniel Bolya and Chong Zhou and Fanyi Xiao and Yong Jae Lee},
+  journal = {IEEE Transactions on Pattern Analysis and Machine Intelligence}, 
+  title   = {YOLACT++: Better Real-time Instance Segmentation}, 
+  year    = {2020},
 }
 ```
 
