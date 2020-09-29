@@ -38,16 +38,17 @@ def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear',
 
     if dets is None:
         return [torch.Tensor()] * 4 # Warning, this is 4 copies of the same thing
-
-    if score_threshold > 0:
-        keep = dets['score'] > score_threshold
-
-        for k in dets:
-            if k != 'proto':
-                dets[k] = dets[k][keep]
-        
-        if dets['score'].size(0) == 0:
-            return [torch.Tensor()] * 4
+    
+    if not cfg.use_maskiou and not cfg.rescore_mask and not cfg.rescore_bbox:
+        if score_threshold > 0:
+            keep = dets['score'] > score_threshold
+    
+            for k in dets:
+                if k != 'proto':
+                    dets[k] = dets[k][keep]
+            
+            if dets['score'].size(0) == 0:
+                return [torch.Tensor()] * 4
     
     # Actually extract everything from dets now
     classes = dets['class']
@@ -84,6 +85,24 @@ def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear',
                     if cfg.rescore_mask:
                         if cfg.rescore_bbox:
                             scores = scores * maskiou_p
+
+                            dets['score'] = scores
+
+                            if score_threshold > 0:
+                                keep = dets['score'] > score_threshold
+
+                                for k in dets:
+                                    if k != 'proto':
+                                        dets[k] = dets[k][keep]
+                                    
+                                if dets['score'].size(0) == 0:
+                                    return [torch.Tensor()] * 4
+
+                            classes = dets['class']
+                            boxes   = dets['box']
+                            scores  = dets['score']
+                            masks   = dets['mask']
+
                         else:
                             scores = [scores, scores * maskiou_p]
 
