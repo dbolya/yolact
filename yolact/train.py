@@ -172,7 +172,7 @@ class CustomDataParallel(nn.DataParallel):
 def train():
     if not os.path.exists(args.save_folder):
         os.mkdir(args.save_folder)
-
+    print(f'Class Names {cfg.dataset.class_names}')
     dataset = COCODetection(image_path=cfg.dataset.train_images,
                             info_file=cfg.dataset.train_info,
                             transform=SSDAugmentation(MEANS))
