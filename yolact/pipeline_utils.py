@@ -1,4 +1,4 @@
-from utils.functions import SavePath
+from yolact.utils.functions import SavePath
 import os
 from pathlib import Path
 
@@ -6,12 +6,12 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from data import cfg, mask_type, MEANS, STD, activation_func
-from layers.box_utils import crop, sanitize_coordinates
-from layers.output_utils import undo_image_transformation
-from utils import timer
-from utils.augmentations import Resize
-from utils.functions import SavePath
+from yolact.data import cfg, mask_type, MEANS, STD, activation_func
+from yolact.layers.box_utils import crop, sanitize_coordinates
+from yolact.layers.output_utils import undo_image_transformation
+from yolact.utils import timer
+from yolact.utils.augmentations import Resize
+from yolact.utils.functions import SavePath
 
 
 # from layers.output_utils import postprocess
@@ -215,7 +215,7 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
         img_gpu *= 0
 
     img_numpy = (img_gpu * 255).byte().cpu().numpy()
-    return img_numpy, boxes
+    return img_numpy, boxes, classes, scores
 
 class FastBaseTransform(torch.nn.Module):
     """

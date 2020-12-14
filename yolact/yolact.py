@@ -8,18 +8,14 @@ from math import sqrt
 from typing import List
 from collections import defaultdict
 
-from data.config import cfg, mask_type
-from layers import Detect
-from layers.interpolate import InterpolateModule
-from backbone import construct_backbone
+from yolact.data.config import cfg, mask_type
+from yolact.layers import Detect
+from yolact.layers.interpolate import InterpolateModule
+from yolact.backbone import construct_backbone
 
 import torch.backends.cudnn as cudnn
-from utils import timer
-from utils.functions import MovingAverage, make_net
-
-# This is required for Pytorch 1.0.1 on Windows to initialize Cuda on some driver versions.
-# See the bug report here: https://github.com/pytorch/pytorch/issues/17108
-torch.cuda.current_device()
+from yolact.utils import timer
+from yolact.utils.functions import MovingAverage, make_net
 
 # As of March 10, 2019, Pytorch DataParallel still doesn't support JIT Script Modules
 use_jit = torch.cuda.device_count() <= 1
