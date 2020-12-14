@@ -395,6 +395,7 @@ class Yolact(nn.Module):
     def __init__(self):
         super().__init__()
 
+        self.class_names = None  # Initialized in load_weights()
         self.backbone = construct_backbone(cfg.backbone)
 
         if cfg.freeze_bn:
@@ -474,8 +475,9 @@ class Yolact(nn.Module):
     
     def load_weights(self, path):
         """ Loads weights from a compressed save file. """
-        print(f"{torch.load(path)['class_names']}")
-        state_dict = torch.load(path)['model']
+        weights = torch.load(path)
+        self.class_names = weights['class_names']
+        state_dict = weights['model']
 
         # For backward compatability, remove these (the new variable is called layers)
         for key in list(state_dict.keys()):
