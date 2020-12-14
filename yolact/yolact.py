@@ -395,6 +395,7 @@ class Yolact(nn.Module):
     def __init__(self):
         super().__init__()
 
+        self.class_names = None  # Initialized in load_weights()
         self.backbone = construct_backbone(cfg.backbone)
 
         if cfg.freeze_bn:
@@ -468,11 +469,15 @@ class Yolact(nn.Module):
 
     def save_weights(self, path):
         """ Saves the model's weights using compression because the file sizes were getting too big. """
-        torch.save(self.state_dict(), path)
+        class_names = cfg.dataset.class_names
+        ckpt = {'class_names': class_names, 'model': self.state_dict()}
+        torch.save(ckpt, path)
     
     def load_weights(self, path):
         """ Loads weights from a compressed save file. """
-        state_dict = torch.load(path)
+        weights = torch.load(path)
+        self.class_names = weights['class_names']
+        state_dict = weights['model']
 
         # For backward compatability, remove these (the new variable is called layers)
         for key in list(state_dict.keys()):
@@ -483,7 +488,7 @@ class Yolact(nn.Module):
             if key.startswith('fpn.downsample_layers.'):
                 if cfg.fpn is not None and int(key.split('.')[2]) >= cfg.fpn.num_downsample:
                     del state_dict[key]
-        self.load_state_dict(state_dict)
+            self.load_state_dict(state_dict)
 
     def init_weights(self, backbone_path):
         """ Initialize weights for training. """
