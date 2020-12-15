@@ -5,11 +5,11 @@ import imutils
 import numpy as np
 import torch
 
-from data import cfg, set_cfg
-from utils.augmentations import FastBaseTransform
-from utils.functions import SavePath
-from yolact import Yolact
-from pipeline_utils import prep_display
+from yolact.data import cfg, set_cfg
+from yolact.utils.augmentations import FastBaseTransform
+from yolact.utils.functions import SavePath
+from yolact.yolact import Yolact
+from yolact.pipeline_utils import prep_display
 
 package = "imutils"
 
