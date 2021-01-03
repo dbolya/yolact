@@ -396,8 +396,10 @@ class Yolact(nn.Module):
         - pred_aspect_ratios: A list of lists of aspect ratios with len(selected_layers) (see PredictionModule)
     """
 
-    def __init__(self):
+    def __init__(self, is_cuda=True):
         super().__init__()
+
+        self.is_cuda = is_cuda
 
         self.class_names = None  # Initialized in load_weights()
         self.backbone = construct_backbone(cfg.backbone)
@@ -480,7 +482,10 @@ class Yolact(nn.Module):
 
     def load_weights(self, path):
         """ Loads weights from a compressed save file. """
-        weights = torch.load(path)
+        if self.is_cuda:
+            weights = torch.load(path)
+        else:
+            weights = torch.load(path, map_location='cpu')
         self.class_names = weights['class_names']
         state_dict = weights['model']
 
