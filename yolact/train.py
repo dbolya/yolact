@@ -17,7 +17,7 @@ from yolact.utils import timer
 from yolact.utils.augmentations import SSDAugmentation, BaseTransform
 from yolact.utils.functions import MovingAverage, SavePath
 from yolact.utils.logger import Log
-from yolact.yolact import Yolact
+from yolact.yolact_model import Yolact
 
 
 def str2bool(v):
