@@ -1,5 +1,5 @@
 from yolact.data import COCODetection, get_label_map, MEANS, COLORS
-from yolact.yolact import Yolact
+from yolact.yolact_model import Yolact
 from yolact.utils.augmentations import BaseTransform, FastBaseTransform, Resize
 from yolact.utils.functions import MovingAverage, ProgressBar
 from yolact.layers.box_utils import jaccard, center_size, mask_iou
