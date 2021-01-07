@@ -12,6 +12,7 @@ from yolact.data import config
 from yolact.layers import Detect
 from yolact.layers.interpolate import InterpolateModule
 from yolact.backbone import construct_backbone
+from yolact.data import cfg
 
 import torch.backends.cudnn as cudnn
 from yolact.utils import timer

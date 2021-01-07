@@ -175,11 +175,11 @@ pascal_sbd_dataset = dataset_base.copy({
 my_custom_dataset = dataset_base.copy({
     'name': 'Ascodero',
 
-    'train_images': '/home/psycle/PsycleResearch/yolact/images/output_ascodero_train/JPEGImages',
-    'train_info':   '/home/psycle/PsycleResearch/yolact/images/output_ascodero_train/annotations.json',
+    'train_images': 'images/output_ascodero_train/JPEGImages',
+    'train_info':   'images/output_ascodero_train/annotations.json',
 
-    'valid_images': '/home/psycle/PsycleResearch/yolact/images/output_ascodero_val/JPEGImages',
-    'valid_info':   '/home/psycle/PsycleResearch/yolact/images/output_ascodero_val/annotations.json',
+    'valid_images': 'images/output_ascodero_val/JPEGImages',
+    'valid_info':   'images/output_ascodero_val/annotations.json',
 
     'has_gt': True,
     'class_names': ('cuivre')
