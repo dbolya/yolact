@@ -93,12 +93,13 @@ def train(args: argparse.Namespace):
 
     if args.log:
         log = Log(cfg.name, args.log_folder, dict(args._get_kwargs()),
-                  overwrite=(args.resume is None), log_gpu_stats=args.log_gpu)
+                  log_gpu_stats=args.log_gpu)
 
     # I don't use the timer during training (I use a different timing method).
     # Apparently there's a race condition with multiple GPUs, so disable it just to be safe.
     timer.disable_all()
 
+    """
     # Both of these can set args.resume to None, so do them before the check    
     if args.resume == 'interrupt':
         args.resume = SavePath.get_interrupt(args.save_folder)
@@ -112,8 +113,9 @@ def train(args: argparse.Namespace):
         if args.start_iter == -1:
             args.start_iter = SavePath.from_str(args.resume).iteration
     else:
-        print('Initializing weights...')
-        yolact_net.init_weights(backbone_path=args.save_folder + cfg.backbone.path)
+    """
+    print('Initializing weights...')
+    yolact_net.init_weights(backbone_path=args.save_folder + cfg.backbone.path)
 
     optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=args.momentum,
                           weight_decay=args.decay)

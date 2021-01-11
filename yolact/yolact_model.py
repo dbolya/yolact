@@ -461,6 +461,8 @@ class Yolact(nn.Module):
             self.class_existence_fc = nn.Linear(src_channels[-1], cfg.num_classes - 1)
         
         if cfg.use_semantic_segmentation_loss:
+            print("\n\nSRC_CHANNELS:", src_channels)
+            print("\n\ncfg.NUM_CLASSES:", cfg.num_classes)
             self.semantic_seg_conv = nn.Conv2d(src_channels[0], cfg.num_classes-1, kernel_size=1)
 
         # For use in evaluation
