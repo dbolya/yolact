@@ -110,6 +110,10 @@ class COCODetection(data.Dataset):
         """
         img_id = self.ids[index]
 
+        print("\n\nindex:", index)
+        print("\n\nself.ids:", self.ids)
+        print("\n\nimg_id:", img_id, "\n\n")
+
         if self.has_gt:
             ann_ids = self.coco.getAnnIds(imgIds=img_id)
 
