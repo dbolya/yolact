@@ -43,6 +43,7 @@ class Config(object):
 
     def dict_to_Config(self, config_dict: dict):
         for key, val in config_dict.items():
+            # Some nested dicts must not be turned into Configs
             if isinstance(val, dict) and key not in ["head_layer_params"]:
                 dict_val = val
                 val = Config()

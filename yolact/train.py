@@ -19,8 +19,14 @@ from yolact.utils.functions import MovingAverage, SavePath
 from yolact.utils.logger import Log
 from yolact.yolact_model import Yolact
 
-
 loss_types = ['B', 'C', 'M', 'P', 'D', 'E', 'S', 'I']
+
+args = argparse.Namespace()
+
+
+def set_global_args(command_line_params_argparse: argparse.Namespace):
+    global args
+    args = command_line_params_argparse
 
 
 def str2bool(v):
@@ -69,7 +75,7 @@ class CustomDataParallel(nn.DataParallel):
         return out
 
 
-def train(args: argparse.Namespace):
+def train():
     # This is managed by set_lr
     cur_lr = args.lr
 
@@ -146,10 +152,6 @@ def train(args: argparse.Namespace):
     last_time = time.time()
 
     epoch_size = len(dataset) // args.batch_size
-    print("\n\nlen(dataset):",  len(dataset))
-    print("\n\nargs.batch_size:", args.batch_size)
-    print("\n\nepoch_size:", epoch_size)
-    num_epochs = math.ceil(cfg.max_iter / epoch_size)
 
     # Which learning rate adjustment step are we on? lr' = lr * gamma ^ step_index
     step_index = 0
@@ -169,7 +171,7 @@ def train(args: argparse.Namespace):
     print()
     # try-except so you can use ctrl+c to save early and stop training
     try:
-        for epoch in range(num_epochs):
+        for epoch in range(args.num_epochs):
             # Resume from start_iter
             if (epoch + 1) * epoch_size < iteration:
                 continue
@@ -201,7 +203,8 @@ def train(args: argparse.Namespace):
                 # Warm up by linearly interpolating the learning rate from some smaller value
                 if cfg.lr_warmup_until > 0 and iteration <= cfg.lr_warmup_until:
                     cur_lr = set_lr(optimizer,
-                           (args.lr - cfg.lr_warmup_init) * (iteration / cfg.lr_warmup_until) + cfg.lr_warmup_init)
+                                    (args.lr - cfg.lr_warmup_init) * (
+                                                iteration / cfg.lr_warmup_until) + cfg.lr_warmup_init)
 
                 # Adjust the learning rate at the given iterations, but also if we resume from past that iteration
                 while step_index < len(cfg.lr_steps) and iteration >= cfg.lr_steps[step_index]:
