@@ -110,10 +110,6 @@ class COCODetection(data.Dataset):
         """
         img_id = self.ids[index]
 
-        print("\n\nindex:", index)
-        print("\n\nself.ids:", self.ids)
-        print("\n\nimg_id:", img_id, "\n\n")
-
         if self.has_gt:
             ann_ids = self.coco.getAnnIds(imgIds=img_id)
 
@@ -158,8 +154,11 @@ class COCODetection(data.Dataset):
         if self.target_transform is not None and len(target) > 0:
             target = self.target_transform(target, width, height)
 
+
         if self.transform is not None:
+
             if len(target) > 0:
+
                 target = np.array(target)
                 img, masks, boxes, labels = self.transform(img, masks, target[:, :4],
                                                            {'num_crowds': num_crowds, 'labels': target[:, 4]})
@@ -175,6 +174,7 @@ class COCODetection(data.Dataset):
                                               {'num_crowds': 0, 'labels': np.array([0])})
                 masks = None
                 target = None
+
 
         if target.shape[0] == 0:
             print('Warning: Augmentation output an example with no ground truth. Resampling...')
