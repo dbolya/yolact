@@ -41,6 +41,18 @@ class Config(object):
             for key, val in config_dict.items():
                 self.__setattr__(key, val)
 
+    def replace(self, new_config):
+        """
+        new_config can either be a dict or a Config.
+        Used for delayed_settings in train.py.
+        """
+        # Turns a Config into a dict
+        if isinstance(new_config, Config):
+            new_config = vars(new_config)
+
+        for key, val in new_config.items():
+            self.__setattr__(key, val)
+
     def dict_to_Config(self, config_dict: dict):
         for key, val in config_dict.items():
             # Some nested dicts must not be turned into Configs
