@@ -625,12 +625,11 @@ class FastBaseTransform(torch.nn.Module):
 
         if is_cuda:
             self.mean = torch.Tensor(MEANS).float().cuda()[None, :, None, None]
-        else:
-            self.mean = torch.Tensor(MEANS).float().cpu()[None, :, None, None]
-        if is_cuda:
             self.std = torch.Tensor(STD).float().cuda()[None, :, None, None]
         else:
+            self.mean = torch.Tensor(MEANS).float().cpu()[None, :, None, None]
             self.std = torch.Tensor(STD).float().cpu()[None, :, None, None]
+
         self.transform = cfg.backbone.transform
 
     def forward(self, img):
