@@ -6,7 +6,6 @@ from yolact.layers.box_utils import jaccard, center_size, mask_iou
 from yolact.utils import timer
 from yolact.utils.functions import SavePath
 from yolact.layers.output_utils import postprocess, undo_image_transformation
-import pycocotools
 
 from yolact.data import cfg, set_cfg, set_dataset
 
@@ -318,6 +317,7 @@ class Detections:
         })
 
     def add_mask(self, image_id:int, category_id:int, segmentation:np.ndarray, score:float):
+        import pycocotools
         """ The segmentation should be the full mask, the size of the image and with size [h, w]. """
         rle = pycocotools.mask.encode(np.asfortranarray(segmentation.astype(np.uint8)))
         rle['counts'] = rle['counts'].decode('ascii') # json.dump doesn't like bytes strings
