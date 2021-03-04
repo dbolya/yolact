@@ -7,7 +7,6 @@ from typing import Union
 import datetime
 
 from collections import defaultdict
-import matplotlib.pyplot as plt
 import numpy as np
 
 # Because Python's package heierarchy system sucks
@@ -336,6 +335,8 @@ class LogVisualizer():
         return list(keys)
 
     def plot(self, entry_type:str, x:str, y:str, smoothness:int=0):
+        import matplotlib.pyplot as plt
+
         """ Plot sequential log data. """
 
         query_x = self._decode(x)
@@ -373,6 +374,8 @@ class LogVisualizer():
         plt.show()
 
     def bar(self, entry_type:str, x:str, labels:list=None, diff:bool=False, x_idx:int=-1):
+        import matplotlib.pyplot as plt
+
         """ Plot a bar chart. The result of x should be list or dictionary. """
 
         query = self._decode(x)
