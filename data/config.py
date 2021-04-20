@@ -105,6 +105,87 @@ class Config(object):
 
 # ----------------------- DATASETS ----------------------- #
 
+# ----------------------- CUSTOM DATASETS ----------------------- #
+
+ul_dataset_base = Config({
+    'name': 'Base Dataset',
+
+    # Training images and annotations
+    'train_images': './data/coco_ul/images/',
+    'train_info':   'path_to_annotation_file',
+
+    # Validation images and annotations.
+    'valid_images': './data/coco_ul/images/',
+    'valid_info':   'path_to_annotation_file',
+
+    # Whether or not to load GT. If this is False, eval.py quantitative evaluation won't work.
+    'has_gt': True,
+
+    # A list of names for each of you classes.
+    'class_names': COCO_UL_CLASSES,
+
+    # COCO class ids aren't sequential, so this is a bandage fix. If your ids aren't sequential,
+    # provide a map from category_id -> index in class_names + 1 (the +1 is there because it's 1-indexed).
+    # If not specified, this just assumes category ids start at 1 and increase sequentially.
+    'label_map': COCO_UL_LABEL_MAP
+})
+
+ul_aug_dataset = Config({
+    'name': 'Unloading Augmented',
+
+    # Training images and annotations
+    'train_images': './data/coco_ul_aug/train/',
+    'train_info':   './data/coco_ul_aug/train/train.json',
+
+    # Validation images and annotations.
+    'valid_images': './data/coco_ul_aug/val/',
+    'valid_info':   './data/coco_ul_aug/val/val.json',
+
+    # Change Validation images and annotations to the testset when benchmark.
+    # 'valid_images': './data/coco_ul_aug/test/',
+    # 'valid_info':   './data/coco_ul_aug/test/test.json',
+
+    # Whether or not to load GT. If this is False, eval.py quantitative evaluation won't work.
+    'has_gt': True,
+
+    # A list of names for each of you classes.
+    'class_names': ['sack', 'pouch','box','icebox'],
+
+    # COCO class ids aren't sequential, so this is a bandage fix. If your ids aren't sequential,
+    # provide a map from category_id -> index in class_names + 1 (the +1 is there because it's 1-indexed).
+    # If not specified, this just assumes category ids start at 1 and increase sequentially.
+    'label_map': {1:  1,  2:  2,  3:  3,  4:  4}
+})
+
+
+ul_aug_gray_dataset = Config({
+    'name': 'Unloading Augmented',
+
+    # Training images and annotations
+    'train_images': './data/coco_ul_aug_gray/train/',
+    'train_info':   './data/coco_ul_aug_gray/train/train.json',
+
+    # Validation images and annotations.
+    'valid_images': './data/coco_ul_aug_gray/val/',
+    'valid_info':   './data/coco_ul_aug_gray/val/val.json',
+
+    # Change Validation images and annotations to the testset when benchmark.
+    # 'valid_images': './data/coco_ul_aug_gray/test/',
+    # 'valid_info':   './data/coco_ul_aug_gray/test/test.json',
+
+    # Whether or not to load GT. If this is False, eval.py quantitative evaluation won't work.
+    'has_gt': True,
+
+    # A list of names for each of you classes.
+    'class_names': ['sack', 'pouch','box','icebox'],
+
+    # COCO class ids aren't sequential, so this is a bandage fix. If your ids aren't sequential,
+    # provide a map from category_id -> index in class_names + 1 (the +1 is there because it's 1-indexed).
+    # If not specified, this just assumes category ids start at 1 and increase sequentially.
+    'label_map': {1:  1,  2:  2,  3:  3,  4:  4}
+})
+
+# ----------------------- ORIGINAL DATASETS ----------------------- #
 dataset_base = Config({
     'name': 'Base Dataset',
 
@@ -657,14 +738,18 @@ yolact_base_config = coco_base_config.copy({
     'name': 'yolact_base',
 
     # Dataset stuff
-    'dataset': coco2017_dataset,
-    'num_classes': len(coco2017_dataset.class_names) + 1,
+    # 'dataset': coco2017_dataset,
+    # 'num_classes': len(coco2017_dataset.class_names) + 1,
+    'dataset': ul_aug_gray_dataset,
+    'num_classes': len(ul_aug_gray_dataset.class_names) + 1,
 
     # Image Size
-    'max_size': 550,
+    # 'max_size': 550, # original yolact config
+    'max_size': 2048,
     
     # Training params
-    'lr_steps': (280000, 600000, 700000, 750000),
+    # 'lr_steps': (280000, 600000, 700000, 750000),
+    'lr_steps': (40000, 80000, 160000, 320000),
     'max_iter': 800000,
     
     # Backbone Settings
