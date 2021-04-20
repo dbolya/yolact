@@ -107,29 +107,6 @@ class Config(object):
 
 # ----------------------- CUSTOM DATASETS ----------------------- #
 
-ul_dataset_base = Config({
-    'name': 'Base Dataset',
-
-    # Training images and annotations
-    'train_images': './data/coco_ul/images/',
-    'train_info':   'path_to_annotation_file',
-
-    # Validation images and annotations.
-    'valid_images': './data/coco_ul/images/',
-    'valid_info':   'path_to_annotation_file',
-
-    # Whether or not to load GT. If this is False, eval.py quantitative evaluation won't work.
-    'has_gt': True,
-
-    # A list of names for each of you classes.
-    'class_names': COCO_UL_CLASSES,
-
-    # COCO class ids aren't sequential, so this is a bandage fix. If your ids aren't sequential,
-    # provide a map from category_id -> index in class_names + 1 (the +1 is there because it's 1-indexed).
-    # If not specified, this just assumes category ids start at 1 and increase sequentially.
-    'label_map': COCO_UL_LABEL_MAP
-})
-
 ul_aug_dataset = Config({
     'name': 'Unloading Augmented',
 
