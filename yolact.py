@@ -8,7 +8,7 @@ from math import sqrt
 from typing import List
 from collections import defaultdict
 
-from data.config import cfg, mask_type
+from data.config import cfg, mask_type, set_cfg
 from layers import Detect
 from layers.interpolate import InterpolateModule
 from backbone import construct_backbone
