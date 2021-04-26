@@ -36,7 +36,7 @@ Some examples from our YOLACT base model (33.5 fps on a Titan Xp and 29.8 mAP on
    ```
  - Set up the environment using one of the following methods:
    - Using [Anaconda](https://www.anaconda.com/distribution/)
-     - Run `conda env create -f environment.yml`
+     - Run `conda env create -f environment.yml` or `conda env create -f environment_win.yml` on Windows
    - Manually with pip
      - Set up a Python3 environment (e.g., using virtenv).
      - Install [Pytorch](http://pytorch.org/) 1.0.1 (or higher) and TorchVision.
