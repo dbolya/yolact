@@ -141,10 +141,15 @@ By default, we train on COCO. Make sure to download the entire dataset using the
    - For Resnet101, download `resnet101_reducedfc.pth` from [here](https://drive.google.com/file/d/1tvqFPd4bJtakOlmn-uIA492g2qurRChj/view?usp=sharing).
    - For Resnet50, download `resnet50-19c8e357.pth` from [here](https://drive.google.com/file/d/1Jy3yCdbatgXa5YYIdTCRrSV0S9V5g1rn/view?usp=sharing).
    - For Darknet53, download `darknet53.pth` from [here](https://drive.google.com/file/d/17Y431j4sagFpSReuPNoFcj9h7azDTZFf/view?usp=sharing).
+ - For custom dataset
+   - Put them into `./data/custom/` and modify class name in `./data/config.py`
  - Run one of the training commands below.
    - Note that you can press ctrl+c while training and it will save an `*_interrupt.pth` file at the current iteration.
    - All weights are saved in the `./weights` directory by default with the file name `<config>_<epoch>_<iter>.pth`.
 ```Shell
+# Train custom dataset with base config. Use --batch_size=3 if there are only 6GB VRAM. If you have more VRAM, you can use bigger batch size to get better model.
+python train.py --config=yolact_base_custom_config --batch_size=3
+
 # Trains using the base config with a batch size of 8 (the default).
 python train.py --config=yolact_base_config
 

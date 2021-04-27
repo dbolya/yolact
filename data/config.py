@@ -172,6 +172,21 @@ pascal_sbd_dataset = dataset_base.copy({
     'class_names': PASCAL_CLASSES,
 })
 
+'''
+If you do not want to create a validation split,
+use the same image path and annotations file for validation.
+'''
+custom_dataset = dataset_base.copy({
+    'name': 'Custom Dataset',
+
+    'train_images': './data/custom/train/images/',
+    'train_info':   './data/custom/train/annotations/instances_default.json',
+
+    'valid_images': './data/custom/train/images/',
+    'valid_info':   './data/custom/train/annotations/instances_default.json',
+
+    'class_names': ('car'),
+})
 
 
 
@@ -765,6 +780,19 @@ yolact_resnet50_pascal_config = yolact_resnet50_config.copy({
         'pred_scales': [[32], [64], [128], [256], [512]],
         'use_square_anchors': False,
     })
+})
+
+yolact_base_custom_config = yolact_base_config.copy({
+    'name': 'yolact_base_custom',
+
+    # Dataset stuff
+    'dataset': custom_dataset,
+    'num_classes': len(custom_dataset.class_names) + 1,
+
+    # Image Size
+    'max_size': 612,
+
+    'max_iter': 100000,
 })
 
 # ----------------------- YOLACT++ CONFIGS ----------------------- #
