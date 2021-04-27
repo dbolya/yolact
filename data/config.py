@@ -795,6 +795,32 @@ yolact_base_custom_config = yolact_base_config.copy({
     'max_iter': 100000,
 })
 
+yolact_resnet50_custom_config = yolact_resnet50_config.copy({
+    'name': 'yolact_resnet50_custom',
+
+    # Dataset stuff
+    'dataset': custom_dataset,
+    'num_classes': len(custom_dataset.class_names) + 1,
+
+    # Image Size
+    'max_size': 612,
+
+    'max_iter': 100000,
+})
+
+yolact_darknet53_custom_config = yolact_darknet53_config.copy({
+    'name': 'yolact_darknet53_custom',
+
+    # Dataset stuff
+    'dataset': custom_dataset,
+    'num_classes': len(custom_dataset.class_names) + 1,
+
+    # Image Size
+    'max_size': 612,
+
+    'max_iter': 100000,
+})
+
 # ----------------------- YOLACT++ CONFIGS ----------------------- #
 
 yolact_plus_base_config = yolact_base_config.copy({
