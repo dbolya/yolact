@@ -281,6 +281,7 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
         #FOV_X_DEGREES = 84.32261888188648
         OBIECT_DISTANCE_MM = 2429.556926464052
         FRONT_OVERHANG_MM = 870
+        BBOX_VALID_BOUNDARY_X = INPUT_IMAGE_WIDTH_PIXEL - 20
         img_height, img_width, img_channels = img_numpy.shape
         if img_height != INPUT_IMAGE_HEIGHT_PIXEL or img_width != INPUT_IMAGE_WIDTH_PIXEL:
             msg = 'Error: 3D projection only support the resolution %dx%d' % (INPUT_IMAGE_WIDTH_PIXEL, INPUT_IMAGE_HEIGHT_PIXEL)
@@ -305,7 +306,7 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
             projected_point_y = round((bbox_y2 - bbox_y1) / 2) + bbox_y1
 
             # find projected x (perspective projection in x-direction)
-            if x2 < INPUT_IMAGE_WIDTH_PIXEL:
+            if x2 < BBOX_VALID_BOUNDARY_X:
                 center_offset_img_x = (INPUT_IMAGE_WIDTH_PIXEL / 2) - x2
                 camera_yaw_rads = fov_cal_rads(2 * center_offset_img_x, CAMERA_MATRIX_FOCAL_LENGTH_X_PIXEL) / 2
                 camera_yaw_degs = math.degrees(camera_yaw_rads)
