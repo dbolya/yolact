@@ -28,6 +28,7 @@ from PIL import Image
 
 import matplotlib.pyplot as plt
 import cv2
+import math
 
 def str2bool(v):
     if v.lower() in ('yes', 'true', 't', 'y', '1'):
@@ -113,10 +114,12 @@ def parse_args(argv=None):
                         help='When displaying / saving video, draw the FPS on the frame')
     parser.add_argument('--emulate_playback', default=False, dest='emulate_playback', action='store_true',
                         help='When saving a video, emulate the framerate that you\'d get running in real-time mode.')
+    parser.add_argument('--projection_estimation', default=False, dest='projection_estimation', action='store_true',
+                        help='Project predefined 3D points to input image.')
 
     parser.set_defaults(no_bar=False, display=False, resume=False, output_coco_json=False, output_web_json=False, shuffle=False,
                         benchmark=False, no_sort=False, no_hash=False, mask_proto_debug=False, crop=True, detect=False, display_fps=False,
-                        emulate_playback=False)
+                        emulate_playback=False, projection_estimation=False)
 
     global args
     args = parser.parse_args(argv)
@@ -131,6 +134,10 @@ iou_thresholds = [x / 100 for x in range(50, 100, 5)]
 coco_cats = {} # Call prep_coco_cats to fill this
 coco_cats_inv = {}
 color_cache = defaultdict(lambda: {})
+
+def fov_cal_rads(image_len_pixel, focal_len_pixel):
+    fov_rads = 2 * math.atan((image_len_pixel / 2) / (focal_len_pixel))
+    return fov_rads
 
 def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, mask_alpha=0.45, fps_str=''):
     """
@@ -257,8 +264,82 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
 
                 cv2.rectangle(img_numpy, (x1, y1), (x1 + text_w, y1 - text_h - 4), color, -1)
                 cv2.putText(img_numpy, text_str, text_pt, font_face, font_scale, text_color, font_thickness, cv2.LINE_AA)
-            
-    
+
+    if args.projection_estimation:
+        print('Project predefined 3D points to input image')
+        # this focal length is only for the resolution 1224x1024
+        CAMERA_MATRIX_FOCAL_LENGTH_X_PIXEL = 675.85856318
+        INPUT_IMAGE_WIDTH_PIXEL = 1224
+        INPUT_IMAGE_HEIGHT_PIXEL = 1024
+        WORLD_WIDTH_MM = 4400
+        FOV_X_RADIANS = 1.4717073333932587
+        #FOV_X_DEGREES = 84.32261888188648
+        OBIECT_DISTANCE_MM = 2429.556926464052
+        FRONT_OVERHANG_MM = 870
+        img_height, img_width, img_channels = img_numpy.shape
+        if img_height != INPUT_IMAGE_HEIGHT_PIXEL or img_width != INPUT_IMAGE_WIDTH_PIXEL:
+            msg = 'Error: 3D projection only support the resolution %dx%d' % (INPUT_IMAGE_WIDTH_PIXEL, INPUT_IMAGE_HEIGHT_PIXEL)
+            print(msg)
+            return img_numpy
+
+        #fov_x_rads = fov_cal_rads(INPUT_IMAGE_WIDTH_PIXEL, CAMERA_MATRIX_FOCAL_LENGTH_X_PIXEL)
+        fov_x_rads = FOV_X_RADIANS
+        #fov_x_degs = math.degrees(fov_x_rads)
+        #object_distance = (WORLD_WIDTH_MM / 2) / math.tan(fov_x_rads / 2)
+        object_distance = OBIECT_DISTANCE_MM
+        #print(fov_x_rads)
+        #print(fov_x_degs)
+        #print(object_distance)
+
+        for j in reversed(range(num_dets_to_consider)):
+            # find projected y (center of the BBox in y-direction)
+            bbox_x1, bbox_y1, bbox_x2, bbox_y2 = boxes[j, :]
+            msg = '=> BBox: (%d, %d), (%d, %d)' % (bbox_x1, bbox_y1, bbox_x2, bbox_y2)
+            print(msg)
+            projected_point_y = round((bbox_y2 - bbox_y1) / 2) + bbox_y1
+
+            # find projected x (perspective projection in x-direction)
+            if x2 < INPUT_IMAGE_WIDTH_PIXEL:
+                center_offset_img_x = (INPUT_IMAGE_WIDTH_PIXEL / 2) - x2
+                camera_yaw_rads = fov_cal_rads(2 * center_offset_img_x, CAMERA_MATRIX_FOCAL_LENGTH_X_PIXEL) / 2
+                camera_yaw_degs = math.degrees(camera_yaw_rads)
+                msg = '=> Camera yaw: %.2f degrees' % (camera_yaw_degs)
+                print(msg)
+
+                center_offset_wrd_x = object_distance * math.tan(camera_yaw_rads)
+                L_center_offset_wrd_x = center_offset_wrd_x + FRONT_OVERHANG_MM
+                if L_center_offset_wrd_x < WORLD_WIDTH_MM / 2:
+                    msg = '=> L offset (world): %d' % (L_center_offset_wrd_x)
+                    print(msg)
+
+                    L_yaw_rads = fov_cal_rads(2 * L_center_offset_wrd_x, OBIECT_DISTANCE_MM) / 2
+                    L_center_offset_img_x = CAMERA_MATRIX_FOCAL_LENGTH_X_PIXEL * math.tan(L_yaw_rads)
+                    msg = '=> L offset (image): %d' % (L_center_offset_img_x)
+                    print(msg)
+
+                    projected_point_x = (INPUT_IMAGE_WIDTH_PIXEL / 2) - L_center_offset_img_x
+                    projected_point_x = round(projected_point_x)
+
+                    msg = '=> L(%d, %d)' % (projected_point_x, projected_point_y)
+                    print(msg)
+
+                    # drow projected point
+                    drawing_color_bgr = (255, 255, 255)
+                    drawing_pt = (projected_point_x, projected_point_y)
+                    circle_radius_px = 5
+                    drawing_line_type = cv2.FILLED
+                    cv2.circle(img_numpy, drawing_pt, circle_radius_px, drawing_color_bgr, drawing_line_type)
+
+                    # show projected L position
+                    text_str = 'L(%d, %d)' % (projected_point_x, projected_point_y)
+                    text_pt = (projected_point_x - 4, projected_point_y + 26)
+                    font_face = cv2.FONT_HERSHEY_DUPLEX
+                    font_scale = 0.8
+                    text_color_bgr = drawing_color_bgr
+                    font_thickness = 1
+                    text_line_type = cv2.LINE_AA
+                    cv2.putText(img_numpy, text_str, text_pt, font_face, font_scale, text_color_bgr, font_thickness, text_line_type)
+
     return img_numpy
 
 def prep_benchmark(dets_out, h, w):
