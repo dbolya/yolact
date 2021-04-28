@@ -266,7 +266,12 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
                 cv2.putText(img_numpy, text_str, text_pt, font_face, font_scale, text_color, font_thickness, cv2.LINE_AA)
 
     if args.projection_estimation:
-        print('Project predefined 3D points to input image')
+        if args.video is not None:
+            dbg = False
+        else:
+            dbg = True
+        if dbg:
+            print('Project predefined 3D points to input image')
         # this focal length is only for the resolution 1224x1024
         CAMERA_MATRIX_FOCAL_LENGTH_X_PIXEL = 675.85856318
         INPUT_IMAGE_WIDTH_PIXEL = 1224
@@ -294,8 +299,9 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
         for j in reversed(range(num_dets_to_consider)):
             # find projected y (center of the BBox in y-direction)
             bbox_x1, bbox_y1, bbox_x2, bbox_y2 = boxes[j, :]
-            msg = '=> BBox: (%d, %d), (%d, %d)' % (bbox_x1, bbox_y1, bbox_x2, bbox_y2)
-            print(msg)
+            if dbg:
+                msg = '=> BBox: (%d, %d), (%d, %d)' % (bbox_x1, bbox_y1, bbox_x2, bbox_y2)
+                print(msg)
             projected_point_y = round((bbox_y2 - bbox_y1) / 2) + bbox_y1
 
             # find projected x (perspective projection in x-direction)
@@ -303,25 +309,29 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
                 center_offset_img_x = (INPUT_IMAGE_WIDTH_PIXEL / 2) - x2
                 camera_yaw_rads = fov_cal_rads(2 * center_offset_img_x, CAMERA_MATRIX_FOCAL_LENGTH_X_PIXEL) / 2
                 camera_yaw_degs = math.degrees(camera_yaw_rads)
-                msg = '=> Camera yaw: %.2f degrees' % (camera_yaw_degs)
-                print(msg)
+                if dbg:
+                    msg = '=> Camera yaw: %.2f degrees' % (camera_yaw_degs)
+                    print(msg)
 
                 center_offset_wrd_x = object_distance * math.tan(camera_yaw_rads)
                 L_center_offset_wrd_x = center_offset_wrd_x + FRONT_OVERHANG_MM
                 if L_center_offset_wrd_x < WORLD_WIDTH_MM / 2:
-                    msg = '=> L offset (world): %d' % (L_center_offset_wrd_x)
-                    print(msg)
+                    if dbg:
+                        msg = '=> L offset (world): %d' % (L_center_offset_wrd_x)
+                        print(msg)
 
                     L_yaw_rads = fov_cal_rads(2 * L_center_offset_wrd_x, OBIECT_DISTANCE_MM) / 2
                     L_center_offset_img_x = CAMERA_MATRIX_FOCAL_LENGTH_X_PIXEL * math.tan(L_yaw_rads)
-                    msg = '=> L offset (image): %d' % (L_center_offset_img_x)
-                    print(msg)
+                    if dbg:
+                        msg = '=> L offset (image): %d' % (L_center_offset_img_x)
+                        print(msg)
 
                     projected_point_x = (INPUT_IMAGE_WIDTH_PIXEL / 2) - L_center_offset_img_x
                     projected_point_x = round(projected_point_x)
 
-                    msg = '=> L(%d, %d)' % (projected_point_x, projected_point_y)
-                    print(msg)
+                    if dbg:
+                        msg = '=> L(%d, %d)' % (projected_point_x, projected_point_y)
+                        print(msg)
 
                     # drow projected point
                     drawing_color_bgr = (255, 255, 255)
