@@ -2,14 +2,13 @@ from .output_utils import postprocess
 import cv2
 import numpy as np
 import torch
-import torch.backends.cudnn as cudnn
 
 
 from itertools import chain
 from copy import deepcopy as dp
 from PIL import Image as im
 
-def unloader_pp(det_output,h ,w, top_k = 15, score_threshold = 0.5):
+def unloader_pp(det_output,h ,w, top_k = 15, score_threshold = 0.99):
     
 
     t = postprocess(det_output, w, h, score_threshold = score_threshold)
@@ -31,8 +30,13 @@ def unloader_pp(det_output,h ,w, top_k = 15, score_threshold = 0.5):
     instance_ch = np.array(0 ,int)
     class_ch = np.array(0 ,int)
     all_new_list =[]
-
     tmp_list_for_Gp = []
+    if masks_np.shape[0] == 0:
+      print('imhere')
+      tmp_list_for_Gp= {'seg_masks':[],'num_objs': 0, 'image_size': (h,w),
+                     'seg_length':[], 'scores': [], 'bboxes': []}
+      return instance_ch, class_ch, tmp_list_for_Gp
+    
     dict_for_Gp = {'num_objs': masks_np.shape[0], 'image_size': (masks_np.shape[1],masks_np.shape[2])}
     dict_for_Gp.setdefault('seg_length',[])
     dict_for_Gp.setdefault('scores',[])
@@ -90,26 +94,13 @@ def unloader_pp(det_output,h ,w, top_k = 15, score_threshold = 0.5):
         img3 = im.fromarray(img3*50)
         img3.save('output_images/output_contour'+str(i)+'.png')
         '''
+        
     #flatten and save list of sementation and boxes
     flatten_list = [j for sub in tmp_list_for_Gp for j in sub]
     dict_for_Gp['segm_masks'] = flatten_list
     bbox_flatten_list = [j for sub in dict_for_Gp['bboxes'] for j in sub]
     dict_for_Gp['bboxes']= bbox_flatten_list
-    
 
-    # all_new_list =>[{'size: int(area of mask), 'masks': overlapped(np.adrray), 
-    # 'classes': (numpy.int64), 'scores': (numpy.float32), 'boxes': (numpy.adarray)}]
-    
-    # np to image and save
-    
-    """
-    save instance and class channel
-
-    img = im.fromarray(instance_ch*10)
-    img.save('output_images/output_instance.png')
-    img2 = im.fromarray(class_ch*50)
-    img2.save('output_images/output_class.png')
-    """
-    # dict_for_gp = > {'segm_masks':[int_list],'seg_length': int, 'scores' : [float_list]
+    # dict_for_Gp = > {'segm_masks':[int_list],'seg_length': int, 'scores' : [float_list]
     #                 , 'bboxes': [int_list], 'image_size' : (h, w) , 'num_objs': int}
     return instance_ch, class_ch, dict_for_Gp
