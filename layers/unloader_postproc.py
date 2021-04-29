@@ -20,25 +20,28 @@ def unloader_pp(det_output,h ,w, top_k = 15, score_threshold = 0.5):
         score_threshold (float, optional): score threshold. Defaults to 0.5.
 
     Returns:
-        instance_ch [numpy.adarray]: instance channel with image size
-        class_ch [numpy.adarray]: class channel with image size
-        dict_for_Gp[dictionary]: {'segm_masks':[np.int32_list],'seg_length': [int_list], 
-                                'scores' : [np.float32_list], 'bboxes': [np.int64_list], 
-                                'image_size' : (int,int) <- (h, w) , 'num_objs': int}
+        instance_ch (numpy.adarray): instance channel with image size
+        class_ch (numpy.adarray): class channel with image size
+        dict_for_YolactSegm (dictionary): {'segm_masks':List(np.int32),'seg_length': List(int), 
+                                'scores' : List(np.float32), 'bboxes': List(np.int64), 
+                                'image_size' : List(int) <- (h, w) , 'num_objs': int}
                                 
                                 segm_masks: contour x,y pixel
                                 seg_length: the number of contour pixel point
-                                bboxes: 4 pixel coordinate for bounding boxes
+                                bboxes: 2 corners coordinate for bounding boxes
                                 num_objs: the number of detected
     """
-
+    # L35, see https://github.com/dbolya/yolact/blob/master/eval.py #L149
     t = postprocess(det_output, w, h, score_threshold = score_threshold)
-     # see https://github.com/dbolya/yolact/blob/master/eval.py #L149
+    
+    # L37-L40, see https://github.com/dbolya/yolact/blob/master/eval.py #L155-L160
     idx = t[1].argsort(0, descending=True)[:top_k]
+    
     # Masks are drawn on the GPU, so don't copy    
     masks = t[3][idx]
     classes, scores, boxes = [x[idx].cpu().numpy() for x in t[:3]]
-    # see https://github.com/dbolya/yolact/blob/master/eval.py #L155-L160
+    
+    # coppied from https://github.com/dbolya/yolact/blob/master/eval.py  end.
 
     # masks_np is numpy and for cpu
     masks_np = (masks).byte().cpu().numpy()
@@ -47,26 +50,27 @@ def unloader_pp(det_output,h ,w, top_k = 15, score_threshold = 0.5):
     instance_ch = np.array(0 ,int)
     class_ch = np.array(0 ,int)
     all_new_list =[]
-    tmp_list_for_Gp = []
+    tmp_list_for_YolactSegm = []
 
     #none instance case
     if masks_np.shape[0] == 0:
-        tmp_list_for_Gp= {'seg_masks':[],'num_objs': 0, 'image_size': (h,w),
+        tmp_dict_for_YolactSegm= {'seg_masks':[],'num_objs': 0, 'image_size': (h,w),
                      'seg_length':[], 'scores': [], 'bboxes': []}
-        return instance_ch, class_ch, tmp_list_for_Gp
+        return instance_ch, class_ch, tmp_dict_for_YolactSegm
 
 
-    dict_for_Gp = {'num_objs': masks_np.shape[0], 'image_size': (masks_np.shape[1],masks_np.shape[2])}
-    dict_for_Gp.setdefault('seg_length',[])
-    dict_for_Gp.setdefault('scores',[])
-    dict_for_Gp.setdefault('bboxes',[])
+    dict_for_YolactSegm = {'num_objs': masks_np.shape[0], 'image_size': (masks_np.shape[1],masks_np.shape[2])}
+    dict_for_YolactSegm.setdefault('seg_length',[])
+    dict_for_YolactSegm.setdefault('scores',[])
+    dict_for_YolactSegm.setdefault('bboxes',[])
     
     # make new list and sort by size(area) of mask
     for i in range(len(classes)):
-        tmp_dict = {}
-        tmp_dict = {'size': masks_np[i, :, :].sum(),'masks': masks_np[i, :, :], 'classes': classes[i],
-       'scores': scores[i], 'bboxes': boxes[i]}
-        all_new_list.append(tmp_dict.copy())
+        all_new_list.append({'size': masks_np[i, :, :].sum(),
+                            'masks': masks_np[i, :, :], 
+                            'classes': classes[i],
+                            'scores': scores[i], 
+                            'bboxes': boxes[i]})
 
     all_new_list = sorted(all_new_list, key=lambda k: k['size'], reverse = True) 
 
@@ -97,14 +101,14 @@ def unloader_pp(det_output,h ,w, top_k = 15, score_threshold = 0.5):
         contours.sort(key=cv2.contourArea, reverse=True)
        
         #flatten np.array,
-        tmp_list_for_Gp.append(contours[0].flatten('F'))
+        tmp_list_for_YolactSegm.append(contours[0].flatten('F'))
       
         #save seg_length
-        dict_for_Gp['seg_length'].append(len(contours[0]))
+        dict_for_YolactSegm['seg_length'].append(len(contours[0]))
         #save scores
-        dict_for_Gp['scores'].append(all_new_list[i]['scores'])
+        dict_for_YolactSegm['scores'].append(all_new_list[i]['scores'])
         #save boxes
-        dict_for_Gp['bboxes'].append(all_new_list[i]['bboxes'])
+        dict_for_YolactSegm['bboxes'].append(all_new_list[i]['bboxes'])
         '''
         Check the contour result
 
@@ -113,10 +117,10 @@ def unloader_pp(det_output,h ,w, top_k = 15, score_threshold = 0.5):
         img3.save('output_images/output_contour'+str(i)+'.png')
         '''
     #flatten and save list of sementation and boxes
-    flatten_list = [j for sub in tmp_list_for_Gp for j in sub]
-    dict_for_Gp['segm_masks'] = flatten_list
-    bbox_flatten_list = [j for sub in dict_for_Gp['bboxes'] for j in sub]
-    dict_for_Gp['bboxes']= bbox_flatten_list
+    flatten_list = list(chain.from_iterable(tmp_list_for_YolactSegm))
+    dict_for_YolactSegm['segm_masks'] = flatten_list
+    bbox_flatten_list = list(chain.from_iterable(dict_for_YolactSegm['bboxes']))
+    dict_for_YolactSegm['bboxes']= bbox_flatten_list
     
     """
     Check instance and class channel
@@ -127,4 +131,4 @@ def unloader_pp(det_output,h ,w, top_k = 15, score_threshold = 0.5):
     img2.save('output_images/output_class.png')
     """
 
-    return instance_ch, class_ch, dict_for_Gp
+    return instance_ch, class_ch, dict_for_YolactSegm
