@@ -281,7 +281,10 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
         #FOV_X_DEGREES = 84.32261888188648
         OBIECT_DISTANCE_MM = 2429.556926464052
         FRONT_OVERHANG_MM = 870
-        BBOX_VALID_BOUNDARY_X = INPUT_IMAGE_WIDTH_PIXEL - 20
+        REAR_OVERHANG_MM = 930
+        WHEELBASE = 2600
+        BBOX_VALID_BOUNDARY_X_LEFT = 20
+        BBOX_VALID_BOUNDARY_X_RIGHT = INPUT_IMAGE_WIDTH_PIXEL - BBOX_VALID_BOUNDARY_X_LEFT
         img_height, img_width, img_channels = img_numpy.shape
         if img_height != INPUT_IMAGE_HEIGHT_PIXEL or img_width != INPUT_IMAGE_WIDTH_PIXEL:
             msg = 'Error: 3D projection only support the resolution %dx%d' % (INPUT_IMAGE_WIDTH_PIXEL, INPUT_IMAGE_HEIGHT_PIXEL)
@@ -305,8 +308,10 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
                 print(msg)
             projected_point_y = round((bbox_y2 - bbox_y1) / 2) + bbox_y1
 
-            # find projected x (perspective projection in x-direction)
-            if x2 < BBOX_VALID_BOUNDARY_X:
+            # find projected x (perspective projection in x-direction) from front
+            if x2 < BBOX_VALID_BOUNDARY_X_RIGHT:
+                if dbg:
+                    print('= >From front of the car')
                 center_offset_img_x = (INPUT_IMAGE_WIDTH_PIXEL / 2) - x2
                 camera_yaw_rads = fov_cal_rads(2 * center_offset_img_x, CAMERA_MATRIX_FOCAL_LENGTH_X_PIXEL) / 2
                 camera_yaw_degs = math.degrees(camera_yaw_rads)
@@ -330,6 +335,53 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
                     projected_point_x = (INPUT_IMAGE_WIDTH_PIXEL / 2) - L_center_offset_img_x
                     projected_point_x = round(projected_point_x)
 
+                    if dbg:
+                        msg = '=> L(%d, %d)' % (projected_point_x, projected_point_y)
+                        print(msg)
+
+                    # drow projected point
+                    drawing_color_bgr = (255, 255, 255)
+                    drawing_pt = (projected_point_x, projected_point_y)
+                    circle_radius_px = 5
+                    drawing_line_type = cv2.FILLED
+                    cv2.circle(img_numpy, drawing_pt, circle_radius_px, drawing_color_bgr, drawing_line_type)
+
+                    # show projected L position
+                    text_str = 'L(%d, %d)' % (projected_point_x, projected_point_y)
+                    text_pt = (projected_point_x - 4, projected_point_y + 26)
+                    font_face = cv2.FONT_HERSHEY_DUPLEX
+                    font_scale = 0.8
+                    text_color_bgr = drawing_color_bgr
+                    font_thickness = 1
+                    text_line_type = cv2.LINE_AA
+                    cv2.putText(img_numpy, text_str, text_pt, font_face, font_scale, text_color_bgr, font_thickness, text_line_type)
+
+            # find projected x (perspective projection in x-direction) from back
+            elif x1 > BBOX_VALID_BOUNDARY_X_LEFT:
+                if dbg:
+                    print('=> From back of the car')
+                center_offset_img_x = (INPUT_IMAGE_WIDTH_PIXEL / 2) - x1
+                camera_yaw_rads = fov_cal_rads(2 * center_offset_img_x, CAMERA_MATRIX_FOCAL_LENGTH_X_PIXEL) / 2
+                camera_yaw_degs = math.degrees(camera_yaw_rads)
+                if dbg:
+                    msg = '=> Camera yaw: %.2f degrees' % (camera_yaw_degs)
+                    print(msg)
+
+                center_offset_wrd_x = object_distance * math.tan(camera_yaw_rads)
+                L_center_offset_wrd_x = center_offset_wrd_x - REAR_OVERHANG_MM - WHEELBASE
+                if L_center_offset_wrd_x >  -WORLD_WIDTH_MM / 2:
+                    if dbg:
+                        msg = '=> L offset (world): %d' % (L_center_offset_wrd_x)
+                        print(msg)
+
+                    L_yaw_rads = fov_cal_rads(2 * L_center_offset_wrd_x, OBIECT_DISTANCE_MM) / 2
+                    L_center_offset_img_x = CAMERA_MATRIX_FOCAL_LENGTH_X_PIXEL * math.tan(L_yaw_rads)
+                    if dbg:
+                        msg = '=> L offset (image): %d' % (L_center_offset_img_x)
+                        print(msg)
+
+                    projected_point_x = (INPUT_IMAGE_WIDTH_PIXEL / 2) - L_center_offset_img_x
+                    projected_point_x = round(projected_point_x)
                     if dbg:
                         msg = '=> L(%d, %d)' % (projected_point_x, projected_point_y)
                         print(msg)
