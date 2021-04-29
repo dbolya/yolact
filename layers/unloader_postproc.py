@@ -8,11 +8,29 @@ from itertools import chain
 from copy import deepcopy as dp
 from PIL import Image as im
 
-# input(return of forward, h, w, top_k, score_threshold)
-#                          ^  ^    ^           ^
-#                         int int int   float
+
 def unloader_pp(det_output,h ,w, top_k = 15, score_threshold = 0.5):
-    
+    """ raw output data of Yolact -> Instance_channel, Class_channel, dictionary of Info
+
+    Args:
+        det_output (list): return of forward
+        h (int): image height
+        w (int): image width
+        top_k (int, optional): maximum number of detected object. Defaults to 15.
+        score_threshold (float, optional): score threshold. Defaults to 0.5.
+
+    Returns:
+        instance_ch [numpy.adarray]: instance channel with image size
+        class_ch [numpy.adarray]: class channel with image size
+        dict_for_Gp[dictionary]: {'segm_masks':[np.int32_list],'seg_length': [int_list], 
+                                'scores' : [np.float32_list], 'bboxes': [np.int64_list], 
+                                'image_size' : (int,int) <- (h, w) , 'num_objs': int}
+                                
+                                segm_masks: contour x,y pixel
+                                seg_length: the number of contour pixel point
+                                bboxes: 4 pixel coordinate for bounding boxes
+                                num_objs: the number of detected
+    """
 
     t = postprocess(det_output, w, h, score_threshold = score_threshold)
      # see https://github.com/dbolya/yolact/blob/master/eval.py #L149
@@ -108,8 +126,5 @@ def unloader_pp(det_output,h ,w, top_k = 15, score_threshold = 0.5):
     img2 = im.fromarray(class_ch*50)
     img2.save('output_images/output_class.png')
     """
-
-    # dict_for_Gp = > {'segm_masks':[np.int32_list],'seg_length': [int_list], 'scores' : [np.float32_list]
-    #                 , 'bboxes': [np.int64_list], 'image_size' : (int,int) <- (h, w) , 'num_objs': int}
 
     return instance_ch, class_ch, dict_for_Gp
