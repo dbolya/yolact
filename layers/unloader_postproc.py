@@ -2,8 +2,6 @@ from .output_utils import postprocess
 import cv2
 import numpy as np
 import torch
-
-
 from itertools import chain
 from copy import deepcopy as dp
 from PIL import Image as im
@@ -24,11 +22,13 @@ def unloader_pp(det_output,h ,w, top_k = 15, score_threshold = 0.5):
         class_ch (numpy.ndarray): class channel with image size
         dict_for_YolactSegm (dictionary): {'segm_masks':List(np.int32),'seg_length': List(int), 
                                 'scores' : List(np.float32), 'bboxes': List(np.int64), 
-                                'image_size' : List(int) <- (h, w) , 'num_objs': int}
+                                'image_size' : Tuple(int), 'num_objs': int}
                                 
                                 segm_masks: contour x,y pixel
                                 seg_length: the number of contour pixel point
+                                scores: confidence score of each detected object
                                 bboxes: 2 corners coordinate for bounding boxes
+                                image_size: (height, width) of image
                                 num_objs: the number of detected
     """
     # L35, see https://github.com/dbolya/yolact/blob/master/eval.py #L149
