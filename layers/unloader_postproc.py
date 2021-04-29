@@ -20,8 +20,8 @@ def unloader_pp(det_output,h ,w, top_k = 15, score_threshold = 0.5):
         score_threshold (float, optional): score threshold. Defaults to 0.5.
 
     Returns:
-        instance_ch (numpy.adarray): instance channel with image size
-        class_ch (numpy.adarray): class channel with image size
+        instance_ch (numpy.ndarray): instance channel with image size
+        class_ch (numpy.ndarray): class channel with image size
         dict_for_YolactSegm (dictionary): {'segm_masks':List(np.int32),'seg_length': List(int), 
                                 'scores' : List(np.float32), 'bboxes': List(np.int64), 
                                 'image_size' : List(int) <- (h, w) , 'num_objs': int}
