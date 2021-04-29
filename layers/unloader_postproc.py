@@ -15,12 +15,12 @@ def unloader_pp(det_output,h ,w, top_k = 15, score_threshold = 0.5):
     
 
     t = postprocess(det_output, w, h, score_threshold = score_threshold)
-
+     # see https://github.com/dbolya/yolact/blob/master/eval.py #L149
     idx = t[1].argsort(0, descending=True)[:top_k]
     # Masks are drawn on the GPU, so don't copy    
     masks = t[3][idx]
     classes, scores, boxes = [x[idx].cpu().numpy() for x in t[:3]]
-    # see https://github.com/dbolya/yolact/blob/master/eval.py #L149, L155-L160
+    # see https://github.com/dbolya/yolact/blob/master/eval.py #L155-L160
 
     # masks_np is numpy and for cpu
     masks_np = (masks).byte().cpu().numpy()
