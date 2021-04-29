@@ -403,6 +403,9 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
                     text_line_type = cv2.LINE_AA
                     cv2.putText(img_numpy, text_str, text_pt, font_face, font_scale, text_color_bgr, font_thickness, text_line_type)
 
+            else:
+                print('Warning: cannot find reference point')
+
     return img_numpy
 
 def prep_benchmark(dets_out, h, w):
