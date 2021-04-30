@@ -111,6 +111,15 @@ python eval.py --trained_model=weights/yolact_base_54_800000.pth --benchmark --m
 # Display qualitative results on the specified image.
 python eval.py --trained_model=weights/yolact_base_54_800000.pth --score_threshold=0.15 --top_k=15 --image=my_image.png
 
+# Display 3D projection point by qualitative results on the specified image.
+python eval.py --trained_model=weights/yolact_resnet50_custom_144_20000.pth --score_threshold=0.15 --top_k=15 --image=CAM3_20210407171423_0355.jpg --projection_estimation
+
+# Display 3D projection point by ARTag on the specified image.
+python eval.py --trained_model=weights/yolact_resnet50_custom_144_20000.pth --score_threshold=0.15 --top_k=15 --image=CAM3_20210407171423_0355.jpg --ar_marker
+
+# Display 3D projection point by qualitative results and ARTag at the same time on the specified image.
+python eval.py --trained_model=weights/yolact_resnet50_custom_144_20000.pth --score_threshold=0.15 --top_k=15 --image=CAM3_20210407171423_0355.jpg --projection_estimation --ar_marker
+
 # Process an image and save it to another file.
 python eval.py --trained_model=weights/yolact_base_54_800000.pth --score_threshold=0.15 --top_k=15 --image=input_image.png:output_image.png
 
@@ -122,6 +131,9 @@ python eval.py --trained_model=weights/yolact_base_54_800000.pth --score_thresho
 # Display a video in real-time. "--video_multiframe" will process that many frames at once for improved performance.
 # If you want, use "--display_fps" to draw the FPS directly on the frame.
 python eval.py --trained_model=weights/yolact_base_54_800000.pth --score_threshold=0.15 --top_k=15 --video_multiframe=4 --video=my_video.mp4
+
+# Display 3D projection point by qualitative results and ARTag at the same time on the specified video.
+python eval.py --trained_model=weights/yolact_resnet50_custom_144_20000.pth --score_threshold=0.15 --top_k=15 --video_multiframe=4 --video=CAM3_20210407171423.wmv --projection_estimation --ar_marker
 
 # Display a webcam feed in real-time. If you have multiple webcams pass the index of the webcam you want instead of 0.
 python eval.py --trained_model=weights/yolact_base_54_800000.pth --score_threshold=0.15 --top_k=15 --video_multiframe=4 --video=0
