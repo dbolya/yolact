@@ -28,7 +28,10 @@ from PIL import Image
 
 import matplotlib.pyplot as plt
 import cv2
+from cv2 import aruco
 import math
+
+import utils.aruco_pose_est as ar_pose_est
 
 def str2bool(v):
     if v.lower() in ('yes', 'true', 't', 'y', '1'):
@@ -116,10 +119,12 @@ def parse_args(argv=None):
                         help='When saving a video, emulate the framerate that you\'d get running in real-time mode.')
     parser.add_argument('--projection_estimation', default=False, dest='projection_estimation', action='store_true',
                         help='Project predefined 3D points to input image.')
+    parser.add_argument('--ar_marker', default=False, dest='ar_marker', action='store_true',
+                        help='Project predefined 3D points to input image by ArUco marker.')
 
     parser.set_defaults(no_bar=False, display=False, resume=False, output_coco_json=False, output_web_json=False, shuffle=False,
                         benchmark=False, no_sort=False, no_hash=False, mask_proto_debug=False, crop=True, detect=False, display_fps=False,
-                        emulate_playback=False, projection_estimation=False)
+                        emulate_playback=False, projection_estimation=False, ar_marker=False)
 
     global args
     args = parser.parse_args(argv)
@@ -138,6 +143,9 @@ color_cache = defaultdict(lambda: {})
 def fov_cal_rads(image_len_pixel, focal_len_pixel):
     fov_rads = 2 * math.atan((image_len_pixel / 2) / (focal_len_pixel))
     return fov_rads
+
+camera_matrix = None
+dist_coeffs = None
 
 def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, mask_alpha=0.45, fps_str=''):
     """
@@ -405,6 +413,36 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
 
             else:
                 print('Warning: cannot find reference point')
+
+    if args.ar_marker:
+        if args.video is not None:
+            dbg = False
+        else:
+            dbg = True
+        if dbg:
+            print('Project predefined 3D points to input image by ArUco marker')
+
+        TARGET_MARKER_LENGTH = 0.2 # side length of the marker in meter
+        TARGET_AXIS_LENGTH = 0.2 # length  of the axis in meter
+        SUPPOSED_L_POINT = np.float32([[1.4, 0.26, -0.5], ]) # supposed position of L point (in meter)
+
+        global camera_matrix
+        global dist_coeffs
+        if camera_matrix is None or dist_coeffs is None:
+            camera_matrix, dist_coeffs = ar_pose_est.calibration_data_load()
+        marker_num, marker_corners, marker_ids = ar_pose_est.detect_aruco_marker(img_numpy)
+        if marker_num > 0:
+            img_numpy = aruco.drawDetectedMarkers(img_numpy, marker_corners, marker_ids)
+            img_numpy, rotation_vectors, translation_vectors = ar_pose_est.draw_axis(
+                    img_numpy, marker_corners,
+                    TARGET_MARKER_LENGTH, TARGET_AXIS_LENGTH,
+                    camera_matrix, dist_coeffs)
+            # try to draw 3D points to 2D image
+            obj_3d_points = SUPPOSED_L_POINT
+            ar_pose_est.mark_3d_points(
+                    img_numpy, obj_3d_points,
+                    rotation_vectors[0], translation_vectors[0],
+                    camera_matrix, dist_coeffs)
 
     return img_numpy
 
