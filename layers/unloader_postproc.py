@@ -16,7 +16,7 @@ def unloader_pp(det_output,h ,w, top_k = 15, score_threshold = 0.5):
         top_k (int, optional): maximum number of detected object. Defaults to 15.
         score_threshold (float, optional): score threshold. Defaults to 0.5.
     Returns:
-        image_ch(numpy.ndarray): image channel with the size of (2, height, width), 2 is instance_ch and class_ch
+        image_ch (numpy.ndarray): image channel with the size of (2, height, width), 2 is instance_ch and class_ch
         dict_for_YolactSegm (dictionary): {'segm_masks':List(np.int32),'seg_length': List(int), 
                                 'scores' : List(np.float32), 'bboxes': List(np.int32), 
                                 'image_size' : Tuple(int), 'num_objs': int, 'class_id' :List(np.int32)}
@@ -75,7 +75,7 @@ def unloader_pp(det_output,h ,w, top_k = 15, score_threshold = 0.5):
     for i in range(len(classes)):
         all_new_list.append({'size': masks_np[i, :, :].sum(),
                             'masks': masks_np[i, :, :], 
-                            'classes': classes[i].astype(np.int32),
+                            'class_id': classes[i].astype(np.int32),
                             'scores': scores[i], 
                             'bboxes': boxes[i].astype(np.int32)})
     
@@ -111,7 +111,7 @@ def unloader_pp(det_output,h ,w, top_k = 15, score_threshold = 0.5):
         tmp_list_for_YolactSegm.append(contours[0].flatten('F'))
       
         #save class_id
-        dict_for_YolactSegm['class_id'].append(all_new_list[i]['classes'])
+        dict_for_YolactSegm['class_id'].append(all_new_list[i]['class_id'])
         #save seg_length
         dict_for_YolactSegm['seg_length'].append(len(contours[0]))
         #save scores
