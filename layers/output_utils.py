@@ -59,10 +59,6 @@ def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear',
         # At this points masks is only the coefficients
         proto_data = dets['proto']
         
-        # Test flag, do not upvote
-        if cfg.mask_proto_debug:
-            np.save('scripts/proto.npy', proto_data.cpu().numpy())
-        
         if visualize_lincomb:
             display_lincomb(proto_data, masks)
 
@@ -75,17 +71,6 @@ def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear',
 
         # Permute into the correct output shape [num_dets, proto_h, proto_w]
         masks = masks.permute(2, 0, 1).contiguous()
-
-        if cfg.use_maskiou:
-            with timer.env('maskiou_net'):                
-                with torch.no_grad():
-                    maskiou_p = net.maskiou_net(masks.unsqueeze(1))
-                    maskiou_p = torch.gather(maskiou_p, dim=1, index=classes.unsqueeze(1)).squeeze(1)
-                    if cfg.rescore_mask:
-                        if cfg.rescore_bbox:
-                            scores = scores * maskiou_p
-                        else:
-                            scores = [scores, scores * maskiou_p]
 
         # Scale masks up to the full image
         masks = F.interpolate(masks.unsqueeze(0), (h, w), mode=interpolation_mode, align_corners=False).squeeze(0)
