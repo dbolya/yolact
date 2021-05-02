@@ -85,7 +85,7 @@ def unloader_pp(det_output,h ,w, top_k = 15, score_threshold = 0.5):
     for i in range(len(classes)):
         #class channel 
         class_ch1 = np.array(0 ,np.int32)
-        tmp_class = np.int32(all_new_list[i]['classes'])
+        tmp_class = np.int32(all_new_list[i]['class_id'])
         class_ch1 = all_new_list[i]['masks'] * tmp_class
         cond2 = class_ch1 == tmp_class
         class_ch = np.where(cond2,class_ch1,class_ch)
