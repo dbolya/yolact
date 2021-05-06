@@ -32,6 +32,8 @@ from cv2 import aruco
 import math
 
 import utils.aruco_pose_est as ar_pose_est
+import web.server as web_server
+import threading
 
 def str2bool(v):
     if v.lower() in ('yes', 'true', 't', 'y', '1'):
@@ -121,10 +123,12 @@ def parse_args(argv=None):
                         help='Project predefined 3D points to input image.')
     parser.add_argument('--ar_marker', default=False, dest='ar_marker', action='store_true',
                         help='Project predefined 3D points to input image by ArUco marker.')
+    parser.add_argument('--web_server', default=False, dest='web_server', action='store_true',
+                        help='Enable Web API.')
 
     parser.set_defaults(no_bar=False, display=False, resume=False, output_coco_json=False, output_web_json=False, shuffle=False,
                         benchmark=False, no_sort=False, no_hash=False, mask_proto_debug=False, crop=True, detect=False, display_fps=False,
-                        emulate_playback=False, projection_estimation=False, ar_marker=False)
+                        emulate_playback=False, projection_estimation=False, ar_marker=False, web_server=False)
 
     global args
     args = parser.parse_args(argv)
@@ -315,6 +319,7 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
                 msg = '=> BBox: (%d, %d), (%d, %d)' % (bbox_x1, bbox_y1, bbox_x2, bbox_y2)
                 print(msg)
             projected_point_y = round((bbox_y2 - bbox_y1) / 2) + bbox_y1
+            projected_point_y = projected_point_y.item() # convert numpy.int64 to int
 
             # find projected x (perspective projection in x-direction) from front
             if x2 < BBOX_VALID_BOUNDARY_X_RIGHT:
@@ -343,6 +348,11 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
                     projected_point_x = (INPUT_IMAGE_WIDTH_PIXEL / 2) - L_center_offset_img_x
                     projected_point_x = round(projected_point_x)
 
+                    web_server.vehicles_mutex.acquire()
+                    web_server.vehicles_list.clear()
+                    web_server.vehicles_list.append({'x': projected_point_x, 'y': projected_point_y})
+                    web_server.vehicles_mutex.release()
+
                     if dbg:
                         msg = '=> L(%d, %d)' % (projected_point_x, projected_point_y)
                         print(msg)
@@ -363,6 +373,11 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
                     font_thickness = 1
                     text_line_type = cv2.LINE_AA
                     cv2.putText(img_numpy, text_str, text_pt, font_face, font_scale, text_color_bgr, font_thickness, text_line_type)
+
+                else:
+                    web_server.vehicles_mutex.acquire()
+                    web_server.vehicles_list.clear()
+                    web_server.vehicles_mutex.release()
 
             # find projected x (perspective projection in x-direction) from back
             elif x1 > BBOX_VALID_BOUNDARY_X_LEFT:
@@ -390,6 +405,12 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
 
                     projected_point_x = (INPUT_IMAGE_WIDTH_PIXEL / 2) - L_center_offset_img_x
                     projected_point_x = round(projected_point_x)
+
+                    web_server.vehicles_mutex.acquire()
+                    web_server.vehicles_list.clear()
+                    web_server.vehicles_list.append({'x': projected_point_x, 'y': projected_point_y})
+                    web_server.vehicles_mutex.release()
+
                     if dbg:
                         msg = '=> L(%d, %d)' % (projected_point_x, projected_point_y)
                         print(msg)
@@ -411,8 +432,16 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
                     text_line_type = cv2.LINE_AA
                     cv2.putText(img_numpy, text_str, text_pt, font_face, font_scale, text_color_bgr, font_thickness, text_line_type)
 
+                else:
+                    web_server.vehicles_mutex.acquire()
+                    web_server.vehicles_list.clear()
+                    web_server.vehicles_mutex.release()
+
             else:
                 print('Warning: cannot find reference point')
+                web_server.vehicles_mutex.acquire()
+                web_server.vehicles_list.clear()
+                web_server.vehicles_mutex.release()
 
     if args.ar_marker:
         if args.video is not None:
@@ -1230,6 +1259,8 @@ def print_maps(all_maps):
     print()
 
 
+def web_api_daemon():
+    web_server.startHttpServer(web_server.ApiHandler)
 
 if __name__ == '__main__':
     parse_args()
@@ -1286,7 +1317,18 @@ if __name__ == '__main__':
 
         if args.cuda:
             net = net.cuda()
-
-        evaluate(net, dataset)
+        if args.web_server:
+            web_server_thr = threading.Thread(target = web_api_daemon)
+            web_server_thr.daemon = True
+            web_server_thr.start()
+            evaluate(net, dataset)
+            while True:
+                try:
+                    pass
+                except KeyboardInterrupt:
+                    web_server.stopHttpServer()
+                time.sleep(1)
+        else:
+            evaluate(net, dataset)
 
 
