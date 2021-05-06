@@ -49,10 +49,22 @@ class Handler(SimpleHTTPRequestHandler):
 	def send_response(self, code, message=None):
 		super().send_response(code, message)
 
+httpd = None
 
-with HTTPServer(('', PORT), Handler) as httpd:
-	print('Serving at port', PORT)
-	try:
-		httpd.serve_forever()
-	except KeyboardInterrupt:
-		pass
+def startHttpServer(request_handler):
+    global httpd
+    httpd = HTTPServer(('', PORT), request_handler)
+    print('Serving at port', PORT)
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        pass
+
+def stopHttpServer():
+    global httpd
+    if httpd is not None:
+        print('Stop server')
+        httpd.shutdown()
+
+if __name__ == '__main__':
+    startHttpServer(Handler)
