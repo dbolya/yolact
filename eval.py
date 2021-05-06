@@ -895,6 +895,10 @@ def evalvideo(net:Yolact, path:str, out_path:str=None):
         exit()
 
     def get_next_frame(vid):
+        if args.web_server and is_webcam == False:
+            target_fps = round(vid.get(cv2.CAP_PROP_FPS))
+            frame_time_target = 1 / target_fps
+            time.sleep(frame_time_target)
         frames = []
         for idx in range(args.video_multiframe):
             frame = vid.read()[1]
@@ -1321,6 +1325,8 @@ if __name__ == '__main__':
             web_server_thr = threading.Thread(target = web_api_daemon)
             web_server_thr.daemon = True
             web_server_thr.start()
+            print('Force set video_multiframe to 1')
+            args.video_multiframe = 1
             evaluate(net, dataset)
             while True:
                 try:
