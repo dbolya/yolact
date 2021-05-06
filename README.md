@@ -145,7 +145,16 @@ As you can tell, `eval.py` can do a ton of stuff. Run the `--help` command to se
 ```Shell
 python eval.py --help
 ```
+## Web API
+ - Add arguments `--web_server` to enable Web API for getting vehicles position
+ - Use `curl http://127.0.0.1:6337/api/v1/vehicles.json` to get vehicles position
+```Shell
+# For image
+python eval.py --trained_model=weights/yolact_resnet50_custom_144_20000.pth --score_threshold=0.15 --top_k=15 --image=CAM3_20210407171423_0300.jpg --projection_estimation --web_server
 
+#For Video
+python eval.py --trained_model=weights/yolact_resnet50_custom_144_20000.pth --score_threshold=0.15 --top_k=15 --video_multiframe=4 --video=CAM1_20210407171426.wmv --projection_estimation --web_server
+```
 
 # Training
 By default, we train on COCO. Make sure to download the entire dataset using the commands above.
