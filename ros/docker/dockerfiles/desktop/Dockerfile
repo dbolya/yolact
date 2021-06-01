@@ -14,13 +14,11 @@ RUN sudo apt update \
         mesa-utils libgl1-mesa-dri ffmpeg tmux \
         lxde gtk2-engines-murrine gnome-themes-standard gtk2-engines-pixbuf gtk2-engines-murrine arc-theme \
         xvfb x11vnc libcanberra-gtk-module libcanberra-gtk3-module \
-        vim-tiny sudo firefox-geckodriver ttf-ubuntu-font-family ttf-wqy-zenhei  \
-    && sudo apt autoclean -y \
+        vim-tiny sudo firefox-geckodriver ttf-ubuntu-font-family ttf-wqy-zenhei \
     && sudo add-apt-repository -r ppa:fcwu-tw/apps \
-    && sudo apt autoremove -y \
-    && sudo rm -rf /var/lib/apt/lists/* \
     && sudo mkdir /usr/local/ffmpeg \
-    && sudo ln -s /usr/bin/ffmpeg /usr/local/ffmpeg/ffmpeg
+    && sudo ln -s /usr/bin/ffmpeg /usr/local/ffmpeg/ffmpeg \
+    && sudo ln -s /usr/bin/python3 /usr/bin/python
 
 ENV HOME=/home/ros \
     SHELL=/bin/bash

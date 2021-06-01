@@ -19,7 +19,7 @@ nvidia-docker container run --rm -$mode \
   --user $(id -u) \
   --workdir /home/ros \
   --mount type=bind,source="${yoldact_docker}/home/ros",target=/home/ros \
-  --mount type=bind,source="${yoldact_docker}/opt/conda",target=/opt/conda \
+  --mount type=bind,source="${yoldact_docker}/usr/local/lib/python3.8/dist-packages",target=/usr/local/lib/python3.8/dist-packages \
   --name yolact-desktop-nvidia \
   --security-opt apparmor:unconfined \
   --net=host \

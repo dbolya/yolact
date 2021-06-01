@@ -2,6 +2,9 @@ FROM nvcr.io/nvidia/pytorch:21.05-py3
 
 ENV DEBIAN_FRONTEND=noninteractive
 
+# Get rid off conda as it conflicts with
+# ROS system python
+RUN rm -rf /opt/conda
 
 # setup timezone
 RUN echo 'Etc/UTC' > /etc/timezone && \
@@ -14,7 +17,12 @@ RUN echo 'Etc/UTC' > /etc/timezone && \
 RUN apt-get update && apt-get install -q -y --no-install-recommends \
     dirmngr \
     gnupg2 \
-    && rm -rf /var/lib/apt/lists/*
+    python3-pip
+
+# You might think "what's the point of starting with a pytorch images if you reinstall it anyways?"
+# The problem is that with other images, installing from pip does not work for some odd reason when using CUDA
+# The only way to fix this while keeping compatibility with ROS2 is by reinstalling
+RUN pip3 install torch torchvision torchaudio
 
 # setup keys
 RUN apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C1CF6E31E6BADE8868B172B4F42ED6FBAB17C654
@@ -56,6 +64,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-pip \
     ros-foxy-desktop=0.9.2-1* \
     wget \
+    python3-tk \
     curl
 
 USER $USERNAME
@@ -63,6 +72,7 @@ WORKDIR /home/$USERNAME
 
 RUN sudo mkdir /etc/ros
 RUN sudo chown -R ros:ros /etc/ros
+RUN sudo chown -R ros:ros /usr/local/lib/python3.8/dist-packages
 
 # bootstrap rosdep
 RUN rosdep init
