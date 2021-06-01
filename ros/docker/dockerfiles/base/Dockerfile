@@ -45,11 +45,8 @@ RUN chmod 0440 /etc/sudoers.d/$USERNAME
 RUN echo "source /usr/share/bash-completion/completions/git" >> /home/$USERNAME/.bashrc
 RUN echo "if [ -f /opt/ros/${ROS_DISTRO}/setup.bash ]; then source /opt/ros/${ROS_DISTRO}/setup.bash; fi" >> /home/$USERNAME/.bashrc
 
-#RUN sudo chown -R ros:ros /opt/conda
-
 # install ros2 packages
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ros-foxy-ros-core=0.9.2-1* \
     build-essential \
     git vim tree net-tools \
     python3-colcon-common-extensions \
@@ -57,11 +54,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-rosdep \
     python3-vcstool \
     python3-pip \
-    ros-foxy-ros-base=0.9.2-1* \
+    ros-foxy-desktop=0.9.2-1* \
     wget \
     curl
-
-#RUN chown -R ros:ros /opt
 
 USER $USERNAME
 WORKDIR /home/$USERNAME
@@ -83,8 +78,7 @@ RUN colcon mixin add default \
 
 RUN wget -qO- https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > packages.microsoft.gpg \
   && sudo install -o root -g root -m 644 packages.microsoft.gpg /etc/apt/trusted.gpg.d/ \
-  && sudo
-  sh -c 'echo "deb [arch=amd64,arm64,armhf signed-by=/etc/apt/trusted.gpg.d/packages.microsoft.gpg] https://packages.microsoft.com/repos/code stable main" > /etc/apt/sources.list.d/vscode.list' \
+  && sudo sh -c 'echo "deb [arch=amd64,arm64,armhf signed-by=/etc/apt/trusted.gpg.d/packages.microsoft.gpg] https://packages.microsoft.com/repos/code stable main" > /etc/apt/sources.list.d/vscode.list' \
   && rm -f packages.microsoft.gpg \
   && sudo apt update \
   && sudo apt install --no-install-recommends -y apt-transport-https  code ninja-build

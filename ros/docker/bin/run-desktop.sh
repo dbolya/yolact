@@ -1,8 +1,8 @@
 #!/bin/bash
-workspace_folder=$1
+yoldact_docker=$1
 if [ -z "$1" ]
   then
-    echo "Absolute path of the workspace folder not found"
+    echo "Absolute path of the yolact work folder not found"
     exit 1
 fi
 mode=$2
@@ -11,13 +11,15 @@ if [ -z "$2" ]
     mode="it"
 fi
 xhost +
+echo $yoldact_docker
 export LIBGL_ALWAYS_INDIRECT=1
 nvidia-docker container run --rm -$mode \
   -e NVIDIA_DRIVER_CAPABILITIES=all \
   --gpus all \
   --user $(id -u) \
   --workdir /home/ros \
-  --mount type=bind,source="${workspace_folder}",target=/home/ros/workspace \
+  --mount type=bind,source="${yoldact_docker}/home/ros",target=/home/ros \
+  --mount type=bind,source="${yoldact_docker}/opt/conda",target=/opt/conda \
   --name yolact-desktop-nvidia \
   --security-opt apparmor:unconfined \
   --net=host \
