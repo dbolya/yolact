@@ -2,12 +2,7 @@
 
 To build the docker images run:
 ```bash
-./bin/build-ros-images.sh
-```
-
-To run the docker image use:
-```bash
-./bin/run-ros-image.sh
+./bin/build-images.sh
 ```
 
 # Getting environment up and running
