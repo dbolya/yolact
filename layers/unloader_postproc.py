@@ -102,7 +102,7 @@ def unloader_pp(det_output,h ,w, top_k = 15, score_threshold = 0.5):
         contours_np.sort(key=cv2.contourArea, reverse=True)
 
         #flatten np.array
-        tmp_list_for_YolactSegm_np.append(contours_np[0].flatten(''))
+        tmp_list_for_YolactSegm_np.append(contours_np[0].flatten('C'))
         
         #save class_id
         dict_for_YolactSegm['class_id'].append(all_new_list_tensor[i]['class_id'])
@@ -167,7 +167,7 @@ def unloader_pp_contour(det_output,h ,w, top_k = 15, score_threshold = 0.5):
                                 num_objs: the number of detected
                                 class_id: class index of each object
     """ 
-       
+
     # L172, see https://github.com/dbolya/yolact/blob/master/eval.py #L149
     t = postprocess(det_output, w, h, score_threshold = score_threshold)
 
