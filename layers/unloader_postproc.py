@@ -142,6 +142,7 @@ def unloader_pp(det_output,h ,w, top_k = 15, score_threshold = 0.5):
 
 
 def unloader_pp_contour(det_output,h ,w, top_k = 15, score_threshold = 0.5):
+
     """ raw output data of Yolact -> dictionary for Cv Node, dictionary for grasp compute Node
 
     Args:
@@ -152,21 +153,20 @@ def unloader_pp_contour(det_output,h ,w, top_k = 15, score_threshold = 0.5):
         score_threshold (float, optional): score threshold. Defaults to 0.5.
 
     Returns:
-        dict_for_cv (dictionary): {'contours':List(np,int32), 'contour_length': List(int),
-                                   'class_id' :List(np.int32)}
         dict_for_YolactSegm (dictionary): {'segm_masks':List(np.int32),'seg_length': List(int), 
                                 'scores' : List(np.float32), 'bboxes': List(np.int32), 
                                 'image_size' : Tuple(int), 'num_objs': int, 'class_id' :List(np.int32)}
                                 
 
-                                segm_masks, contours: contour x,y pixel
-                                seg_length, contour_length: the number of contour pixel point
+                                segm_masks: contour x,y pixel
+                                seg_length: the number of contour pixel point
                                 scores: confidence score of each detected object
                                 bboxes: 2 corners coordinate for bounding boxes
                                 image_size: (height, width) of image
                                 num_objs: the number of detected
                                 class_id: class index of each object
-    """ 
+    """    
+
 
     # L172, see https://github.com/dbolya/yolact/blob/master/eval.py #L149
     t = postprocess(det_output, w, h, score_threshold = score_threshold)
@@ -179,28 +179,17 @@ def unloader_pp_contour(det_output,h ,w, top_k = 15, score_threshold = 0.5):
     
     # coppied from https://github.com/dbolya/yolact/blob/master/eval.py  end.
     
-    #torch.tensor -> numpy.ndarray
-    masks_np = (masks).to(torch.int).cpu().numpy()
-    
     #initial var
-    all_new_list = []
-    tmp_list_for_YolactSegm_np = []
-    dict_for_cv = {}
-    
-    # make new list
-    for i in range(len(classes)):
-        all_new_list.append({'class_id': (classes[i]+1).astype(np.int32),
-                            'scores': scores[i], 
-                            'bboxes': boxes[i].astype(np.int32),
-                            'masks':masks[i,:,:]})
-    
+    class_iter = iter(classes)
+    score_iter = iter(scores)
+    bbox_iter = iter(boxes)
+
     #none instance case
     if masks.size()[0] == 0:
         tmp_dict_for_YolactSegm= {'seg_masks':[],'num_objs': 0, 'image_size': (h,w), 'class_id':[]
                     , 'seg_length':[], 'scores': [], 'bboxes': []}
-        tmp_dict_for_cv = {'class_id':[], 'instance_id':[], 'contours': [], 'contour_length':[]}
-
-        return tmp_dict_for_cv, tmp_dict_for_YolactSegm
+       
+        return tmp_dict_for_YolactSegm
     
     #default setting
     dict_for_YolactSegm = {'num_objs': masks.size()[0], 'image_size': (masks.size()[1],masks.size()[2])}
@@ -208,47 +197,44 @@ def unloader_pp_contour(det_output,h ,w, top_k = 15, score_threshold = 0.5):
     dict_for_YolactSegm.setdefault('scores',[])
     dict_for_YolactSegm.setdefault('bboxes',[])
     dict_for_YolactSegm.setdefault('class_id', [])
-    
-    dict_for_cv.setdefault('class_id',[])
-    dict_for_cv.setdefault('contours',[])
-    dict_for_cv.setdefault('contour_length',[])
+    dict_for_YolactSegm.setdefault('segm_masks', [])
     
     for i in range(len(classes)):
         
-        cond = masks_np[i, :, :]
-        cond = cond.astype(np.uint8)
+        #torch.tensor -> numpy.array
+        masks_np = (masks)[i].to(torch.int).cpu().numpy()
+        cond = masks_np.astype(np.uint8)
+
         #get contours for each mask
         contours_np, hierarchy = cv2.findContours(cond, cv2.RETR_LIST,cv2.CHAIN_APPROX_SIMPLE)
 
         #get the biggest mask for each contour
         contours_np.sort(key=cv2.contourArea, reverse=True)
-
-        #flatten np.array
-        tmp_list_for_YolactSegm_np.append(contours_np[0].flatten('C'))
+        
+        #flatten np.array and save masks
+        dict_for_YolactSegm['segm_masks'].extend(contours_np[0].flatten('C'))
         
         #save class_id
-        dict_for_YolactSegm['class_id'].append(all_new_list[i]['class_id'])
-        dict_for_cv['class_id'].append(all_new_list[i]['class_id'])
+        dict_for_YolactSegm['class_id'].append((class_iter.__next__()+1).astype(np.int32))
         #save seg_length
         dict_for_YolactSegm['seg_length'].append(len(contours_np[0]))
-        dict_for_cv['contour_length'].append(len(contours_np[0]))
         #save scores
-        dict_for_YolactSegm['scores'].append(all_new_list[i]['scores'])
+        dict_for_YolactSegm['scores'].append(score_iter.__next__())
         #save boxes
-        dict_for_YolactSegm['bboxes'].append(all_new_list[i]['bboxes'])
-        
+        dict_for_YolactSegm['bboxes'].extend(bbox_iter.__next__().astype(np.int32))
+
         """
         #Check contours
-        img3 = cv2.drawContours(cond, [contours_np[0]], -1, (255,0,0), 3)
+        img5 = np.zeros(shape = (h,w), dtype = np.uint8)
+        img3 = cv2.drawContours(img5, [contours_np[0]], -1, (255,0,0), 3)
         img3 = im.fromarray(img3*50)
         img3.save('output_images/output_contour_np'+str(i)+'.png')
-        """
-       
-    #flatten and save list of segmentation and boxes
-    flatten_list = list(chain.from_iterable(tmp_list_for_YolactSegm_np))
-    dict_for_YolactSegm['segm_masks'] = flatten_list
-    dict_for_cv['contours'] = flatten_list
-    bbox_flatten_list = list(chain.from_iterable(dict_for_YolactSegm['bboxes']))
-    dict_for_YolactSegm['bboxes']= bbox_flatten_list
 
-    return dict_for_cv, dict_for_YolactSegm
+        #img4 needs to be initialized
+        img4 = img3 + img4
+        if i == len(classes)-1:
+          img4 = im.fromarray(img4)
+          img4.save('output_images/output_contours_np'+str(i)+'.png')
+        """
+
+    return dict_for_YolactSegm
