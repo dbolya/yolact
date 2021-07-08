@@ -711,8 +711,8 @@ yolact_base_config = coco_base_config.copy({
     # Dataset stuff
     # 'dataset': coco2017_dataset,
     # 'num_classes': len(coco2017_dataset.class_names) + 1,
-    'dataset': ul_aug_gray_dataset,
-    'num_classes': len(ul_aug_gray_dataset.class_names) + 1,
+    'dataset': ul_aug_dataset,
+    'num_classes': len(ul_aug_dataset.class_names) + 1,
 
     # Image Size
     # 'max_size': 550, # original yolact config
@@ -860,6 +860,19 @@ yolact_plus_resnet50_config = yolact_plus_base_config.copy({
         'preapply_sqrt': False,
         'use_square_anchors': False,
     }),
+})
+
+
+yolact_resnet50_max1024_config = yolact_resnet50_config.copy({
+    'name': 'yolact_resnet50_max1024_config',
+    # Image Size
+    'max_size': 1024,
+
+    # Training params
+    'lr': 1e-4,
+    # 'lr_steps': (280000, 600000, 700000, 750000),
+    'lr_steps': (40000, 80000, 160000, 320000),
+    'max_iter': 800000,
 })
 
 
