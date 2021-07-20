@@ -87,7 +87,8 @@ def monitor():
                         if session not in logs["val"].keys():
                             logs["val"][session] = {
                                 "epoch": [], "iter": [], "box": [], "mask": []}
-                            legends["val"] = list(mask.keys())
+                            legends["val"] = {'box': list(
+                                mask.keys()), 'mask': list(mask.keys())}
 
                         logs["val"][session]["epoch"].append(epoch)
                         logs["val"][session]["iter"].append(iteration)
@@ -100,7 +101,7 @@ def monitor():
                     y = torch.Tensor(logs["train"][s]["loss"])
                     opts = {
                         "legend": legends["train"],
-                        "title": "session "+str(s) + " (train)"
+                        "title": "session "+str(s) + " (training Loss)"
                     }
                     win_key = "train_{}".format(s)
                     if win_key in windows.keys():
@@ -111,18 +112,20 @@ def monitor():
 
                 for s in logs["val"]:
                     x = torch.Tensor(logs["val"][s]['iter'])
-                    y = torch.Tensor(logs["val"][s]["mask"])
-                    opts = {
-                        "legend": legends["val"],
-                        "title": "session "+str(s) + " (val)"
-                    }
-                    win_key = "val_{}".format(s)
-                    if win_key in windows.keys():
-                        vis.line(Y=y, X=x, opts=opts, update="replace",
-                                 win=windows[win_key])
-                    else:
-                        windows[win_key] = vis.line(Y=y, X=x, opts=opts)
-
+                    y = {"mask": torch.Tensor(logs["val"][s]["mask"]),
+                         "box": torch.Tensor(logs["val"][s]["box"])}
+                    opts = {"mask": {"legend": legends["val"]['mask'],
+                                     "title": "session "+str(s) + " (mask mAP)"},
+                            "box": {"legend": legends["val"]['box'],
+                                    "title": "session "+str(s) + " (bounding box mAP)"}}
+                    win_keys = {"mask": "val_mask_{}".format(s),
+                                "box": "val_box_{}".format(s)}
+                    for k, v in win_keys.items():
+                        if v in windows.keys():
+                            vis.line(Y=y[k], X=x, opts=opts[k], update="replace",
+                                     win=windows[v])
+                        else:
+                            windows[v] = vis.line(Y=y[k], X=x, opts=opts[k])
             timer.sleep()
 
     except KeyboardInterrupt:
