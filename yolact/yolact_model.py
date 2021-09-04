@@ -395,7 +395,6 @@ class Yolact(nn.Module):
     def __init__(self):
         super().__init__()
 
-        self.class_names = None  # Initialized in load_weights()
         self.backbone = construct_backbone(cfg.backbone)
 
         if cfg.freeze_bn:
