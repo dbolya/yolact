@@ -245,7 +245,7 @@ class PredictionModule(nn.Module):
 
                                 prior_data += [x, y, w, h]
 
-                self.priors = torch.Tensor(prior_data, device=device).view(-1, 4).detach()
+                self.priors = torch.tensor(prior_data, device=device).view(-1, 4).detach()
                 self.priors.requires_grad = False
                 self.last_img_size = (cfg._tmp_img_w, cfg._tmp_img_h)
                 self.last_conv_size = (conv_w, conv_h)
@@ -409,7 +409,7 @@ class Yolact(nn.Module):
             cfg.mask_dim = cfg.mask_size**2
         elif cfg.mask_type == mask_type.lincomb:
             if cfg.mask_proto_use_grid:
-                self.grid = torch.Tensor(np.load(cfg.mask_proto_grid_file))
+                self.grid = torch.tensor(np.load(cfg.mask_proto_grid_file))
                 self.num_grids = self.grid.size(0)
             else:
                 self.num_grids = 0
