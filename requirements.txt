@@ -1,7 +1,5 @@
-torch>1.0.1
 cython
 opencv-python
 pycocotools
 matplotlib
-torchvision
-sparseml[torchvision] ~= 0.7.0
+sparseml[torchvision] >= 0.7.0
