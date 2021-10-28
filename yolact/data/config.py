@@ -104,11 +104,11 @@ dataset_base = Config({
 my_custom_dataset = dataset_base.copy({
     'name': 'custom',
 
-    'train_images': 'path_to_training_images',
-    'train_info':   'path_to_training_annotation',
+    'train_images': '/media/hdd_1/baptiste/ecore_with_galloo/images',
+    'train_info':   '/media/hdd_1/baptiste/ecore_with_galloo/data/annotations_yolact.json',
 
-    'valid_images': 'path_to_validation_images',
-    'valid_info':   'path_to_validation_annotation',
+    'valid_images': '/media/hdd_1/baptiste/ecore_with_galloo/images',
+    'valid_info':   '/media/hdd_1/baptiste/ecore_with_galloo/data/annotations_yolact_val.json',
 
     'has_gt': True,
     'class_names': ('copper')

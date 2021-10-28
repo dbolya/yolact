@@ -1,3 +1,8 @@
+# Trick to allow using train.py inside lib
+import os, sys
+dir_path = os.getcwd()
+sys.path.insert(0, dir_path)
+
 from yolact.data import *
 from yolact.utils.augmentations import SSDAugmentation, BaseTransform
 from yolact.utils.functions import MovingAverage, SavePath
