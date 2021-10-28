@@ -1,7 +1,7 @@
 from setuptools import setup
 
 setup(name='yolact',
-      version='2.0.3',
+      version='2.0.4',
       author="Psycle Research",
       description="Fork of yolact",
       url="https://github.com/PsycleResearch/yolact",
