@@ -1,9 +1,9 @@
 import torch
 import torch.nn.functional as F
-from ..box_utils import decode, jaccard, index2d
-from utils import timer
+from yolact.layers.box_utils import decode, jaccard, index2d
+from yolact.utils import timer
 
-from data import cfg, mask_type
+from yolact.data import cfg, mask_type
 
 import numpy as np
 
@@ -183,7 +183,7 @@ class Detect(object):
         import pyximport
         pyximport.install(setup_args={"include_dirs":np.get_include()}, reload_support=True)
 
-        from utils.cython_nms import nms as cnms
+        from yolact.utils.cython_nms import nms as cnms
 
         num_classes = scores.size(0)
 

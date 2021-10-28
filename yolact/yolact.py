@@ -8,18 +8,18 @@ from math import sqrt
 from typing import List
 from collections import defaultdict
 
-from data.config import cfg, mask_type
-from layers import Detect
-from layers.interpolate import InterpolateModule
-from backbone import construct_backbone
+from yolact.data.config import cfg, mask_type
+from yolact.layers import Detect
+from yolact.layers.interpolate import InterpolateModule
+from yolact.backbone import construct_backbone
 
 import torch.backends.cudnn as cudnn
-from utils import timer
-from utils.functions import MovingAverage, make_net
+from yolact.utils import timer
+from yolact.utils.functions import MovingAverage, make_net
 
 # This is required for Pytorch 1.0.1 on Windows to initialize Cuda on some driver versions.
 # See the bug report here: https://github.com/pytorch/pytorch/issues/17108
-torch.cuda.current_device()
+# torch.cuda.current_device()
 
 # As of March 10, 2019, Pytorch DataParallel still doesn't support JIT Script Modules
 use_jit = torch.cuda.device_count() <= 1
@@ -481,7 +481,7 @@ class Yolact(nn.Module):
 
     def load_weights(self, path):
         """ Loads weights from a compressed save file. """
-        state_dict = torch.load(path)
+        state_dict = torch.load(path, map_location='cpu' if not torch.cuda.is_available() else '0')
 
         # For backward compatability, remove these (the new variable is called layers)
         for key in list(state_dict.keys()):

@@ -1,4 +1,4 @@
-from backbone import ResNetBackbone, VGGBackbone, ResNetBackboneGN, DarkNetBackbone
+from yolact.backbone import ResNetBackbone, VGGBackbone, ResNetBackboneGN, DarkNetBackbone
 from math import sqrt
 import torch
 
@@ -123,48 +123,17 @@ dataset_base = Config({
     'label_map': None
 })
 
-coco2014_dataset = dataset_base.copy({
-    'name': 'COCO 2014',
+my_custom_dataset = dataset_base.copy({
+    'name': 'custom',
 
-    'train_info': './data/coco/annotations/instances_train2014.json',
-    'valid_info': './data/coco/annotations/instances_val2014.json',
+    'train_images': 'path_to_training_images',
+    'train_info':   'path_to_training_annotation',
 
-    'label_map': COCO_LABEL_MAP
-})
+    'valid_images': 'path_to_validation_images',
+    'valid_info':   'path_to_validation_annotation',
 
-coco2017_dataset = dataset_base.copy({
-    'name': 'COCO 2017',
-
-    'train_info': './data/coco/annotations/instances_train2017.json',
-    'valid_info': './data/coco/annotations/instances_val2017.json',
-
-    'label_map': COCO_LABEL_MAP
-})
-
-coco2017_testdev_dataset = dataset_base.copy({
-    'name': 'COCO 2017 Test-Dev',
-
-    'valid_info': './data/coco/annotations/image_info_test-dev2017.json',
-    'has_gt': False,
-
-    'label_map': COCO_LABEL_MAP
-})
-
-PASCAL_CLASSES = ("aeroplane", "bicycle", "bird", "boat", "bottle",
-                  "bus", "car", "cat", "chair", "cow", "diningtable",
-                  "dog", "horse", "motorbike", "person", "pottedplant",
-                  "sheep", "sofa", "train", "tvmonitor")
-
-pascal_sbd_dataset = dataset_base.copy({
-    'name': 'Pascal SBD 2012',
-
-    'train_images': './data/sbd/img',
-    'valid_images': './data/sbd/img',
-
-    'train_info': './data/sbd/pascal_sbd_train.json',
-    'valid_info': './data/sbd/pascal_sbd_val.json',
-
-    'class_names': PASCAL_CLASSES,
+    'has_gt': True,
+    'class_names': ('copper')
 })
 
 # ----------------------- TRANSFORMS ----------------------- #
@@ -220,69 +189,6 @@ resnet101_backbone = backbone_base.copy({
     'selected_layers': list(range(2, 8)),
     'pred_scales': [[1]] * 6,
     'pred_aspect_ratios': [[[0.66685089, 1.7073535, 0.87508774, 1.16524493, 0.49059086]]] * 6,
-})
-
-resnet101_gn_backbone = backbone_base.copy({
-    'name': 'ResNet101_GN',
-    'path': 'R-101-GN.pkl',
-    'type': ResNetBackboneGN,
-    'args': ([3, 4, 23, 3],),
-    'transform': resnet_transform,
-
-    'selected_layers': list(range(2, 8)),
-    'pred_scales': [[1]] * 6,
-    'pred_aspect_ratios': [[[0.66685089, 1.7073535, 0.87508774, 1.16524493, 0.49059086]]] * 6,
-})
-
-resnet101_dcn_inter3_backbone = resnet101_backbone.copy({
-    'name': 'ResNet101_DCN_Interval3',
-    'args': ([3, 4, 23, 3], [0, 4, 23, 3], 3),
-})
-
-resnet50_backbone = resnet101_backbone.copy({
-    'name': 'ResNet50',
-    'path': 'resnet50-19c8e357.pth',
-    'type': ResNetBackbone,
-    'args': ([3, 4, 6, 3],),
-    'transform': resnet_transform,
-})
-
-resnet50_dcnv2_backbone = resnet50_backbone.copy({
-    'name': 'ResNet50_DCNv2',
-    'args': ([3, 4, 6, 3], [0, 4, 6, 3]),
-})
-
-darknet53_backbone = backbone_base.copy({
-    'name': 'DarkNet53',
-    'path': 'darknet53.pth',
-    'type': DarkNetBackbone,
-    'args': ([1, 2, 8, 8, 4],),
-    'transform': darknet_transform,
-
-    'selected_layers': list(range(3, 9)),
-    'pred_scales': [[3.5, 4.95], [3.6, 4.90], [3.3, 4.02], [2.7, 3.10], [2.1, 2.37], [1.8, 1.92]],
-    'pred_aspect_ratios': [[[1, sqrt(2), 1 / sqrt(2), sqrt(3), 1 / sqrt(3)][:n], [1]] for n in [3, 5, 5, 5, 3, 3]],
-})
-
-vgg16_arch = [[64, 64],
-              ['M', 128, 128],
-              ['M', 256, 256, 256],
-              [('M', {'kernel_size': 2, 'stride': 2, 'ceil_mode': True}), 512, 512, 512],
-              ['M', 512, 512, 512],
-              [('M', {'kernel_size': 3, 'stride': 1, 'padding': 1}),
-               (1024, {'kernel_size': 3, 'padding': 6, 'dilation': 6}),
-               (1024, {'kernel_size': 1})]]
-
-vgg16_backbone = backbone_base.copy({
-    'name': 'VGG16',
-    'path': 'vgg16_reducedfc.pth',
-    'type': VGGBackbone,
-    'args': (vgg16_arch, [(256, 2), (128, 2), (128, 1), (128, 1)], [3]),
-    'transform': vgg_transform,
-
-    'selected_layers': [3] + list(range(5, 10)),
-    'pred_scales': [[5, 4]] * 6,
-    'pred_aspect_ratios': [[[1], [1, sqrt(2), 1 / sqrt(2), sqrt(3), 1 / sqrt(3)][:n]] for n in [3, 5, 5, 5, 3, 3]],
 })
 
 # ----------------------- MASK BRANCH TYPES ----------------------- #
@@ -386,7 +292,7 @@ fpn_base = Config({
 # ----------------------- CONFIG DEFAULTS ----------------------- #
 
 coco_base_config = Config({
-    'dataset': coco2014_dataset,
+    'dataset': None,
     'num_classes': 81,  # This should include the background class
 
     'max_iter': 400000,
@@ -624,8 +530,8 @@ yolact_base_config = coco_base_config.copy({
     'name': 'yolact_base',
 
     # Dataset stuff
-    'dataset': coco2017_dataset,
-    'num_classes': len(coco2017_dataset.class_names) + 1,
+    'dataset': my_custom_dataset,
+    'num_classes': len(my_custom_dataset.class_names) + 1,
 
     # Image Size
     'max_size': 550,
@@ -670,109 +576,6 @@ yolact_base_config = coco_base_config.copy({
     'use_semantic_segmentation_loss': True,
 })
 
-yolact_im400_config = yolact_base_config.copy({
-    'name': 'yolact_im400',
-
-    'max_size': 400,
-    'backbone': yolact_base_config.backbone.copy({
-        'pred_scales': [[int(x[0] / yolact_base_config.max_size * 400)] for x in
-                        yolact_base_config.backbone.pred_scales],
-    }),
-})
-
-yolact_im700_config = yolact_base_config.copy({
-    'name': 'yolact_im700',
-
-    'masks_to_train': 300,
-    'max_size': 700,
-    'backbone': yolact_base_config.backbone.copy({
-        'pred_scales': [[int(x[0] / yolact_base_config.max_size * 700)] for x in
-                        yolact_base_config.backbone.pred_scales],
-    }),
-})
-
-yolact_darknet53_config = yolact_base_config.copy({
-    'name': 'yolact_darknet53',
-
-    'backbone': darknet53_backbone.copy({
-        'selected_layers': list(range(2, 5)),
-
-        'pred_scales': yolact_base_config.backbone.pred_scales,
-        'pred_aspect_ratios': yolact_base_config.backbone.pred_aspect_ratios,
-        'use_pixel_scales': True,
-        'preapply_sqrt': False,
-        'use_square_anchors': True,  # This is for backward compatability with a bug
-    }),
-})
-
-yolact_resnet50_config = yolact_base_config.copy({
-    'name': 'yolact_resnet50',
-
-    'backbone': resnet50_backbone.copy({
-        'selected_layers': list(range(1, 4)),
-
-        'pred_scales': yolact_base_config.backbone.pred_scales,
-        'pred_aspect_ratios': yolact_base_config.backbone.pred_aspect_ratios,
-        'use_pixel_scales': True,
-        'preapply_sqrt': False,
-        'use_square_anchors': True,  # This is for backward compatability with a bug
-    }),
-})
-
-yolact_resnet50_pascal_config = yolact_resnet50_config.copy({
-    'name': None,  # Will default to yolact_resnet50_pascal
-
-    # Dataset stuff
-    'dataset': pascal_sbd_dataset,
-    'num_classes': len(pascal_sbd_dataset.class_names) + 1,
-
-    'max_iter': 120000,
-    'lr_steps': (60000, 100000),
-
-    'backbone': yolact_resnet50_config.backbone.copy({
-        'pred_scales': [[32], [64], [128], [256], [512]],
-        'use_square_anchors': False,
-    })
-})
-
-# ----------------------- YOLACT++ CONFIGS ----------------------- #
-
-yolact_plus_base_config = yolact_base_config.copy({
-    'name': 'yolact_plus_base',
-
-    'backbone': resnet101_dcn_inter3_backbone.copy({
-        'selected_layers': list(range(1, 4)),
-
-        'pred_aspect_ratios': [[[1, 1 / 2, 2]]] * 5,
-        'pred_scales': [[i * 2 ** (j / 3.0) for j in range(3)] for i in [24, 48, 96, 192, 384]],
-        'use_pixel_scales': True,
-        'preapply_sqrt': False,
-        'use_square_anchors': False,
-    }),
-
-    'use_maskiou': True,
-    'maskiou_net': [(8, 3, {'stride': 2}), (16, 3, {'stride': 2}), (32, 3, {'stride': 2}), (64, 3, {'stride': 2}),
-                    (128, 3, {'stride': 2})],
-    'maskiou_alpha': 25,
-    'rescore_bbox': False,
-    'rescore_mask': True,
-
-    'discard_mask_area': 5 * 5,
-})
-
-yolact_plus_resnet50_config = yolact_plus_base_config.copy({
-    'name': 'yolact_plus_resnet50',
-
-    'backbone': resnet50_dcnv2_backbone.copy({
-        'selected_layers': list(range(1, 4)),
-
-        'pred_aspect_ratios': [[[1, 1 / 2, 2]]] * 5,
-        'pred_scales': [[i * 2 ** (j / 3.0) for j in range(3)] for i in [24, 48, 96, 192, 384]],
-        'use_pixel_scales': True,
-        'preapply_sqrt': False,
-        'use_square_anchors': False,
-    }),
-})
 
 # Default config
 cfg = yolact_base_config.copy()
