@@ -1,13 +1,14 @@
+import os
 import os.path as osp
-import random
-
+import sys
 import torch
 import torch.utils.data as data
 import torch.nn.functional as F
 import cv2
 import numpy as np
-
 from .config import cfg
+from pycocotools import mask as maskUtils
+import random
 
 
 def get_label_map():
@@ -154,11 +155,8 @@ class COCODetection(data.Dataset):
         if self.target_transform is not None and len(target) > 0:
             target = self.target_transform(target, width, height)
 
-
         if self.transform is not None:
-
             if len(target) > 0:
-
                 target = np.array(target)
                 img, masks, boxes, labels = self.transform(img, masks, target[:, :4],
                                                            {'num_crowds': num_crowds, 'labels': target[:, 4]})
@@ -174,7 +172,6 @@ class COCODetection(data.Dataset):
                                               {'num_crowds': 0, 'labels': np.array([0])})
                 masks = None
                 target = None
-
 
         if target.shape[0] == 0:
             print('Warning: Augmentation output an example with no ground truth. Resampling...')
