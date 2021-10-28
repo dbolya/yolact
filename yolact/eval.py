@@ -165,10 +165,6 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
         classes, scores, boxes = [x[idx].cpu().numpy() for x in t[:3]]
 
     num_dets_to_consider = classes.shape[0]
-    for j in range(num_dets_to_consider):
-        if scores[j] < args.score_threshold:
-            num_dets_to_consider = j
-            break
 
     # Quick and dirty lambda for selecting the color for a particular index
     # Also keeps track of a per-gpu color cache for maximum speed
