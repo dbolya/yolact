@@ -9,12 +9,12 @@ def infer_segmentation(weights_path: str, im: np.ndarray, confidence: float):
         weights=weights_path,
         preprocessing_file_path=None,
         conf_thresh=confidence,
-        classes={'0': {'name': '0', 'color': [255, 0, 0]},
-                 '1': {'name': '1', 'color': [0, 255, 0]},
-                 '2': {'name': '2', 'color': [0, 0, 255]}},
+        classes={'0': {'name': 'zero', 'color': [255, 0, 0]},
+                 '1': {'name': 'un', 'color': [0, 255, 0]},
+                 '2': {'name': 'deux', 'color': [0, 0, 255]}},
     )
     out = model.infer(im)
-    im_out = model.draw(im, out)
+    im_out = model.draw(im, out, print_confidence=True, draw_center=True, with_rectangle=True)
     cv2.imwrite('/tmp/in.png', im)
     cv2.imwrite('/tmp/out.png', im_out)
     return im_out
