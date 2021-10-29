@@ -1,5 +1,24 @@
 *.pth
-.idea/
 **/images/
 **/*.egg-info/
+
+env/
+venv/
+.idea/
+.vscode/
+**/.ipynb_checkpoints/
+**/*.pt
+**/*.pth
+**/*.jpg
+
+# Must also be ignored in Repsycle/tests/
+**/__pycache__/
+
+# Private PyPi
 dist/
+
+.storage/
+.pytest_cache/
+build/
+
+.python-version
