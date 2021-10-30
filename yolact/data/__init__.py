@@ -1,6 +1,2 @@
-from .config import *
-from .coco import *
-
-import torch
-import cv2
-import numpy as np
+from yolact.data.config import *
+from yolact.data.coco import *

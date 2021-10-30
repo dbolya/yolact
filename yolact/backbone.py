@@ -8,25 +8,28 @@ try:
     from dcn_v2 import DCN
 except ImportError:
     def DCN(*args, **kwdargs):
-        raise Exception('DCN could not be imported. If you want to use YOLACT++ models, compile DCN. Check the README for instructions.')
+        raise Exception(
+            'DCN could not be imported. If you want to use YOLACT++ models, compile DCN. Check the README for instructions.')
+
 
 class Bottleneck(nn.Module):
     """ Adapted from torchvision.models.resnet """
     expansion = 4
 
-    def __init__(self, inplanes, planes, stride=1, downsample=None, norm_layer=nn.BatchNorm2d, dilation=1, use_dcn=False):
+    def __init__(self, inplanes, planes, stride=1, downsample=None, norm_layer=nn.BatchNorm2d, dilation=1,
+                 use_dcn=False):
         super(Bottleneck, self).__init__()
         self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, bias=False, dilation=dilation)
         self.bn1 = norm_layer(planes)
         if use_dcn:
             self.conv2 = DCN(planes, planes, kernel_size=3, stride=stride,
-                                padding=dilation, dilation=dilation, deformable_groups=1)
+                             padding=dilation, dilation=dilation, deformable_groups=1)
             self.conv2.bias.data.zero_()
             self.conv2.conv_offset_mask.weight.data.zero_()
             self.conv2.conv_offset_mask.bias.data.zero_()
         else:
             self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=stride,
-                                padding=dilation, bias=False, dilation=dilation)
+                                   padding=dilation, bias=False, dilation=dilation)
         self.bn2 = norm_layer(planes)
         self.conv3 = nn.Conv2d(planes, planes * 4, kernel_size=1, bias=False, dilation=dilation)
         self.bn3 = norm_layer(planes * 4)
@@ -60,7 +63,8 @@ class Bottleneck(nn.Module):
 class ResNetBackbone(nn.Module):
     """ Adapted from torchvision.models.resnet """
 
-    def __init__(self, layers, dcn_layers=[0, 0, 0, 0], dcn_interval=1, atrous_layers=[], block=Bottleneck, norm_layer=nn.BatchNorm2d):
+    def __init__(self, layers, dcn_layers=[0, 0, 0, 0], dcn_interval=1, atrous_layers=[], block=Bottleneck,
+                 norm_layer=nn.BatchNorm2d):
         super().__init__()
 
         # These will be populated by _make_layer
@@ -73,12 +77,12 @@ class ResNetBackbone(nn.Module):
 
         # From torchvision.models.resnet.Resnet
         self.inplanes = 64
-        
+
         self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False)
         self.bn1 = norm_layer(64)
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-        
+
         self._make_layer(block, 64, layers[0], dcn_layers=dcn_layers[0], dcn_interval=dcn_interval)
         self._make_layer(block, 128, layers[1], stride=2, dcn_layers=dcn_layers[1], dcn_interval=dcn_interval)
         self._make_layer(block, 256, layers[2], stride=2, dcn_layers=dcn_layers[2], dcn_interval=dcn_interval)
@@ -89,8 +93,7 @@ class ResNetBackbone(nn.Module):
         # in this list. That way, Yolact::init_weights knows which backbone weights to initialize
         # with xavier, and which ones to leave alone.
         self.backbone_modules = [m for m in self.modules() if isinstance(m, nn.Conv2d)]
-        
-    
+
     def _make_layer(self, block, planes, blocks, stride=1, dcn_layers=0, dcn_interval=1):
         """ Here one layer means a string of n Bottleneck blocks. """
         downsample = None
@@ -101,7 +104,7 @@ class ResNetBackbone(nn.Module):
             if len(self.layers) in self.atrous_layers:
                 self.dilation += 1
                 stride = 1
-            
+
             downsample = nn.Sequential(
                 nn.Conv2d(self.inplanes, planes * block.expansion,
                           kernel_size=1, stride=stride, bias=False,
@@ -114,7 +117,7 @@ class ResNetBackbone(nn.Module):
         layers.append(block(self.inplanes, planes, stride, downsample, self.norm_layer, self.dilation, use_dcn=use_dcn))
         self.inplanes = planes * block.expansion
         for i in range(1, blocks):
-            use_dcn = ((i+dcn_layers) >= blocks) and (i % dcn_interval == 0)
+            use_dcn = ((i + dcn_layers) >= blocks) and (i % dcn_interval == 0)
             layers.append(block(self.inplanes, planes, norm_layer=self.norm_layer, use_dcn=use_dcn))
         layer = nn.Sequential(*layers)
 
@@ -147,7 +150,7 @@ class ResNetBackbone(nn.Module):
         for key in keys:
             if key.startswith('layer'):
                 idx = int(key[5])
-                new_key = 'layers.' + str(idx-1) + key[6:]
+                new_key = 'layers.' + str(idx - 1) + key[6:]
                 state_dict[new_key] = state_dict.pop(key)
 
         # Note: Using strict=False is berry scary. Triple check this.
@@ -158,8 +161,6 @@ class ResNetBackbone(nn.Module):
         self._make_layer(block, conv_channels // block.expansion, blocks=depth, stride=downsample)
 
 
-
-
 class ResNetBackboneGN(ResNetBackbone):
 
     def __init__(self, layers, num_groups=32):
@@ -168,15 +169,15 @@ class ResNetBackboneGN(ResNetBackbone):
     def init_backbone(self, path):
         """ The path here comes from detectron. So we load it differently. """
         with open(path, 'rb') as f:
-            state_dict = pickle.load(f, encoding='latin1') # From the detectron source
+            state_dict = pickle.load(f, encoding='latin1')  # From the detectron source
             state_dict = state_dict['blobs']
-        
+
         our_state_dict_keys = list(self.state_dict().keys())
         new_state_dict = {}
-    
-        gn_trans     = lambda x: ('gn_s' if x == 'weight' else 'gn_b')
-        layeridx2res = lambda x: 'res' + str(int(x)+2)
-        block2branch = lambda x: 'branch2' + ('a', 'b', 'c')[int(x[-1:])-1]
+
+        gn_trans = lambda x: ('gn_s' if x == 'weight' else 'gn_b')
+        layeridx2res = lambda x: 'res' + str(int(x) + 2)
+        block2branch = lambda x: 'branch2' + ('a', 'b', 'c')[int(x[-1:]) - 1]
 
         # Transcribe each Detectron weights name to a Yolact weights name
         for key in our_state_dict_keys:
@@ -195,7 +196,7 @@ class ResNetBackboneGN(ResNetBackbone):
 
                 if parts[3] == 'downsample':
                     transcribed_key += 'branch1_'
-                    
+
                     if parts[4] == '0':
                         transcribed_key += 'w'
                     else:
@@ -209,14 +210,9 @@ class ResNetBackboneGN(ResNetBackbone):
                         transcribed_key += gn_trans(parts[4])
 
             new_state_dict[key] = torch.Tensor(state_dict[transcribed_key])
-        
+
         # strict=False because we may have extra unitialized layers at this point
         self.load_state_dict(new_state_dict, strict=False)
-
-
-
-
-
 
 
 def darknetconvlayer(in_channels, out_channels, *args, **kwdargs):
@@ -232,6 +228,7 @@ def darknetconvlayer(in_channels, out_channels, *args, **kwdargs):
         nn.LeakyReLU(0.1, inplace=True)
     )
 
+
 class DarkNetBlock(nn.Module):
     """ Note: channels is the lesser of the two. The output will be expansion * channels. """
 
@@ -240,13 +237,11 @@ class DarkNetBlock(nn.Module):
     def __init__(self, in_channels, channels):
         super().__init__()
 
-        self.conv1 = darknetconvlayer(in_channels, channels,                  kernel_size=1)
-        self.conv2 = darknetconvlayer(channels,    channels * self.expansion, kernel_size=3, padding=1)
+        self.conv1 = darknetconvlayer(in_channels, channels, kernel_size=1)
+        self.conv2 = darknetconvlayer(channels, channels * self.expansion, kernel_size=3, padding=1)
 
     def forward(self, x):
         return self.conv2(self.conv1(x)) + x
-
-
 
 
 class DarkNetBackbone(nn.Module):
@@ -264,12 +259,12 @@ class DarkNetBackbone(nn.Module):
         self.num_base_layers = len(layers)
         self.layers = nn.ModuleList()
         self.channels = []
-        
+
         self._preconv = darknetconvlayer(3, 32, kernel_size=3, padding=1)
         self.in_channels = 32
-        
-        self._make_layer(block, 32,  layers[0])
-        self._make_layer(block, 64,  layers[1])
+
+        self._make_layer(block, 32, layers[0])
+        self._make_layer(block, 64, layers[1])
         self._make_layer(block, 128, layers[2])
         self._make_layer(block, 256, layers[3])
         self._make_layer(block, 512, layers[4])
@@ -279,7 +274,7 @@ class DarkNetBackbone(nn.Module):
         # in this list. That way, Yolact::init_weights knows which backbone weights to initialize
         # with xavier, and which ones to leave alone.
         self.backbone_modules = [m for m in self.modules() if isinstance(m, nn.Conv2d)]
-    
+
     def _make_layer(self, block, channels, num_blocks, stride=2):
         """ Here one layer means a string of n blocks. """
         layer_list = []
@@ -311,14 +306,11 @@ class DarkNetBackbone(nn.Module):
     def add_layer(self, conv_channels=1024, stride=2, depth=1, block=DarkNetBlock):
         """ Add a downsample layer to the backbone as per what SSD does. """
         self._make_layer(block, conv_channels // block.expansion, num_blocks=depth, stride=stride)
-    
+
     def init_backbone(self, path):
         """ Initializes the backbone weights for training. """
         # Note: Using strict=False is berry scary. Triple check this.
         self.load_state_dict(torch.load(path), strict=False)
-
-
-
 
 
 class VGGBackbone(nn.Module):
@@ -334,11 +326,11 @@ class VGGBackbone(nn.Module):
 
     def __init__(self, cfg, extra_args=[], norm_layers=[]):
         super().__init__()
-        
+
         self.channels = []
         self.layers = nn.ModuleList()
         self.in_channels = 3
-        self.extra_args = list(reversed(extra_args)) # So I can use it as a stack
+        self.extra_args = list(reversed(extra_args))  # So I can use it as a stack
 
         # Keeps track of what the corresponding key will be in the state dict of the
         # pretrained model. For instance, layers.0.2 for us is 2 for the pretrained
@@ -392,7 +384,7 @@ class VGGBackbone(nn.Module):
                 layers.append(nn.Conv2d(self.in_channels, v, **args))
                 layers.append(nn.ReLU(inplace=True))
                 self.in_channels = v
-        
+
         self.total_layer_count += len(layers)
         self.channels.append(self.in_channels)
         self.layers.append(nn.Sequential(*layers))
@@ -403,13 +395,13 @@ class VGGBackbone(nn.Module):
 
         for idx, layer in enumerate(self.layers):
             x = layer(x)
-            
+
             # Apply an l2norm module to the selected layers
             # Note that this differs from the original implemenetation
             if idx in self.norm_lookup:
                 x = self.norms[self.norm_lookup[idx]](x)
             outs.append(x)
-        
+
         return tuple(outs)
 
     def transform_key(self, k):
@@ -421,7 +413,7 @@ class VGGBackbone(nn.Module):
     def init_backbone(self, path):
         """ Initializes the backbone weights for training. """
         state_dict = torch.load(path)
-        state_dict = OrderedDict([(self.transform_key(k), v) for k,v in state_dict.items()])
+        state_dict = OrderedDict([(self.transform_key(k), v) for k, v in state_dict.items()])
 
         self.load_state_dict(state_dict, strict=False)
 
@@ -429,21 +421,19 @@ class VGGBackbone(nn.Module):
         """ Add a downsample layer to the backbone as per what SSD does. """
         if len(self.extra_args) > 0:
             conv_channels, downsample = self.extra_args.pop()
-        
+
         padding = 1 if downsample > 1 else 0
-        
+
         layer = nn.Sequential(
             nn.Conv2d(self.in_channels, conv_channels, kernel_size=1),
             nn.ReLU(inplace=True),
-            nn.Conv2d(conv_channels, conv_channels*2, kernel_size=3, stride=downsample, padding=padding),
+            nn.Conv2d(conv_channels, conv_channels * 2, kernel_size=3, stride=downsample, padding=padding),
             nn.ReLU(inplace=True)
         )
 
-        self.in_channels = conv_channels*2
+        self.in_channels = conv_channels * 2
         self.channels.append(self.in_channels)
         self.layers.append(layer)
-        
-                
 
 
 def construct_backbone(cfg):

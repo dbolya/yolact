@@ -8,7 +8,7 @@ import torch
 from yolact.data import cfg, set_cfg
 from yolact.utils.augmentations import FastBaseTransform
 from yolact.utils.functions import SavePath
-from yolact.yolact_model import Yolact
+from yolact.yolact import Yolact
 from yolact.pipeline_utils import prep_display
 
 package = "imutils"

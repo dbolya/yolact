@@ -1,0 +1,8 @@
+include *.txt
+recursive-include Makefile
+
+exclude Makefile
+exclude tests
+recursive-exclude * __pycache__
+recursive-exclude * *.py[co]
+recursive-exclude * *.jpeg

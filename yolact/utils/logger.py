@@ -7,6 +7,7 @@ from typing import Union
 import datetime
 
 from collections import defaultdict
+import matplotlib.pyplot as plt
 import numpy as np
 
 # Because Python's package heierarchy system sucks
@@ -16,6 +17,7 @@ if __name__ == '__main__':
 else:
     from .nvinfo import gpu_info, visible_gpus, nvsmi_available
     from .functions import MovingAverage
+
 
 class Log:
     """
@@ -30,14 +32,14 @@ class Log:
      - log_time: Also log the time in each iteration.
     """
 
-    def __init__(self, log_name:str, log_dir:str='logs/', session_data:dict={},
-                 overwrite:bool=False, log_gpu_stats:bool=True, log_time:bool=True):
-        
+    def __init__(self, log_name: str, log_dir: str = 'logs/', session_data: dict = {},
+                 overwrite: bool = False, log_gpu_stats: bool = True, log_time: bool = True):
+
         if log_gpu_stats and not nvsmi_available():
             print('Warning: Log created with log_gpu_stats=True, but nvidia-smi ' \
                   'was not found. Setting log_gpu_stats to False.')
             log_gpu_stats = False
-        
+
         if not os.path.exists(log_dir):
             os.makedirs(log_dir)
         self.log_path = os.path.join(log_dir, log_name + '.log')
@@ -57,18 +59,15 @@ class Log:
         else:
             self.session = 0
 
-
         self.log_gpu_stats = log_gpu_stats
         self.log_time = log_time
 
         if self.log_gpu_stats:
             self.visible_gpus = visible_gpus()
-    
 
         self._log_session_header(session_data)
 
-
-    def _log_session_header(self, session_data:dict):
+    def _log_session_header(self, session_data: dict):
         """
         Log information that does not change between iterations here.
         This is to cut down on the file size so you're not outputing this every iteration.
@@ -84,7 +83,7 @@ class Log:
 
             gpus = gpu_info()
             info['gpus'] = [{k: gpus[i][k] for k in keys} for i in self.visible_gpus]
-        
+
         if self.log_time:
             info['time'] = time.time()
 
@@ -93,17 +92,16 @@ class Log:
         with open(self.log_path, 'a') as f:
             f.write(out)
 
-
-    def log(self, type:str, data:dict={}, **kwdargs):
+    def log(self, type: str, data: dict = {}, **kwdargs):
         """
         Add an iteration to the log with the specified data points.
         Type should be the type of information this is (e.g., train, valid, etc.)
-        
+
         You can either pass data points as kwdargs, or as a dictionary (or both!).
         Values should be json-serializable.
         """
         info = {}
-        
+
         info['type'] = type
         info['session'] = self.session
 
@@ -112,14 +110,13 @@ class Log:
 
         if self.log_gpu_stats:
             keys = ['fan_spd', 'temp', 'pwr_used', 'mem_used', 'util']
-            
+
             gpus = gpu_info()
             info['gpus'] = [{k: gpus[i][k] for k in keys} for i in self.visible_gpus]
-        
+
         if self.log_time:
             info['time'] = time.time()
-            
-        
+
         out = json.dumps(info) + '\n'
 
         with open(self.log_path, 'a') as f:
@@ -129,7 +126,7 @@ class Log:
 class LogEntry():
     """ A class that allows you to navigate a dictonary using x.a.b[2].c, etc. """
 
-    def __init__(self, entry:Union[dict, list]):
+    def __init__(self, entry: Union[dict, list]):
         self._ = entry
 
     def __getattr__(self, name):
@@ -142,22 +139,22 @@ class LogEntry():
             return LogEntry(res)
         else:
             return res
-    
+
     def __getitem__(self, name):
         return self.__getattr__(name)
 
     def __len__(self):
         return len(self.__dict__['_'])
 
-class LogVisualizer():
 
+class LogVisualizer():
     COLORS = [
         'xkcd:azure',
         'xkcd:coral',
         'xkcd:turquoise',
         'xkcd:orchid',
         'xkcd:orange',
-        
+
         'xkcd:blue',
         'xkcd:red',
         'xkcd:teal',
@@ -169,10 +166,10 @@ class LogVisualizer():
         self.logs = []
         self.total_logs = []
         self.log_names = []
-    
-    def _decode(self, query:str) -> list:
+
+    def _decode(self, query: str) -> list:
         path, select = (query.split(';') + [''])[:2]
-        
+
         if select.strip() == '':
             select = lambda x, s: True
         else:
@@ -182,10 +179,10 @@ class LogVisualizer():
             path = lambda x, s: x
         else:
             path = eval('lambda x, s: ' + path)
-        
+
         return path, select
 
-    def _follow(self, entry:LogEntry, query:list):
+    def _follow(self, entry: LogEntry, query: list):
         path, select = query
 
         try:
@@ -201,10 +198,10 @@ class LogVisualizer():
         except (KeyError, IndexError):
             return None
 
-    def _color(self, idx:int):
+    def _color(self, idx: int):
         return self.COLORS[idx % len(self.COLORS)]
 
-    def sessions(self, path:str):
+    def sessions(self, path: str):
         """ Prints statistics about the sessions in the file. """
 
         if not os.path.exists(path):
@@ -234,10 +231,10 @@ class LogVisualizer():
                         num_entries = 0
                     last_time = js['time']
                     num_entries += 1
-        
+
         pop_session()
 
-    def add(self, path:str, session:Union[int,list]=None):
+    def add(self, path: str, session: Union[int, list] = None):
         """ Add a log file to the list of logs being considered. """
 
         log = defaultdict(lambda: [])
@@ -249,7 +246,7 @@ class LogVisualizer():
 
         session_idx = 0
         ignoring = True
-        
+
         def valid(idx):
             if session is None:
                 return True
@@ -263,7 +260,7 @@ class LogVisualizer():
                 line = line.strip()
                 if len(line) > 0:
                     js = json.loads(line)
-                    
+
                     _type = js['type']
                     if _type == 'session':
                         session_idx = js['session']
@@ -274,10 +271,10 @@ class LogVisualizer():
                         if _type == 'session':
                             js['_s'] = ljs
                         else:
-                            js['_s'] =log['session'][-1]
+                            js['_s'] = log['session'][-1]
                         log[_type].append(ljs)
                         total_log.append(ljs)
-        
+
         name = os.path.basename(path)
         if session is not None:
             name += ' (Session %s)' % session
@@ -286,7 +283,7 @@ class LogVisualizer():
         self.total_logs.append(total_log)
         self.log_names.append(name)
 
-    def query(self, x:Union[str, list], entry_type:str=None, x_idx:int=None, log_idx:int=None) -> list:
+    def query(self, x: Union[str, list], entry_type: str = None, x_idx: int = None, log_idx: int = None) -> list:
         """
         Given a query string (can be already decoded for faster computation), query the entire log
         and return all values found by that query. If both log_idx and x_idx is None, this will be
@@ -297,7 +294,7 @@ class LogVisualizer():
 
         if type(x) is not list:
             x = self._decode(x)
-        
+
         res = []
 
         for idx in (range(len(self.logs)) if log_idx is None else [log_idx]):
@@ -308,16 +305,16 @@ class LogVisualizer():
                 candidate = self._follow(entry, x)
                 if candidate is not None:
                     candidates.append(candidate)
-            
+
             if x_idx is not None:
                 candidates = candidates[x_idx]
             res.append(candidates)
-        
+
         if log_idx is not None:
             res = res[0]
         return res
 
-    def check(self, entry_type:str, x:str):
+    def check(self, entry_type: str, x: str):
         """ Checks the log for the valid keys for this input. """
         keys = set()
         x = self._decode(x)
@@ -331,12 +328,10 @@ class LogVisualizer():
                         keys.add(key)
                 elif type(res) == list:
                     keys.add('< %d' % len(res))
-    
+
         return list(keys)
 
-    def plot(self, entry_type:str, x:str, y:str, smoothness:int=0):
-        import matplotlib.pyplot as plt
-
+    def plot(self, entry_type: str, x: str, y: str, smoothness: int = 0):
         """ Plot sequential log data. """
 
         query_x = self._decode(x)
@@ -362,20 +357,18 @@ class LogVisualizer():
 
                         if len(avg) < smoothness // 10:
                             continue
-                        
+
                     _x.append(val_x)
                     _y.append(val_y)
-            
+
             plt.plot(_x, _y, color=self._color(idx), label=name)
-        
+
         plt.title(y.replace('x.', entry_type + '.'))
         plt.legend()
         plt.grid(linestyle=':', linewidth=0.5)
         plt.show()
 
-    def bar(self, entry_type:str, x:str, labels:list=None, diff:bool=False, x_idx:int=-1):
-        import matplotlib.pyplot as plt
-
+    def bar(self, entry_type: str, x: str, labels: list = None, diff: bool = False, x_idx: int = -1):
         """ Plot a bar chart. The result of x should be list or dictionary. """
 
         query = self._decode(x)
@@ -394,10 +387,10 @@ class LogVisualizer():
                     candidates.append(test)
                 elif type(test) == list:
                     candidates.append({idx: v for idx, v in enumerate(test)})
-            
+
             if len(candidates) > 0:
                 data_points.append((name, candidates[x_idx]))
-        
+
         if len(data_points) == 0:
             print('Warning: Nothing to show in bar chart!')
             return
@@ -413,10 +406,9 @@ class LogVisualizer():
             for datum in data_points:
                 for k in datum:
                     data_labels.add(k)
-                
+
             data_labels = list(data_labels)
             data_labels.sort()
-        
 
         data_values = [[(datum[k] if k in datum else None) for k in data_labels] for datum in data_points]
 
@@ -428,33 +420,30 @@ class LogVisualizer():
                     else:
                         data_values[idx][jdx] -= data_values[0][jdx]
 
-
         series_labels = names
 
         # Plot the graph now
         num_bars = len(series_labels)
         bar_width = 1 / (num_bars + 1)
-        
+
         # Set position of bar on X axis
         positions = [np.arange(len(data_labels))]
         for _ in range(1, num_bars):
             positions.append([x + bar_width for x in positions[-1]])
-        
+
         # Make the plot
         for idx, (series, data, pos) in enumerate(zip(series_labels, data_values, positions)):
             plt.bar(pos, data, color=self._color(idx), width=bar_width, edgecolor='white', label=series)
-        
+
         # Add xticks on the middle of the group bars
         plt.title(x.replace('x.', entry_type + '.') + (' diff' if diff else ''))
         plt.xticks([r + bar_width for r in range(len(data_labels))], data_labels)
-        
+
         # Create legend & Show graphic
         plt.legend()
         plt.show()
 
-        
-
-    def elapsed_time(self, cond1:str='', cond2:str='', legible:bool=True) -> list:
+    def elapsed_time(self, cond1: str = '', cond2: str = '', legible: bool = True) -> list:
         """
         Returns the elapsed time between two entries based on the given conditionals.
         If a query isn't specified, the first / last entry will be used. The first query
@@ -467,26 +456,17 @@ class LogVisualizer():
 
         x1 = self.query(q1, x_idx=0)
         x2 = self.query(q2, x_idx=-1)
-        
+
         diff = (lambda x: str(datetime.timedelta(seconds=x)).split('.')[0]) if legible else lambda x: x
 
         return [diff(b - a) for a, b in zip(x1, x2)]
 
 
-
-
-
-
-
-
-
-
-
 if __name__ == '__main__':
-    if len(sys.argv) < 4+1:
+    if len(sys.argv) < 4 + 1:
         print('Usage: python utils/logger.py <LOG_FILE> <TYPE> <X QUERY> <Y QUERY>')
         exit()
-    
+
     vis = LogVisualizer()
     vis.add(sys.argv[1])
     vis.plot(sys.argv[2], sys.argv[3], sys.argv[4])
