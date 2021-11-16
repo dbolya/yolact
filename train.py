@@ -1,29 +1,30 @@
+import logging
+
+from sparseml.pytorch.utils import TensorBoardLogger
+from torch.cuda import amp
+
 from data import *
 from utils.augmentations import SSDAugmentation, BaseTransform
 from utils.functions import MovingAverage, SavePath
 from utils.logger import Log
 from utils import timer
 from layers.modules import MultiBoxLoss
+from utils.sparse import SparseMLWrapper
+from utils.zoo import is_valid_stub, download_checkpoint_from_stub
 from yolact import Yolact
 import os
-import sys
 import time
 import math, random
-from pathlib import Path
 import torch
-from torch.autograd import Variable
 import torch.nn as nn
 import torch.optim as optim
-import torch.backends.cudnn as cudnn
-import torch.nn.init as init
 import torch.utils.data as data
-import numpy as np
 import argparse
 import datetime
 
 # Oof
 import eval as eval_script
-
+logger = logging.getLogger(__name__)
 def str2bool(v):
     return v.lower() in ("yes", "true", "t", "1")
 
@@ -34,7 +35,11 @@ parser.add_argument('--batch_size', default=8, type=int,
                     help='Batch size for training')
 parser.add_argument('--resume', default=None, type=str,
                     help='Checkpoint state_dict file to resume training from. If this is "interrupt"'\
-                         ', the model will resume training from the interrupt file.')
+                         ', the model will resume training from the interrupt file. Can also be set to True;'
+                        'along with the --ckpt argument to resume training from a SparseZoo stub or local checkpoint'
+                    )
+parser.add_argument('--ckpt', type=str, default=None,
+                    help="Path to a Yolact checkpoint/SparseZoo stub used only if --resume is True")
 parser.add_argument('--start_iter', default=-1, type=int,
                     help='Resume training at this iter. If this is -1, the iteration will be'\
                          'determined from the file name.')
@@ -78,6 +83,22 @@ parser.add_argument('--batch_alloc', default=None, type=str,
                     help='If using multiple GPUS, you can set this to be a comma separated list detailing which GPUs should get what local batch size (It should add up to your total batch size).')
 parser.add_argument('--no_autoscale', dest='autoscale', action='store_false',
                     help='YOLACT will automatically scale the lr and the number of iterations depending on the batch size. Set this if you want to disable that.')
+parser.add_argument('--recipe', type=str, default=None,
+                    help="Path to a sparsification recipe, can also be a "
+                         "SparseZoo recipe stub, if provided the recipe "
+                         "stored with the checkpoint is ignored"
+                    )
+parser.add_argument('--override_checkpoint_epoch',
+                    default=True,
+                    type=bool,
+                    help="True to to override epoch # saved in the checkpoint and start from 0"
+                    )
+parser.add_argument('--disable_fp16',
+                    action='store_true',
+                    help ='flag to switch off fp16 while training'
+                    )
+parser.add_argument('--wandb', action='store_true', help="Flag to use wandb logging")
+parser.add_argument('--cont', action='store_true', help="Flag to continue application of a halted recipe.")
 
 parser.set_defaults(keep_latest=False, log=True, log_gpu=False, interrupt=True, autoscale=True)
 args = parser.parse_args()
@@ -201,16 +222,29 @@ def train():
         args.resume = SavePath.get_interrupt(args.save_folder)
     elif args.resume == 'latest':
         args.resume = SavePath.get_latest(args.save_folder, cfg.name)
+    elif str2bool(args.resume):
+        if is_valid_stub(args.ckpt):
+            args.resume = download_checkpoint_from_stub(args.ckpt)
+        else:
+            args.resume = args.ckpt
 
-    if args.resume is not None:
-        print('Resuming training, loading {}...'.format(args.resume))
-        yolact_net.load_weights(args.resume)
-
+    if args.resume and args.resume.lower() not in ("no", "false", "f", "0"):
+        print('Resuming training, loading checkpoint {}...'.format(args.resume))
+        checkpoint_epoch, checkpoint_recipe, sparseml_wrapper = yolact_net.load_checkpoint(args.resume, args.recipe, resume=args.cont)
+        start_epoch = 0
+        if checkpoint_epoch and args.cont:
+            start_epoch = checkpoint_epoch
+        if args.override_checkpoint_epoch:
+            start_epoch = 0
+        args.recipe = args.recipe or checkpoint_recipe
         if args.start_iter == -1:
             args.start_iter = SavePath.from_str(args.resume).iteration
     else:
         print('Initializing weights...')
         yolact_net.init_weights(backbone_path=args.save_folder + cfg.backbone.path)
+        start_epoch= 0
+        sparseml_wrapper = SparseMLWrapper(yolact_net, args.recipe)
+        sparseml_wrapper.initialize(start_epoch=start_epoch)
 
     optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=args.momentum,
                           weight_decay=args.decay)
@@ -239,19 +273,16 @@ def train():
     conf_loss = 0
     iteration = max(args.start_iter, 0)
     last_time = time.time()
-
     epoch_size = len(dataset) // args.batch_size
     num_epochs = math.ceil(cfg.max_iter / epoch_size)
-    
+
     # Which learning rate adjustment step are we on? lr' = lr * gamma ^ step_index
     step_index = 0
-
     data_loader = data.DataLoader(dataset, args.batch_size,
                                   num_workers=args.num_workers,
                                   shuffle=True, collate_fn=detection_collate,
                                   pin_memory=True)
-    
-    
+
     save_path = lambda epoch, iteration: SavePath(cfg.name, epoch, iteration).get_path(root=args.save_folder)
     time_avg = MovingAverage()
 
@@ -261,8 +292,30 @@ def train():
     print('Begin training!')
     print()
     # try-except so you can use ctrl+c to save early and stop training
+    # SparseML Integration
+    half_precision = not args.disable_fp16 and args.device != 'cpu'
+    scaler = amp.GradScaler(enabled=half_precision)
+    sparseml_wrapper.initialize_loggers(logger, tb_writer=TensorBoardLogger,
+                                        wandb_logger=args.wandb, rank=-1)
+    scaler = sparseml_wrapper.modify(scaler, optimizer, yolact_net, data_loader)
+    num_epochs = sparseml_wrapper.check_epoch_override(num_epochs)
+
+    max_steps = cfg.max_iter
+    print(f"num epochs: {num_epochs}")
+    print(f"Steps to train: {(num_epochs - start_epoch) * len(data_loader)}" )
+
+    # try-except so you can use ctrl+c to save early and stop training
+    # SparseML Integration
+
     try:
-        for epoch in range(num_epochs):
+        for epoch in range(start_epoch, num_epochs):
+            if sparseml_wrapper.qat_active(epoch):
+                logger.info(
+                    'Disabling half precision, QAT scheduled to run'
+                    )
+                scaler._enabled = False
+                half_precision = False
+
             # Resume from start_iter
             if (epoch+1)*epoch_size < iteration:
                 continue
@@ -286,37 +339,50 @@ def train():
                         # Reset the loss averages because things might have changed
                         for avg in loss_avgs:
                             avg.reset()
-                
+
                 # If a config setting was changed, remove it from the list so we don't keep checking
                 if changed:
                     cfg.delayed_settings = [x for x in cfg.delayed_settings if x[0] > iteration]
 
                 # Warm up by linearly interpolating the learning rate from some smaller value
-                if cfg.lr_warmup_until > 0 and iteration <= cfg.lr_warmup_until:
+
+                needs_manual_lr_update = (
+                    cfg.lr_warmup_until > 0 and
+                    iteration <= cfg.lr_warmup_until and
+                    not sparseml_wrapper.should_override_scheduler()
+                )
+                if needs_manual_lr_update:
                     set_lr(optimizer, (args.lr - cfg.lr_warmup_init) * (iteration / cfg.lr_warmup_until) + cfg.lr_warmup_init)
 
                 # Adjust the learning rate at the given iterations, but also if we resume from past that iteration
-                while step_index < len(cfg.lr_steps) and iteration >= cfg.lr_steps[step_index]:
+                while not sparseml_wrapper.should_override_scheduler() and \
+                        step_index < len(cfg.lr_steps) and iteration >= \
+                        cfg.lr_steps[step_index]:
                     step_index += 1
                     set_lr(optimizer, args.lr * (args.gamma ** step_index))
-                
+
                 # Zero the grad to get ready to compute gradients
                 optimizer.zero_grad()
 
-                # Forward Pass + Compute loss at the same time (see CustomDataParallel and NetLoss)
-                losses = net(datum)
-                
-                losses = { k: (v).mean() for k,v in losses.items() } # Mean here because Dataparallel
-                loss = sum([losses[k] for k in losses])
-                
+
+                with amp.autocast(enabled=half_precision):
+                    # Forward Pass + Compute loss at the same time (see CustomDataParallel and NetLoss)
+                    losses = net(datum)
+                    losses = { k: (v).mean() for k,v in losses.items() } # Mean here because Dataparallel
+                    loss = sum([losses[k] for k in losses])
+
+                # log losses on wandb
+                sparseml_wrapper.log_losses_wandb(losses=losses)
                 # no_inf_mean removes some components from the loss, so make sure to backward through all of it
                 # all_loss = sum([v.mean() for v in losses.values()])
 
                 # Backprop
-                loss.backward() # Do this to free up vram even if loss is not finite
+                scaler.scale(loss).backward() # Do this to free up vram even if loss is not finite
                 if torch.isfinite(loss).item():
-                    optimizer.step()
-                
+                    scaler.step(optimizer)
+                    scaler.update()
+                    optimizer.zero_grad()
+
                 # Add the loss to the moving average for bookkeeping
                 for k in losses:
                     loss_avgs[k].add(losses[k].item())
@@ -330,11 +396,16 @@ def train():
                     time_avg.add(elapsed)
 
                 if iteration % 10 == 0:
-                    eta_str = str(datetime.timedelta(seconds=(cfg.max_iter-iteration) * time_avg.get_avg())).split('.')[0]
-                    
+                    remaining_epoch_iterations = len(data_loader) - (iteration % len(data_loader))
+                    remaining_complete_epochs = (num_epochs - epoch - 1)
+                    remaining_iterations = remaining_epoch_iterations + remaining_complete_epochs * len(data_loader)
+                    eta_current_setup = datetime.timedelta(seconds=((remaining_iterations * time_avg.get_avg())))
+                    eta_max = datetime.timedelta(seconds=((max_steps - iteration) * time_avg.get_avg()))
+
+                    eta_str = str(min(eta_current_setup, eta_max)).split('.')[0]
                     total = sum([loss_avgs[k].get_avg() for k in losses])
                     loss_labels = sum([[k, loss_avgs[k].get_avg()] for k in loss_types if k in losses], [])
-                    
+
                     print(('[%3d] %7d ||' + (' %s: %.3f |' * len(losses)) + ' T: %.3f || ETA: %s || timer: %.3f')
                             % tuple([epoch, iteration] + loss_labels + [total, eta_str, elapsed]), flush=True)
 
@@ -345,12 +416,12 @@ def train():
 
                     if args.log_gpu:
                         log.log_gpu_stats = (iteration % 10 == 0) # nvidia-smi is sloooow
-                        
+
                     log.log('train', loss=loss_info, epoch=epoch, iter=iteration,
                         lr=round(cur_lr, 10), elapsed=elapsed)
 
                     log.log_gpu_stats = args.log_gpu
-                
+
                 iteration += 1
 
                 if iteration % args.save_interval == 0 and iteration != args.start_iter:
@@ -358,7 +429,10 @@ def train():
                         latest = SavePath.get_latest(args.save_folder, cfg.name)
 
                     print('Saving state, iter:', iteration)
-                    yolact_net.save_weights(save_path(epoch, iteration))
+                    yolact_net.save_checkpoint(
+                        save_path(epoch, iteration),
+                        recipe=sparseml_wrapper.state_dict().get('recipe'),
+                        epoch=epoch)
 
                     if args.keep_latest and latest is not None:
                         if args.keep_latest_interval <= 0 or iteration % args.keep_latest_interval != args.save_interval:
@@ -369,9 +443,8 @@ def train():
             if args.validation_epoch > 0:
                 if epoch % args.validation_epoch == 0 and epoch > 0:
                     compute_validation_map(epoch, iteration, yolact_net, val_dataset, log if args.log else None)
-        
-        # Compute validation mAP after training is finished
-        compute_validation_map(epoch, iteration, yolact_net, val_dataset, log if args.log else None)
+
+
     except KeyboardInterrupt:
         if args.interrupt:
             print('Stopping early. Saving network...')
@@ -379,10 +452,23 @@ def train():
             # Delete previous copy of the interrupted network so we don't spam the weights folder
             SavePath.remove_interrupt(args.save_folder)
             
-            yolact_net.save_weights(save_path(epoch, repr(iteration) + '_interrupt'))
+            yolact_net.save_checkpoint(
+                save_path(epoch, repr(iteration) +'_interrupt'),
+                recipe=sparseml_wrapper.state_dict().get('recipe'),
+                epoch=epoch,
+            )
         exit()
 
-    yolact_net.save_weights(save_path(epoch, iteration))
+    yolact_net.save_checkpoint(
+        save_path(epoch, iteration),
+        recipe=sparseml_wrapper.state_dict().get('recipe'),
+        epoch=epoch,
+    )
+    # Compute validation mAP after training is finished
+    print("Computing val mAP after training:")
+    compute_validation_map(epoch, iteration, yolact_net, val_dataset,
+                           log if args.log else None)
+
 
 
 def set_lr(optimizer, new_lr):
