@@ -21,7 +21,8 @@ from utils.functions import MovingAverage, make_net
 # See the bug report here: https://github.com/pytorch/pytorch/issues/17108
 from utils.sparse import SparseMLWrapper
 
-torch.cuda.current_device()
+if torch.cuda.is_available():
+    torch.cuda.current_device()
 
 # As of March 10, 2019, Pytorch DataParallel still doesn't support JIT Script Modules
 # jit turned off for SparseMl Integration to support Quantization
