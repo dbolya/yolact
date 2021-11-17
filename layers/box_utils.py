@@ -95,7 +95,7 @@ def elemwise_box_iou(box_a, box_b):
     # Return value is [n] for inputs [n, 4]
     return torch.clamp(inter / union, max=1)
 
-def mask_iou(masks_a, masks_b, iscrowd=False):
+def mask_iou(masks_a, masks_b, iscrowd=False, device='cpu'):
     """
     Computes the pariwise mask IoU between two sets of masks of size [a, h, w] and [b, h, w].
     The output is of size [a, b].
@@ -105,8 +105,9 @@ def mask_iou(masks_a, masks_b, iscrowd=False):
 
     masks_a = masks_a.view(masks_a.size(0), -1)
     masks_b = masks_b.view(masks_b.size(0), -1)
-
-    intersection = masks_a @ masks_b.t()
+    masks_a = masks_a.to(device)
+    masks_b = masks_b.to(device)
+    intersection = masks_a.to(device) @ masks_b.t().to(device)
     area_a = masks_a.sum(dim=1).unsqueeze(1)
     area_b = masks_b.sum(dim=1).unsqueeze(0)
 

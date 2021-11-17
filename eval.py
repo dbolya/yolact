@@ -1,4 +1,8 @@
+import contextlib
+import itertools
+
 from data import COCODetection, get_label_map, MEANS, COLORS
+from utils.wrapper import DeepsparseWrapper
 from yolact import Yolact
 from utils.augmentations import BaseTransform, FastBaseTransform, Resize
 from utils.functions import MovingAverage, ProgressBar
@@ -28,6 +32,11 @@ from PIL import Image
 
 import matplotlib.pyplot as plt
 import cv2
+deepsparse_available = False
+device='cpu'
+with contextlib.suppress(Exception):
+    import deepsparse
+    deepsparse_available = True
 
 def str2bool(v):
     if v.lower() in ('yes', 'true', 't', 'y', '1'):
@@ -113,6 +122,10 @@ def parse_args(argv=None):
                         help='When displaying / saving video, draw the FPS on the frame')
     parser.add_argument('--emulate_playback', default=False, dest='emulate_playback', action='store_true',
                         help='When saving a video, emulate the framerate that you\'d get running in real-time mode.')
+    parser.add_argument('--num_cores', default=None, help="The num of cores to use (supported only with deepsparse), defaults to None")
+    parser.add_argument('--warm_up_iterations', default=1, type=int, help="The num of warm up iterations to run the engine for, defaults to 1")
+    parser.add_argument('--num_iterations', default=0, type=int, help="The num of iterations to run the engine for, defaults to the validation set")
+    parser.add_argument('--batch_size', default=1, type=int, help="The batch size to use the engine for, defaults to 1")
 
     parser.set_defaults(no_bar=False, display=False, resume=False, output_coco_json=False, output_web_json=False, shuffle=False,
                         benchmark=False, no_sort=False, no_hash=False, mask_proto_debug=False, crop=True, detect=False, display_fps=False,
@@ -138,7 +151,7 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
     """
     if undo_transform:
         img_numpy = undo_image_transformation(img, w, h)
-        img_gpu = torch.Tensor(img_numpy).cuda()
+        img_gpu = torch.Tensor(img_numpy).to(device)
     else:
         img_gpu = img / 255.0
         h, w, _ = img.shape
@@ -177,7 +190,7 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
             color = COLORS[color_idx]
             if not undo_transform:
                 # The image might come in as RGB or BRG, depending
-                color = (color[2], color[1], color[0])
+                color = torch.tensor((color[2], color[1], color[0]))
             if on_gpu is not None:
                 color = torch.Tensor(color).to(on_gpu).float() / 255.
                 color_cache[on_gpu][color_idx] = color
@@ -191,8 +204,9 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
         masks = masks[:num_dets_to_consider, :, :, None]
         
         # Prepare the RGB images for each mask given their color (size [num_dets, h, w, 1])
-        colors = torch.cat([get_color(j, on_gpu=img_gpu.device.index).view(1, 1, 1, 3) for j in range(num_dets_to_consider)], dim=0)
+        colors = torch.cat([get_color(j, on_gpu=img_gpu.device.index).view(1, 1, 1, 3) for j in range(num_dets_to_consider)], dim=0).to(device)
         masks_color = masks.repeat(1, 1, 1, 3) * colors * mask_alpha
+        masks_color.to(device)
 
         # This is 1 everywhere except for 1-mask_alpha where the mask is
         inv_alph_masks = masks * (-mask_alpha) + 1
@@ -206,7 +220,7 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
             masks_color_cumul = masks_color[1:] * inv_alph_cumul
             masks_color_summand += masks_color_cumul.sum(dim=0)
 
-        img_gpu = img_gpu * inv_alph_masks.prod(dim=0) + masks_color_summand
+        img_gpu = img_gpu.to(device) * inv_alph_masks.prod(dim=0) + masks_color_summand
     
     if args.display_fps:
             # Draw the box for the fps on the GPU
@@ -238,7 +252,7 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
             x1, y1, x2, y2 = boxes[j, :]
             color = get_color(j)
             score = scores[j]
-
+            color = [int(x) for x in color]
             if args.display_bboxes:
                 cv2.rectangle(img_numpy, (x1, y1), (x2, y2), color, 1)
 
@@ -375,7 +389,7 @@ class Detections:
 
 def _mask_iou(mask1, mask2, iscrowd=False):
     with timer.env('Mask IoU'):
-        ret = mask_iou(mask1, mask2, iscrowd)
+        ret = mask_iou(mask1, mask2, iscrowd, device=device)
     return ret.cpu()
 
 def _bbox_iou(bbox1, bbox2, iscrowd=False):
@@ -413,8 +427,10 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, num_crowd, image_id, de
             scores = list(scores.cpu().numpy().astype(float))
             box_scores = scores
             mask_scores = scores
-        masks = masks.view(-1, h*w).cuda()
-        boxes = boxes.cuda()
+        masks = masks.view(-1, h*w)
+        if args.cuda:
+            masks = masks.cuda()
+            boxes = boxes.cuda()
 
 
     if args.output_coco_json:
@@ -593,8 +609,8 @@ def badhash(x):
     return x
 
 def evalimage(net:Yolact, path:str, save_path:str=None):
-    frame = torch.from_numpy(cv2.imread(path)).cuda().float()
-    batch = FastBaseTransform()(frame.unsqueeze(0))
+    frame = torch.from_numpy(cv2.imread(path)).to(device).float()
+    batch = FastBaseTransform(cuda=False)(frame.unsqueeze(0))
     preds = net(batch)
 
     img_numpy = prep_display(preds, frame, None, None, undo_transform=False)
@@ -658,8 +674,10 @@ def evalvideo(net:Yolact, path:str, out_path:str=None):
     else:
         num_frames = round(vid.get(cv2.CAP_PROP_FRAME_COUNT))
 
-    net = CustomDataParallel(net).cuda()
-    transform = torch.nn.DataParallel(FastBaseTransform()).cuda()
+    transform = FastBaseTransform(cuda=False)
+    if args.cuda:
+        net = CustomDataParallel(net).cuda()
+        transform = torch.nn.DataParallel(FastBaseTransform()).cuda()
     frame_times = MovingAverage(100)
     fps = 0
     frame_time_target = 1 / target_fps
@@ -691,7 +709,10 @@ def evalvideo(net:Yolact, path:str, out_path:str=None):
 
     def transform_frame(frames):
         with torch.no_grad():
-            frames = [torch.from_numpy(frame).cuda().float() for frame in frames]
+            frames = []
+            for frame in frames:
+                f = torch.from_numpy(frame)
+                frames.append(f.cuda().float() if args.cuda else f.float())
             return frames, transform(torch.stack(frames, 0))
 
     def eval_network(inp):
@@ -926,24 +947,19 @@ def evaluate(net:Yolact, dataset, train_mode=False):
         dataset_indices.sort(key=lambda x: hashed[x])
 
     dataset_indices = dataset_indices[:dataset_size]
-
+    printed_fps_calc_message = False
     try:
         # Main eval loop
-        for it, image_idx in enumerate(dataset_indices):
+        for it, image_idx in enumerate(itertools.cycle(dataset_indices)):
             timer.reset()
+            if not args.num_iterations and it == dataset_size:
+                break
+            elif args.num_iterations and it > args.warm_up_iterations + args.num_iterations:
+                break
 
             with timer.env('Load Data'):
-                img, gt, gt_masks, h, w, num_crowd = dataset.pull_item(image_idx)
-
-                # Test flag, do not upvote
-                if cfg.mask_proto_debug:
-                    with open('scripts/info.txt', 'w') as f:
-                        f.write(str(dataset.ids[image_idx]))
-                    np.save('scripts/gt.npy', gt_masks)
-
-                batch = Variable(img.unsqueeze(0))
-                if args.cuda:
-                    batch = batch.cuda()
+                batch, gt, gt_masks, h, img, num_crowd, w = load_batch(dataset,
+                                                                       image_idx)
 
             with timer.env('Network Extra'):
                 preds = net(batch)
@@ -955,23 +971,27 @@ def evaluate(net:Yolact, dataset, train_mode=False):
             else:
                 prep_metrics(ap_data, preds, img, gt, gt_masks, h, w, num_crowd, dataset.ids[image_idx], detections)
             
-            # First couple of images take longer because we're constructing the graph.
-            # Since that's technically initialization, don't include those in the FPS calculations.
-            if it > 1:
+            # First few images take longer because we're constructing the graph.
+            # Don't include warm_up_iterations in the FPS calculations.
+            if it > args.warm_up_iterations:
+                if not printed_fps_calc_message:
+                    printed_fps_calc_message = True
+                    print('Warm up iterations over, starting FPS calc')
                 frame_times.add(timer.total_time())
             
             if args.display:
-                if it > 1:
+                if it > args.warm_up_iterations:
                     print('Avg FPS: %.4f' % (1 / frame_times.get_avg()))
                 plt.imshow(img_numpy)
                 plt.title(str(dataset.ids[image_idx]))
                 plt.show()
             elif not args.no_bar:
-                if it > 1: fps = 1 / frame_times.get_avg()
+                if it > args.warm_up_iterations: fps = 1 / frame_times.get_avg()
                 else: fps = 0
                 progress = (it+1) / dataset_size * 100
                 progress_bar.set_val(it+1)
-                print('\rProcessing Images  %s %6d / %6d (%5.2f%%)    %5.2f fps        '
+                if it > args.warm_up_iterations:
+                    print('\rProcessing Images  %s %6d / %6d (%5.2f%%)    %5.2f fps        '
                     % (repr(progress_bar), it+1, dataset_size, progress, fps), end='')
 
 
@@ -1001,6 +1021,19 @@ def evaluate(net:Yolact, dataset, train_mode=False):
 
     except KeyboardInterrupt:
         print('Stopping...')
+
+
+def load_batch(dataset, image_idx):
+    img, gt, gt_masks, h, w, num_crowd = dataset.pull_item(image_idx)
+    # Test flag, do not upvote
+    if cfg.mask_proto_debug:
+        with open('scripts/info.txt', 'w') as f:
+            f.write(str(dataset.ids[image_idx]))
+        np.save('scripts/gt.npy', gt_masks)
+    batch = Variable(img.unsqueeze(0))
+    if args.cuda:
+        batch = batch.cuda()
+    return batch, gt, gt_masks, h, img, num_crowd, w
 
 
 def calc_map(ap_data):
@@ -1048,7 +1081,9 @@ def print_maps(all_maps):
 
 if __name__ == '__main__':
     parse_args()
-
+    run_deepsparse = args.trained_model.endswith('.onnx') or args.trained_model.startswith('zoo')
+    if deepsparse_available and run_deepsparse:
+        args.cuda = False
     if args.config is not None:
         set_cfg(args.config)
 
@@ -1094,9 +1129,21 @@ if __name__ == '__main__':
             dataset = None        
 
         print('Loading model...', end='')
-        net = Yolact()
-        net.load_weights(args.trained_model)
-        net.eval()
+
+        if deepsparse_available and run_deepsparse:
+            net = DeepsparseWrapper(filepath=args.trained_model, cfg=cfg,
+                                    num_cores=args.num_cores,
+                                    batch_size=args.batch_size
+                                    )
+
+            device = 'cpu'
+        else:
+            if args.cuda:
+
+                device = 'cuda'
+            net = Yolact()
+            net.load_checkpoint(args.trained_model)
+            net.eval()
         print(' Done.')
 
         if args.cuda:

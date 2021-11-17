@@ -20,7 +20,6 @@ aug_file  = 'weights/bboxes_aug.pkl'
 
 use_augmented_boxes = True
 
-
 def intersect(box_a, box_b):
     """ We resize both tensors to [A,B,2] without new malloc:
     [A,2] -> [A,1,2] -> [A,B,2]
@@ -71,7 +70,7 @@ def to_relative(bboxes):
     return np.concatenate((bboxes[:, 2:4] / bboxes[:, :2], (bboxes[:, 2:4] + bboxes[:, 4:]) / bboxes[:, :2]), axis=1)
 
 
-def make_priors(conv_size, scales, aspect_ratios):
+def make_priors(conv_size, scales, aspect_ratios, cuda=False):
     prior_data = []
     conv_h = conv_size[0]
     conv_w = conv_size[1]
@@ -88,7 +87,10 @@ def make_priors(conv_size, scales, aspect_ratios):
 
                 # Point form
                 prior_data += [x - w/2, y - h/2, x + w/2, y + h/2]
-    return torch.Tensor(prior_data).view(-1, 4).cuda()
+    prior_output = torch.Tensor(prior_data).view(-1, 4)
+    if cuda:
+        prior_output = prior_output.cuda()
+    return prior_output
 
 
 
