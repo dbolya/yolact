@@ -26,7 +26,7 @@ import datetime
 import eval as eval_script
 logger = logging.getLogger(__name__)
 def str2bool(v):
-    return v.lower() in ("yes", "true", "t", "1")
+    return v and v.lower() in ("yes", "true", "t", "1")
 
 
 parser = argparse.ArgumentParser(
@@ -93,7 +93,7 @@ parser.add_argument('--override_checkpoint_epoch',
                     type=bool,
                     help="True to to override epoch # saved in the checkpoint and start from 0"
                     )
-parser.add_argument('--disable_fp16',
+parser.add_argument('--fp16',
                     action='store_true',
                     help ='flag to switch off fp16 while training'
                     )
@@ -191,6 +191,9 @@ class CustomDataParallel(nn.DataParallel):
         return out
 
 def train():
+    args.device ='cuda'
+    if not args.cuda:
+        args.device = 'cpu'
     if not os.path.exists(args.save_folder):
         os.mkdir(args.save_folder)
 
@@ -293,7 +296,7 @@ def train():
     print()
     # try-except so you can use ctrl+c to save early and stop training
     # SparseML Integration
-    half_precision = not args.disable_fp16 and args.device != 'cpu'
+    half_precision = args.fp16 and args.device != 'cpu'
     scaler = amp.GradScaler(enabled=half_precision)
     sparseml_wrapper.initialize_loggers(logger, tb_writer=TensorBoardLogger,
                                         wandb_logger=args.wandb, rank=-1)
@@ -372,7 +375,8 @@ def train():
                     loss = sum([losses[k] for k in losses])
 
                 # log losses on wandb
-                sparseml_wrapper.log_losses_wandb(losses=losses)
+                if args.wandb:
+                    sparseml_wrapper.log_losses_wandb(losses=losses)
                 # no_inf_mean removes some components from the loss, so make sure to backward through all of it
                 # all_loss = sum([v.mean() for v in losses.values()])
 
