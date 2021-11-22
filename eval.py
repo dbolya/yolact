@@ -1,8 +1,242 @@
-import contextlib
-import itertools
+"""
+Eval script to annotate/evaluate and benchmark YOLACT models using DeepSparse,
+Onnx-Runtime or PyTorch Engines
 
+####################
+usage: eval.py [-h] [--trained_model TRAINED_MODEL] [--top_k TOP_K]
+               [--cuda CUDA] [--fast_nms FAST_NMS]
+               [--cross_class_nms CROSS_CLASS_NMS]
+               [--display_masks DISPLAY_MASKS]
+               [--display_bboxes DISPLAY_BBOXES]
+               [--display_text DISPLAY_TEXT]
+               [--display_scores DISPLAY_SCORES] [--display] [--shuffle]
+               [--ap_data_file AP_DATA_FILE] [--resume]
+               [--max_images MAX_IMAGES] [--output_coco_json]
+               [--bbox_det_file BBOX_DET_FILE]
+               [--mask_det_file MASK_DET_FILE] [--config CONFIG]
+               [--output_web_json] [--web_det_path WEB_DET_PATH] [--no_bar]
+               [--display_lincomb DISPLAY_LINCOMB] [--benchmark]
+               [--no_sort] [--seed SEED] [--mask_proto_debug] [--no_crop]
+               [--image IMAGE] [--images IMAGES] [--video VIDEO]
+               [--video_multiframe VIDEO_MULTIFRAME]
+               [--score_threshold SCORE_THRESHOLD] [--dataset DATASET]
+               [--detect] [--display_fps] [--emulate_playback]
+               [--num_cores NUM_CORES]
+               [--warm_up_iterations WARM_UP_ITERATIONS]
+               [--num_iterations NUM_ITERATIONS] [--batch_size BATCH_SIZE]
+               [--engine {deepsparse,ort,torch}]
+
+YOLACT COCO Evaluation
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --trained_model TRAINED_MODEL
+                        Trained state_dict file path to open. If
+                        "interrupt", this will open the interrupt
+                        file.Defaults to YOLACT base model stub from
+                        SparseZoo
+  --top_k TOP_K         Further restrict the number of predictions to parse
+  --cuda CUDA           Use cuda to evaulate model
+  --fast_nms FAST_NMS   Whether to use a faster, but not entirely correct
+                        version of NMS.
+  --cross_class_nms CROSS_CLASS_NMS
+                        Whether compute NMS cross-class or per-class.
+  --display_masks DISPLAY_MASKS
+                        Whether or not to display masks over bounding boxes
+  --display_bboxes DISPLAY_BBOXES
+                        Whether or not to display bboxes around masks
+  --display_text DISPLAY_TEXT
+                        Whether or not to display text (class [score])
+  --display_scores DISPLAY_SCORES
+                        Whether or not to display scores in addition to
+                        classes
+  --display             Display qualitative results instead of quantitative
+                        ones.
+  --shuffle             Shuffles the images when displaying them. Doesn't
+                        have much of an effect when display is off though.
+  --ap_data_file AP_DATA_FILE
+                        In quantitative mode, the file to save detections
+                        before calculating mAP.
+  --resume              If display not set, this resumes mAP calculations
+                        from the ap_data_file.
+  --max_images MAX_IMAGES
+                        The maximum number of images from the dataset to
+                        consider. Use -1 for all.
+  --output_coco_json    If display is not set, instead of processing IoU
+                        values, this just dumps detections into the coco
+                        json file.
+  --bbox_det_file BBOX_DET_FILE
+                        The output file for coco bbox results if
+                        --coco_results is set.
+  --mask_det_file MASK_DET_FILE
+                        The output file for coco mask results if
+                        --coco_results is set.
+  --config CONFIG       The config object to use. Defaults to
+                        yolact_darknet53_config (for DarkNet53 backbones).
+  --output_web_json     If display is not set, instead of processing IoU
+                        values, this dumps detections for usage with the
+                        detections viewer web thingy.
+  --web_det_path WEB_DET_PATH
+                        If output_web_json is set, this is the path to dump
+                        detections into.
+  --no_bar              Do not output the status bar. This is useful for
+                        when piping to a file.
+  --display_lincomb DISPLAY_LINCOMB
+                        If the config uses lincomb masks, output a
+                        visualization of how those masks are created.
+  --benchmark           Equivalent to running display mode but without
+                        displaying an image.
+  --no_sort             Do not sort images by hashed image ID.
+  --seed SEED           The seed to pass into random.seed. Note: this is
+                        only really for the shuffle and does not (I think)
+                        affect cuda stuff.
+  --mask_proto_debug    Outputs stuff for scripts/compute_mask.py.
+  --no_crop             Do not crop output masks with the predicted
+                        bounding box.
+  --image IMAGE         A path to an image to use for display.
+  --images IMAGES       An input folder of images and output folder to save
+                        detected images. Should be in the format
+                        input->output.
+  --video VIDEO         A path to a video to evaluate on. Passing in a
+                        number will use that index webcam.
+  --video_multiframe VIDEO_MULTIFRAME
+                        The number of frames to evaluate in parallel to
+                        make videos play at higher fps.
+  --score_threshold SCORE_THRESHOLD
+                        Detections with a score under this threshold will
+                        not be considered. This currently only works in
+                        display mode.
+  --dataset DATASET     If specified, override the dataset specified in the
+                        config with this one (example: coco2017_dataset).
+  --detect              Don't evauluate the mask branch at all and only do
+                        object detection. This only works for --display and
+                        --benchmark.
+  --display_fps         When displaying / saving video, draw the FPS on the
+                        frame
+  --emulate_playback    When saving a video, emulate the framerate that
+                        you'd get running in real-time mode.
+  --num_cores NUM_CORES
+                        The num of cores to use (supported only with
+                        deepsparse), defaults to None
+  --warm_up_iterations WARM_UP_ITERATIONS
+                        The num of warm up iterations to run the engine
+                        for, defaults to 1
+  --num_iterations NUM_ITERATIONS
+                        The num of iterations to run the engine for,
+                        defaults to the validation set
+  --batch_size BATCH_SIZE
+                        The batch size to use the engine for, defaults to 1
+  --engine {deepsparse,ort,torch}
+                        Engine to use for evaluation choices are
+                        ['deepsparse', 'ort', 'torch']
+####################
+Example usage:
+
+##########
+# Commands to Evaluate on COCO Validation
+# Needs Data to be set up using `sh data/scripts/COCO.sh`
+# Needs DeepSparse installed for running with deepsparse `pip install deepsparse`
+# Needs ORT installed for running with onnxruntime `pip install onnxruntime`
+
+
+1) # Using DeepSparse Engine with local weights
+# python eval.py --trained_model PRETRAINED_ONNX_WEIGHTS
+
+python eval.py --trained_model weights/model.onnx
+
+2) # Using DeepSparse Engine with SparseZoo stubs
+# Downloads weights automatically from SparseZoo
+# python eval.py --trained_model SPARSEZOO_YOLACT_STUB
+
+python eval.py \
+--trained_model \
+'zoo:cv/segmentation/yolact-darknet53/pytorch/dbolya/coco/base-none'
+
+3) # Using ORT Engine with local weights
+# python eval.py --trained_model PRETRAINED_ONNX_WEIGHTS --engine ort
+
+python eval.py --trained_model weights/model.onnx --engine ort
+
+4) # Using ORT Engine with SparseZoo stubs
+# Downloads weights automatically from SparseZoo
+# python eval.py --trained_model SPARSEZOO_YOLACT_STUB --engine ort
+
+python eval.py \
+--trained_model \
+'zoo:cv/segmentation/yolact-darknet53/pytorch/dbolya/coco/base-none' \
+--engine ort
+
+5) # Using TORCH with local weights
+# python eval.py --trained_model PRETRAINED_TORCH_WEIGHTS
+
+python eval.py --trained_model weights/model.pth
+
+6) # Using TORCH Engine with SparseZoo stubs
+# Downloads weights automatically from SparseZoo
+# python eval.py --trained_model SPARSEZOO_YOLACT_STUB --engine torch
+
+python eval.py \
+--trained_model \
+'zoo:cv/segmentation/yolact-darknet53/pytorch/dbolya/coco/base-none' \
+--engine torch
+
+##########
+# Commands to ANNOTATE using a PRETRAINED MODEL and DeepSparse
+# --trained_model can be replaced with any valid YOLACT SparseZoo stub
+
+1) # Annotate an Image using DeepSparse
+# python eval.py --trained_model PRETRAINED_ONNX_WEIGHTS \
+# --image input.png:output.png
+
+python eval.py --trained_model weights/model.onnx \
+--image data/yolact_example_0.png:data/yolact_example_out_0.png
+
+2) # Annotate Images using DeepSparse
+# python eval.py --trained_model PRETRAINED_ONNX_WEIGHTS \
+--images input_dir:output_dir --score SCORE_THRESHOLD
+
+python eval.py --trained_model weights/model.onnx \
+--images input_dir:output_dir --score 0.6
+
+3) # Annotate Video using DeepSparse
+# python eval.py --trained_model PRETRAINED_ONNX_WEIGHTS \
+--video input.mp4:output.mp4 --score 0.6
+
+python eval.py --trained_model weights/model.onnx \
+--video input.mp4:output.mp4 --score 0.6
+
+##########
+# Commands to benchmark using a PRETRAINED MODEL on COCO dataset
+# --trained_model can be replaced with any valid YOLACT SparseZoo stub
+# (Note: benchmarking on custom images, videos not supported yet; However
+a Custom Dataset is supported)
+
+1) # Using DeepSparse and the entire COCO validation set
+
+python eval.py --trained_model weights/model.onnx --score 0.6 --benchmark
+
+2) # Using DeepSparse on the COCO validation set for fixed num of iterations
+
+python eval.py --trained_model weights/model.onnx \
+--score 0.6 --benchmark --warm_up_iterations 10 \
+--num_iterations 100
+
+####################
+Some Useful Model Stubs:
+1) Base YOLACT
+    zoo:cv/segmentation/yolact-darknet53/pytorch/dbolya/coco/base-none
+2) Pruned YOLACT
+    zoo:cv/segmentation/yolact-darknet53/pytorch/dbolya/coco/pruned90-none
+3) Pruned Quantized YOLACT
+    zoo:cv/segmentation/yolact-darknet53/pytorch/dbolya/coco/pruned82_quant-none
+
+"""
+import itertools
 from data import COCODetection, get_label_map, MEANS, COLORS
-from utils.wrapper import DeepsparseWrapper
+from utils.engines import Engine
+from utils.wrapper import DeepSparseWrapper, ORTWrapper
+from utils.zoo import get_checkpoint_from_stub, get_model_onnx_from_stub, \
+    is_valid_stub
 from yolact import Yolact
 from utils.augmentations import BaseTransform, FastBaseTransform, Resize
 from utils.functions import MovingAverage, ProgressBar
@@ -34,9 +268,6 @@ import matplotlib.pyplot as plt
 import cv2
 deepsparse_available = False
 device='cpu'
-with contextlib.suppress(Exception):
-    import deepsparse
-    deepsparse_available = True
 
 def str2bool(v):
     if v.lower() in ('yes', 'true', 't', 'y', '1'):
@@ -47,11 +278,15 @@ def str2bool(v):
         raise argparse.ArgumentTypeError('Boolean value expected.')
 
 def parse_args(argv=None):
+    base_model_stub = 'zoo:cv/segmentation/yolact-darknet53/pytorch/dbolya' \
+                      '/coco/base-none'
     parser = argparse.ArgumentParser(
         description='YOLACT COCO Evaluation')
-    parser.add_argument('--trained_model',
-                        default='weights/ssd300_mAP_77.43_v2.pth', type=str,
-                        help='Trained state_dict file path to open. If "interrupt", this will open the interrupt file.')
+    parser.add_argument('--trained_model',default=base_model_stub, type=str,
+                        help='Trained state_dict file path to open. '
+                        'If "interrupt", this will open the interrupt file.'
+                        'Defaults to YOLACT base model stub from SparseZoo'
+                        )
     parser.add_argument('--top_k', default=5, type=int,
                         help='Further restrict the number of predictions to parse')
     parser.add_argument('--cuda', default=True, type=str2bool,
@@ -84,8 +319,8 @@ def parse_args(argv=None):
                         help='The output file for coco bbox results if --coco_results is set.')
     parser.add_argument('--mask_det_file', default='results/mask_detections.json', type=str,
                         help='The output file for coco mask results if --coco_results is set.')
-    parser.add_argument('--config', default=None,
-                        help='The config object to use.')
+    parser.add_argument('--config', default='yolact_darknet53_config',
+                        help='The config object to use. Defaults to yolact_darknet53_config (for DarkNet53 backbones). ')
     parser.add_argument('--output_web_json', dest='output_web_json', action='store_true',
                         help='If display is not set, instead of processing IoU values, this dumps detections for usage with the detections viewer web thingy.')
     parser.add_argument('--web_det_path', default='web/dets/', type=str,
@@ -126,6 +361,7 @@ def parse_args(argv=None):
     parser.add_argument('--warm_up_iterations', default=1, type=int, help="The num of warm up iterations to run the engine for, defaults to 1")
     parser.add_argument('--num_iterations', default=0, type=int, help="The num of iterations to run the engine for, defaults to the validation set")
     parser.add_argument('--batch_size', default=1, type=int, help="The batch size to use the engine for, defaults to 1")
+    parser.add_argument('--engine', default=None, choices=Engine.supported(), help=f'Engine to use for evaluation choices are {Engine.supported()}')
 
     parser.set_defaults(no_bar=False, display=False, resume=False, output_coco_json=False, output_web_json=False, shuffle=False,
                         benchmark=False, no_sort=False, no_hash=False, mask_proto_debug=False, crop=True, detect=False, display_fps=False,
@@ -709,10 +945,11 @@ def evalvideo(net:Yolact, path:str, out_path:str=None):
 
     def transform_frame(frames):
         with torch.no_grad():
-            frames = []
-            for frame in frames:
-                f = torch.from_numpy(frame)
-                frames.append(f.cuda().float() if args.cuda else f.float())
+            frames = [
+                torch.from_numpy(frame).cuda().float() if args.cuda
+                else torch.from_numpy(frame).float()
+                for frame in frames
+            ]
             return frames, transform(torch.stack(frames, 0))
 
     def eval_network(inp):
@@ -915,7 +1152,6 @@ def evaluate(net:Yolact, dataset, train_mode=False):
 
     frame_times = MovingAverage()
     dataset_size = len(dataset) if args.max_images < 0 else min(args.max_images, len(dataset))
-    progress_bar = ProgressBar(30, dataset_size)
 
     print()
 
@@ -946,8 +1182,11 @@ def evaluate(net:Yolact, dataset, train_mode=False):
         hashed = [badhash(x) for x in dataset.ids]
         dataset_indices.sort(key=lambda x: hashed[x])
 
+    dataset_size = args.num_iterations or dataset_size
     dataset_indices = dataset_indices[:dataset_size]
     printed_fps_calc_message = False
+    progress_bar = ProgressBar(30, dataset_size)
+
     try:
         # Main eval loop
         for it, image_idx in enumerate(itertools.cycle(dataset_indices)):
@@ -986,13 +1225,16 @@ def evaluate(net:Yolact, dataset, train_mode=False):
                 plt.title(str(dataset.ids[image_idx]))
                 plt.show()
             elif not args.no_bar:
-                if it > args.warm_up_iterations: fps = 1 / frame_times.get_avg()
-                else: fps = 0
-                progress = (it+1) / dataset_size * 100
-                progress_bar.set_val(it+1)
+                if it > args.warm_up_iterations:
+                    fps = 1 / frame_times.get_avg()
+                else:
+                    fps = 0
+                curr_progress = it + 1 - args.warm_up_iterations
+                progress = curr_progress / dataset_size * 100
+                progress_bar.set_val(curr_progress)
                 if it > args.warm_up_iterations:
                     print('\rProcessing Images  %s %6d / %6d (%5.2f%%)    %5.2f fps        '
-                    % (repr(progress_bar), it+1, dataset_size, progress, fps), end='')
+                          % (repr(progress_bar), curr_progress, dataset_size, progress, fps), end='')
 
 
 
@@ -1014,8 +1256,6 @@ def evaluate(net:Yolact, dataset, train_mode=False):
         elif args.benchmark:
             print()
             print()
-            print('Stats for the last frame:')
-            timer.print_stats()
             avg_seconds = frame_times.get_avg()
             print('Average: %5.2f fps, %5.2f ms' % (1 / frame_times.get_avg(), 1000*avg_seconds))
 
@@ -1077,13 +1317,15 @@ def print_maps(all_maps):
     print(make_sep(len(all_maps['box']) + 1))
     print()
 
+def get_engine(model_filepath: str, engine=None):
+    return Engine.from_filepath(
+        filepath=model_filepath,
+        default_onnx=engine,
+    )
 
 
 if __name__ == '__main__':
     parse_args()
-    run_deepsparse = args.trained_model.endswith('.onnx') or args.trained_model.startswith('zoo')
-    if deepsparse_available and run_deepsparse:
-        args.cuda = False
     if args.config is not None:
         set_cfg(args.config)
 
@@ -1091,13 +1333,16 @@ if __name__ == '__main__':
         args.trained_model = SavePath.get_interrupt('weights/')
     elif args.trained_model == 'latest':
         args.trained_model = SavePath.get_latest('weights/', cfg.name)
+    elif is_valid_stub(args.trained_model):
+        if args.engine == 'torch':
+            args.trained_model = get_checkpoint_from_stub(args.trained_model)
+        else:
+            args.trained_model = get_model_onnx_from_stub(args.trained_model)
 
-    if args.config is None:
-        model_path = SavePath.from_str(args.trained_model)
-        # TODO: Bad practice? Probably want to do a name lookup instead.
-        args.config = model_path.model_name + '_config'
-        print('Config not specified. Parsed %s from the file name.\n' % args.config)
-        set_cfg(args.config)
+    args.engine = get_engine(
+        model_filepath=args.trained_model,
+        engine=args.engine,
+    )
 
     if args.detect:
         cfg.eval_mask_branch = False
@@ -1109,9 +1354,14 @@ if __name__ == '__main__':
         if not os.path.exists('results'):
             os.makedirs('results')
 
+        if args.engine in [Engine.DEEPSPARSE, Engine.ORT]:
+            args.cuda = False
+            device = 'cpu'
+
         if args.cuda:
             cudnn.fastest = True
             torch.set_default_tensor_type('torch.cuda.FloatTensor')
+            device = 'cuda'
         else:
             torch.set_default_tensor_type('torch.FloatTensor')
 
@@ -1130,17 +1380,14 @@ if __name__ == '__main__':
 
         print('Loading model...', end='')
 
-        if deepsparse_available and run_deepsparse:
-            net = DeepsparseWrapper(filepath=args.trained_model, cfg=cfg,
+        if args.engine == Engine.DEEPSPARSE:
+            net = DeepSparseWrapper(filepath=args.trained_model, cfg=cfg,
                                     num_cores=args.num_cores,
                                     batch_size=args.batch_size
                                     )
-
-            device = 'cpu'
+        elif args.engine == Engine.ORT:
+            net = ORTWrapper(filepath=args.trained_model, cfg=cfg)
         else:
-            if args.cuda:
-
-                device = 'cuda'
             net = Yolact()
             net.load_checkpoint(args.trained_model)
             net.eval()

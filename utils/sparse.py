@@ -59,7 +59,7 @@ class SparseMLWrapper(object):
             SparsificationGroupLogger(
                 lambda_func=_logging_lambda,
                 tensorboard=tb_writer,
-                wandb_={'project': 'yolact'}
+                wandb_={'project': 'yolact'} if wandb_logger else None,
             )
         ])
 
