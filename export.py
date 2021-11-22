@@ -31,7 +31,7 @@ optional arguments:
   --config CONFIG, -c CONFIG
                         The config used to train the yolact model,
                         for ex: yolact_darknet53_config, yolact_resnet50_config,
-                        etc...; Defaults to yolact_base_config.
+                        etc...; Defaults to yolact_darknet53_config.
   --recipe RECIPE, -r RECIPE
                         Path or SparseZoo stub to the recipe used for training,
                         omit if no recipe used.
@@ -149,10 +149,10 @@ def parse_args() -> ExportArgs:
         "--config",
         "-c",
         type=str,
-        default="yolact_darkenet53_config",
+        default="yolact_darknet53_config",
         help="The config used to train the yolact model, for ex: "
         "yolact_darknet53_config, yolact_resnet50_config, etc...; "
-        "Defaults to yolact_base_config.",
+        "Defaults to yolact_darknet53_config.",
     )
 
     parser.add_argument(
