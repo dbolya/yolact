@@ -18,7 +18,7 @@ Helper script to export yolact models to ONNX
 ##########
 Command help:
 usage: export.py [-h] --checkpoint CHECKPOINT [--config CONFIG] \
-    [--recipe RECIPE] [--convert-qat] [--batch-size BATCH_SIZE] \
+    [--recipe RECIPE] [--skip-qat-convert] [--batch-size BATCH_SIZE] \
     [--image-shape IMAGE_SHAPE [IMAGE_SHAPE ...]] \
     [--save-dir SAVE_DIR] [--name NAME]
 
@@ -31,11 +31,13 @@ optional arguments:
   --config CONFIG, -c CONFIG
                         The config used to train the yolact model,
                         for ex: yolact_darknet53_config, yolact_resnet50_config,
-                        etc...; Defaults to yolact_base_config.
+                        etc...; Defaults to yolact_darknet53_config.
   --recipe RECIPE, -r RECIPE
-                        Path or SparseZoo stub to the recipe used for training,
-                        omit if no recipe used.
-  --no-qat, -N          Flag to prevent conversion of a QAT(Quantization Aware
+                        Path or SparseZoo stub to the recipe used for training.
+                        If no recipe given, the checkpoint recipe is applied if
+                        present
+  --skip-qat-convert, -N
+                        Flag to prevent conversion of a QAT(Quantization Aware
                         Training) Graph to a Quantized Graph
   --batch-size BATCH_SIZE, -b BATCH_SIZE
                         The batch size to use while exporting the Model graph to
@@ -50,14 +52,11 @@ optional arguments:
 
 ##########
 Example usage:
-python export.py --checkpoint ./checkpoints/yolact_darknet53_ks.pth \
-    --recipe ./recipes/yolact_ks.yaml \
-    --config yolact_darknet53_config
+python export.py --checkpoint ./checkpoints/yolact_darknet53_pruned.pth \
 
 ##########
 Example Two:
 python export.py --checkpoint ./quantized-checkpoint/yolact_darknet53_1_10.pth \
-    --recipe ./recipes/yolact.quant.yaml \
     --save-dir ./exported-models \
     --name yolact_darknet53_quantized \
     --batch-size 1 \
@@ -88,7 +87,7 @@ class ExportArgs:
     checkpoint: Path
     config: str
     recipe: str
-    no_qat: bool
+    skip_qat_convert: bool
     batch_size: int
     image_shape: Iterable
     name: Path
@@ -149,10 +148,10 @@ def parse_args() -> ExportArgs:
         "--config",
         "-c",
         type=str,
-        default="yolact_darkenet53_config",
+        default="yolact_darknet53_config",
         help="The config used to train the yolact model, for ex: "
         "yolact_darknet53_config, yolact_resnet50_config, etc...; "
-        "Defaults to yolact_base_config.",
+        "Defaults to yolact_darknet53_config.",
     )
 
     parser.add_argument(
@@ -161,12 +160,11 @@ def parse_args() -> ExportArgs:
         type=str,
         default=None,
         help="Path or SparseZoo stub to the recipe used for training, "
-        "omit if no recipe used. If no recipe given, "
-        "but the checkpoint recipe is applied if present.",
+        " If no recipe given, the checkpoint recipe is applied if present",
     )
 
     parser.add_argument(
-        "--no-qat",
+        "--skip-qat-convert",
         "-N",
         action="store_true",
         help="Flag to prevent conversion of a QAT(Quantization Aware Training) "
@@ -216,7 +214,7 @@ def export(args: ExportArgs):
         module=model,
         sample_batch=torch.randn(*batch_shape),
         file_path=str(args.name),
-        convert_qat=not args.no_qat,
+        convert_qat=not args.skip_qat_convert,
     )
     logging.info(f"Model checkpoint exported to {args.name}")
 

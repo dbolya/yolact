@@ -2,5 +2,5 @@ cython
 opencv-python
 pycocotools
 matplotlib
-sparseml>=0.9
 torchvision<=0.8.2
+sparseml[torchvision]>=0.9
