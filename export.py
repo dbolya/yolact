@@ -33,8 +33,9 @@ optional arguments:
                         for ex: yolact_darknet53_config, yolact_resnet50_config,
                         etc...; Defaults to yolact_darknet53_config.
   --recipe RECIPE, -r RECIPE
-                        Path or SparseZoo stub to the recipe used for training,
-                        omit if no recipe used.
+                        Path or SparseZoo stub to the recipe used for training.
+                        If no recipe given, the checkpoint recipe is applied if
+                        present
   --no-qat, -N          Flag to prevent conversion of a QAT(Quantization Aware
                         Training) Graph to a Quantized Graph
   --batch-size BATCH_SIZE, -b BATCH_SIZE
@@ -50,14 +51,11 @@ optional arguments:
 
 ##########
 Example usage:
-python export.py --checkpoint ./checkpoints/yolact_darknet53_ks.pth \
-    --recipe ./recipes/yolact_ks.yaml \
-    --config yolact_darknet53_config
+python export.py --checkpoint ./checkpoints/yolact_darknet53_pruned.pth \
 
 ##########
 Example Two:
 python export.py --checkpoint ./quantized-checkpoint/yolact_darknet53_1_10.pth \
-    --recipe ./recipes/yolact.quant.yaml \
     --save-dir ./exported-models \
     --name yolact_darknet53_quantized \
     --batch-size 1 \
@@ -161,8 +159,7 @@ def parse_args() -> ExportArgs:
         type=str,
         default=None,
         help="Path or SparseZoo stub to the recipe used for training, "
-        "omit if no recipe used. If no recipe given, "
-        "but the checkpoint recipe is applied if present.",
+        " If no recipe given, the checkpoint recipe is applied if present",
     )
 
     parser.add_argument(
