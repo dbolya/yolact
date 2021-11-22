@@ -31,10 +31,11 @@ optional arguments:
   --config CONFIG, -c CONFIG
                         The config used to train the yolact model,
                         for ex: yolact_darknet53_config, yolact_resnet50_config,
-                        etc...; Defaults to yolact_base_config.
+                        etc...; Defaults to yolact_darknet53_config.
   --recipe RECIPE, -r RECIPE
-                        Path or SparseZoo stub to the recipe used for training,
-                        omit if no recipe used.
+                        Path or SparseZoo stub to the recipe used for training.
+                        If no recipe given, the checkpoint recipe is applied if
+                        present
   --skip-qat-convert, -N
                         Flag to prevent conversion of a QAT(Quantization Aware
                         Training) Graph to a Quantized Graph
@@ -51,14 +52,11 @@ optional arguments:
 
 ##########
 Example usage:
-python export.py --checkpoint ./checkpoints/yolact_darknet53_ks.pth \
-    --recipe ./recipes/yolact_ks.yaml \
-    --config yolact_darknet53_config
+python export.py --checkpoint ./checkpoints/yolact_darknet53_pruned.pth \
 
 ##########
 Example Two:
 python export.py --checkpoint ./quantized-checkpoint/yolact_darknet53_1_10.pth \
-    --recipe ./recipes/yolact.quant.yaml \
     --save-dir ./exported-models \
     --name yolact_darknet53_quantized \
     --batch-size 1 \
@@ -89,7 +87,7 @@ class ExportArgs:
     checkpoint: Path
     config: str
     recipe: str
-    skip_qat_convert: bool
+    no_qat: bool
     batch_size: int
     image_shape: Iterable
     name: Path
@@ -150,10 +148,10 @@ def parse_args() -> ExportArgs:
         "--config",
         "-c",
         type=str,
-        default="yolact_darkenet53_config",
+        default="yolact_darknet53_config",
         help="The config used to train the yolact model, for ex: "
         "yolact_darknet53_config, yolact_resnet50_config, etc...; "
-        "Defaults to yolact_base_config.",
+        "Defaults to yolact_darknet53_config.",
     )
 
     parser.add_argument(
@@ -162,8 +160,7 @@ def parse_args() -> ExportArgs:
         type=str,
         default=None,
         help="Path or SparseZoo stub to the recipe used for training, "
-        "omit if no recipe used. If no recipe given, "
-        "but the checkpoint recipe is applied if present.",
+        " If no recipe given, the checkpoint recipe is applied if present",
     )
 
     parser.add_argument(
