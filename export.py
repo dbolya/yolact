@@ -18,7 +18,7 @@ Helper script to export yolact models to ONNX
 ##########
 Command help:
 usage: export.py [-h] --checkpoint CHECKPOINT [--config CONFIG] \
-    [--recipe RECIPE] [--convert-qat] [--batch-size BATCH_SIZE] \
+    [--recipe RECIPE] [--skip-qat-convert] [--batch-size BATCH_SIZE] \
     [--image-shape IMAGE_SHAPE [IMAGE_SHAPE ...]] \
     [--save-dir SAVE_DIR] [--name NAME]
 
@@ -36,7 +36,8 @@ optional arguments:
                         Path or SparseZoo stub to the recipe used for training.
                         If no recipe given, the checkpoint recipe is applied if
                         present
-  --no-qat, -N          Flag to prevent conversion of a QAT(Quantization Aware
+  --skip-qat-convert, -N
+                        Flag to prevent conversion of a QAT(Quantization Aware
                         Training) Graph to a Quantized Graph
   --batch-size BATCH_SIZE, -b BATCH_SIZE
                         The batch size to use while exporting the Model graph to
@@ -163,7 +164,7 @@ def parse_args() -> ExportArgs:
     )
 
     parser.add_argument(
-        "--no-qat",
+        "--skip-qat-convert",
         "-N",
         action="store_true",
         help="Flag to prevent conversion of a QAT(Quantization Aware Training) "
@@ -213,7 +214,7 @@ def export(args: ExportArgs):
         module=model,
         sample_batch=torch.randn(*batch_shape),
         file_path=str(args.name),
-        convert_qat=not args.no_qat,
+        convert_qat=not args.skip_qat_convert,
     )
     logging.info(f"Model checkpoint exported to {args.name}")
 
