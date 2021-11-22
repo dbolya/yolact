@@ -87,7 +87,7 @@ class ExportArgs:
     checkpoint: Path
     config: str
     recipe: str
-    no_qat: bool
+    skip_qat_convert: bool
     batch_size: int
     image_shape: Iterable
     name: Path
