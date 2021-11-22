@@ -120,12 +120,13 @@ optional arguments:
                         deepsparse), defaults to None
   --warm_up_iterations WARM_UP_ITERATIONS
                         The num of warm up iterations to run the engine
-                        for, defaults to 1
+                        for, defaults to 10
   --num_iterations NUM_ITERATIONS
                         The num of iterations to run the engine for,
                         defaults to the validation set
   --batch_size BATCH_SIZE
-                        The batch size to use the engine for, defaults to 1
+                        The batch size to use the engine for, defaults to 1.
+                        Only available for benchmark mode
   --engine {deepsparse,ort,torch}
                         Engine to use for evaluation choices are
                         ['deepsparse', 'ort', 'torch']
@@ -358,9 +359,9 @@ def parse_args(argv=None):
     parser.add_argument('--emulate_playback', default=False, dest='emulate_playback', action='store_true',
                         help='When saving a video, emulate the framerate that you\'d get running in real-time mode.')
     parser.add_argument('--num_cores', default=None, help="The num of cores to use (supported only with deepsparse), defaults to None")
-    parser.add_argument('--warm_up_iterations', default=1, type=int, help="The num of warm up iterations to run the engine for, defaults to 1")
+    parser.add_argument('--warm_up_iterations', default=10, type=int, help="The num of warm up iterations to run the engine for, defaults to 10")
     parser.add_argument('--num_iterations', default=0, type=int, help="The num of iterations to run the engine for, defaults to the validation set")
-    parser.add_argument('--batch_size', default=1, type=int, help="The batch size to use the engine for, defaults to 1")
+    parser.add_argument('--batch_size', default=1, type=int, help="The batch size to use the engine for, defaults to 1. Only available for benchmark mode")
     parser.add_argument('--engine', default=None, choices=Engine.supported(), help=f'Engine to use for evaluation choices are {Engine.supported()}')
 
     parser.set_defaults(no_bar=False, display=False, resume=False, output_coco_json=False, output_web_json=False, shuffle=False,
@@ -375,6 +376,13 @@ def parse_args(argv=None):
     
     if args.seed is not None:
         random.seed(args.seed)
+
+    if args.batch_size > 1 and (not args.benchmark or args.display):
+        raise ValueError(
+            "Custom batch size only supported for benchmarking mode with no display "
+            f"display batch_size {args.batch_size} with args.benchmark={args.benchmark} "
+            f"and args.display={args.display}"
+        )
 
 iou_thresholds = [x / 100 for x in range(50, 100, 5)]
 coco_cats = {} # Call prep_coco_cats to fill this
@@ -511,9 +519,9 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
     
     return img_numpy
 
-def prep_benchmark(dets_out, h, w):
+def prep_benchmark(dets_out, h, w, batch_idx=0):
     with timer.env('Postprocess'):
-        t = postprocess(dets_out, w, h, crop_masks=args.crop, score_threshold=args.score_threshold)
+        t = postprocess(dets_out, w, h, batch_idx=batch_idx, crop_masks=args.crop, score_threshold=args.score_threshold)
 
     with timer.env('Copy'):
         classes, scores, boxes, masks = [x[:args.top_k] for x in t]
@@ -1189,16 +1197,31 @@ def evaluate(net:Yolact, dataset, train_mode=False):
 
     try:
         # Main eval loop
+        if args.batch_size > 1:
+            full_batch = []
+            h_batch = []
+            w_batch = []
+
         for it, image_idx in enumerate(itertools.cycle(dataset_indices)):
             timer.reset()
             if not args.num_iterations and it == dataset_size:
                 break
-            elif args.num_iterations and it > args.warm_up_iterations + args.num_iterations:
+            elif args.num_iterations and it // args.batch_size > args.warm_up_iterations + args.num_iterations:
                 break
 
             with timer.env('Load Data'):
                 batch, gt, gt_masks, h, img, num_crowd, w = load_batch(dataset,
                                                                        image_idx)
+                if args.batch_size > 1:
+                    # build batch
+                    full_batch.append(batch)
+                    h_batch.append(h)
+                    w_batch.append(w)
+                    if (it + 1) % args.batch_size != 0:
+                        # keep building batch
+                        continue
+                    else:
+                        batch = torch.cat(full_batch)
 
             with timer.env('Network Extra'):
                 preds = net(batch)
@@ -1206,35 +1229,43 @@ def evaluate(net:Yolact, dataset, train_mode=False):
             if args.display:
                 img_numpy = prep_display(preds, img, h, w)
             elif args.benchmark:
-                prep_benchmark(preds, h, w)
+                if args.batch_size == 1:
+                    prep_benchmark(preds, h, w)
+                else:
+                    # run post-processing individually for each item in batch
+                    for batch_idx, (h_item, w_item) in enumerate(zip(h_batch, w_batch)):
+                        prep_benchmark(preds, h_item, w_item, batch_idx=batch_idx)
+                    # reset batch vars
+                    full_batch, h_batch, w_batch = [], [], []
             else:
                 prep_metrics(ap_data, preds, img, gt, gt_masks, h, w, num_crowd, dataset.ids[image_idx], detections)
             
             # First few images take longer because we're constructing the graph.
             # Don't include warm_up_iterations in the FPS calculations.
-            if it > args.warm_up_iterations:
+            iteration = it // args.batch_size
+            if iteration > args.warm_up_iterations:
                 if not printed_fps_calc_message:
                     printed_fps_calc_message = True
-                    print('Warm up iterations over, starting FPS calc')
+                    print(f'Warm up iterations ({args.warm_up_iterations}) over, starting FPS calc')
                 frame_times.add(timer.total_time())
             
             if args.display:
-                if it > args.warm_up_iterations:
+                if iteration > args.warm_up_iterations:
                     print('Avg FPS: %.4f' % (1 / frame_times.get_avg()))
                 plt.imshow(img_numpy)
                 plt.title(str(dataset.ids[image_idx]))
                 plt.show()
             elif not args.no_bar:
-                if it > args.warm_up_iterations:
+                if iteration > args.warm_up_iterations:
                     fps = 1 / frame_times.get_avg()
                 else:
                     fps = 0
-                curr_progress = it + 1 - args.warm_up_iterations
+                curr_progress = iteration + 1 - args.warm_up_iterations
                 progress = curr_progress / dataset_size * 100
                 progress_bar.set_val(curr_progress)
-                if it > args.warm_up_iterations:
+                if iteration > args.warm_up_iterations:
                     print('\rProcessing Images  %s %6d / %6d (%5.2f%%)    %5.2f fps        '
-                          % (repr(progress_bar), curr_progress, dataset_size, progress, fps), end='')
+                          % (repr(progress_bar), curr_progress, dataset_size, progress, fps * args.batch_size), end='')
 
 
 
@@ -1257,7 +1288,7 @@ def evaluate(net:Yolact, dataset, train_mode=False):
             print()
             print()
             avg_seconds = frame_times.get_avg()
-            print('Average: %5.2f fps, %5.2f ms' % (1 / frame_times.get_avg(), 1000*avg_seconds))
+            print('Average: %5.2f fps, %5.2f ms' % (args.batch_size / frame_times.get_avg(), 1000*avg_seconds))
 
     except KeyboardInterrupt:
         print('Stopping...')
