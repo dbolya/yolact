@@ -233,6 +233,8 @@ Some Useful Model Stubs:
 
 """
 import itertools
+
+from sparsezoo.utils import load_numpy_list
 from data import COCODetection, get_label_map, MEANS, COLORS
 from utils.engines import Engine
 from utils.wrapper import DeepSparseWrapper, ORTWrapper
@@ -246,7 +248,7 @@ from utils import timer
 from utils.functions import SavePath
 from layers.output_utils import postprocess, undo_image_transformation
 import pycocotools
-
+from sparsezoo.models.detection import yolo_v3 as zoo_yolo_v3
 from data import cfg, set_cfg, set_dataset
 
 import numpy as np
@@ -536,7 +538,8 @@ def prep_benchmark(dets_out, h, w, batch_idx=0):
     
     with timer.env('Sync'):
         # Just in case
-        torch.cuda.synchronize()
+        if args.cuda and torch.cuda.is_available():
+            torch.cuda.synchronize()
 
 def prep_coco_cats():
     """ Prepare inverted table for category id lookup given a coco cats object. """
@@ -1133,6 +1136,17 @@ def evalvideo(net:Yolact, path:str, out_path:str=None):
     
     cleanup_and_exit()
 
+
+def load_benchmark_batch(dataset, image_idx):
+    img = dataset[image_idx]['arr_0']
+    TARGET_SIZE = 550, 550
+    img = cv2.resize(img, TARGET_SIZE)
+    img = np.moveaxis(img, -1, 0) # put channels in front
+    _, h, w = img.shape
+    batch = torch.from_numpy(np.ascontiguousarray(img[np.newaxis], dtype=np.float32))
+    return batch, h, w
+
+
 def evaluate(net:Yolact, dataset, train_mode=False):
     net.detect.use_fast_nms = args.fast_nms
     net.detect.use_cross_class_nms = args.cross_class_nms
@@ -1187,8 +1201,11 @@ def evaluate(net:Yolact, dataset, train_mode=False):
         # the hardest. To combat this, I use a hard-coded hash function based on the image ids
         # to shuffle the indices we use. That way, no matter what python version or how pycocotools
         # handles the data, we get the same result every time.
-        hashed = [badhash(x) for x in dataset.ids]
-        dataset_indices.sort(key=lambda x: hashed[x])
+        if args.benchmark:
+            dataset_indices = list(range(len(dataset)))
+        else :
+            hashed = [badhash(x) for x in dataset.ids]
+            dataset_indices.sort(key=lambda x: hashed[x])
 
     dataset_size = args.num_iterations or dataset_size
     dataset_indices = dataset_indices[:dataset_size]
@@ -1204,14 +1221,19 @@ def evaluate(net:Yolact, dataset, train_mode=False):
 
         for it, image_idx in enumerate(itertools.cycle(dataset_indices)):
             timer.reset()
-            if not args.num_iterations and it == dataset_size:
+            if not args.num_iterations and it == args.warm_up_iterations + dataset_size:
                 break
             elif args.num_iterations and it // args.batch_size > args.warm_up_iterations + args.num_iterations:
                 break
 
             with timer.env('Load Data'):
-                batch, gt, gt_masks, h, img, num_crowd, w = load_batch(dataset,
+                if not args.benchmark:
+                    batch, gt, gt_masks, h, img, num_crowd, w = load_batch(dataset,
                                                                        image_idx)
+                else:
+
+                    batch, h, w = load_benchmark_batch(dataset, image_idx)
+                    gt, gt_masks, num_crowd, img = None, None, None, None
                 if args.batch_size > 1:
                     # build batch
                     full_batch.append(batch)
@@ -1403,9 +1425,13 @@ if __name__ == '__main__':
             exit()
 
         if args.image is None and args.video is None and args.images is None:
-            dataset = COCODetection(cfg.dataset.valid_images, cfg.dataset.valid_info,
+            if not args.benchmark:
+                dataset = COCODetection(cfg.dataset.valid_images, cfg.dataset.valid_info,
                                     transform=BaseTransform(), has_gt=cfg.dataset.has_gt)
-            prep_coco_cats()
+                prep_coco_cats()
+            else:
+                zoo_model = zoo_yolo_v3()
+                dataset = load_numpy_list(zoo_model.data_originals.downloaded_path())
         else:
             dataset = None        
 
