@@ -528,7 +528,8 @@ def prep_benchmark(dets_out, h, w):
     
     with timer.env('Sync'):
         # Just in case
-        torch.cuda.synchronize()
+        if torch.cuda.is_available() and args.cuda:
+            torch.cuda.synchronize()
 
 def prep_coco_cats():
     """ Prepare inverted table for category id lookup given a coco cats object. """
