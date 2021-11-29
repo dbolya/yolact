@@ -1210,7 +1210,9 @@ def evaluate(net:Yolact, dataset, train_mode=False):
     dataset_size = args.num_iterations or dataset_size
     dataset_indices = dataset_indices[:dataset_size]
     printed_fps_calc_message = False
-    progress_bar = ProgressBar(30, dataset_size)
+    printed_warm_up_iteration_message = False
+    progress_bar_iterations = ProgressBar(30, dataset_size)
+    progress_bar_warm_up = ProgressBar(30, args.warm_up_iterations)
 
     try:
         # Main eval loop
@@ -1220,10 +1222,11 @@ def evaluate(net:Yolact, dataset, train_mode=False):
             w_batch = []
 
         for it, image_idx in enumerate(itertools.cycle(dataset_indices)):
+            iteration = it // args.batch_size
             timer.reset()
-            if not args.num_iterations and it == args.warm_up_iterations + dataset_size:
+            if not args.num_iterations and iteration == args.warm_up_iterations + dataset_size:
                 break
-            elif args.num_iterations and it // args.batch_size > args.warm_up_iterations + args.num_iterations:
+            elif args.num_iterations and iteration >= args.warm_up_iterations + args.num_iterations:
                 break
 
             with timer.env('Load Data'):
@@ -1264,12 +1267,17 @@ def evaluate(net:Yolact, dataset, train_mode=False):
             
             # First few images take longer because we're constructing the graph.
             # Don't include warm_up_iterations in the FPS calculations.
-            iteration = it // args.batch_size
+
             if iteration > args.warm_up_iterations:
                 if not printed_fps_calc_message:
                     printed_fps_calc_message = True
-                    print(f'Warm up iterations ({args.warm_up_iterations}) over, starting FPS calc')
+                    print(f'\nWarm up iterations ({args.warm_up_iterations}) over, starting FPS calc with a batch of {args.batch_size}')
                 frame_times.add(timer.total_time())
+            else:
+                if not printed_warm_up_iteration_message:
+                    printed_warm_up_iteration_message = True
+                    print(f'Starting ({args.warm_up_iterations}) Warm up iterations, with a batch of {args.batch_size}, this might take some time')
+
             
             if args.display:
                 if iteration > args.warm_up_iterations:
@@ -1284,10 +1292,18 @@ def evaluate(net:Yolact, dataset, train_mode=False):
                     fps = 0
                 curr_progress = iteration + 1 - args.warm_up_iterations
                 progress = curr_progress / dataset_size * 100
-                progress_bar.set_val(curr_progress)
+                progress_bar_iterations.set_val(curr_progress)
                 if iteration > args.warm_up_iterations:
                     print('\rProcessing Images  %s %6d / %6d (%5.2f%%)    %5.2f fps        '
-                          % (repr(progress_bar), curr_progress, dataset_size, progress, fps * args.batch_size), end='')
+                          % (repr(progress_bar_iterations), curr_progress, dataset_size, progress, fps * args.batch_size), end='')
+                else:
+                    warm_up_progress = iteration / args.warm_up_iterations * 100
+                    progress_bar_warm_up.set_val(iteration)
+                    print(
+                        '\rProcessing Images  %s %6d / %6d (%5.2f%%)'
+                        % (repr(progress_bar_warm_up), iteration,
+                           args.warm_up_iterations, warm_up_progress),
+                        end='')
 
 
 
@@ -1310,7 +1326,7 @@ def evaluate(net:Yolact, dataset, train_mode=False):
             print()
             print()
             avg_seconds = frame_times.get_avg()
-            print('Average: %5.2f fps, %5.2f ms' % (args.batch_size / frame_times.get_avg(), 1000*avg_seconds))
+            print('Average: %5.2f fps, %5.2f ms per batch' % (args.batch_size / frame_times.get_avg(), 1000*avg_seconds))
 
     except KeyboardInterrupt:
         print('Stopping...')
