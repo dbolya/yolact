@@ -255,11 +255,6 @@ if torch.cuda.device_count() == 0:
     print('No GPUs detected. Exiting...')
     exit(-1)
 
-if args.batch_size // torch.cuda.device_count() < 6:
-    if __name__ == '__main__':
-        print('Per-GPU batch size is less than the recommended limit for batch norm. Disabling batch norm.')
-    cfg.freeze_bn = True
-
 loss_types = ['B', 'C', 'M', 'P', 'D', 'E', 'S', 'I']
 
 if torch.cuda.is_available():
