@@ -360,7 +360,7 @@ def parse_args(argv=None):
                         help='When displaying / saving video, draw the FPS on the frame')
     parser.add_argument('--emulate_playback', default=False, dest='emulate_playback', action='store_true',
                         help='When saving a video, emulate the framerate that you\'d get running in real-time mode.')
-    parser.add_argument('--num_cores', default=None, help="The num of cores to use (supported only with deepsparse), defaults to None")
+    parser.add_argument('--num_cores', default=None, type=int, help="The num of cores to use (supported only with deepsparse), defaults to None")
     parser.add_argument('--warm_up_iterations', default=10, type=int, help="The num of warm up iterations to run the engine for, defaults to 10")
     parser.add_argument('--num_iterations', default=0, type=int, help="The num of iterations to run the engine for, defaults to the validation set")
     parser.add_argument('--batch_size', default=1, type=int, help="The batch size to use the engine for, defaults to 1. Only available for benchmark mode")
