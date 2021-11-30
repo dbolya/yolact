@@ -14,7 +14,7 @@ usage: train.py [-h] [--batch_size BATCH_SIZE] [--resume RESUME]
                 [--dataset DATASET] [--no_log] [--log_gpu] [--no_interrupt]
                 [--batch_alloc BATCH_ALLOC] [--no_autoscale]
                 [--recipe RECIPE]
-                [--override_checkpoint_epoch OVERRIDE_CHECKPOINT_EPOCH]
+                [--use_checkpoint_epoch USE_CHECKPOINT_EPOCH]
                 [--fp16] [--wandb] [--cont]
 
 Yolact Training Script
@@ -85,9 +85,9 @@ optional arguments:
   --recipe RECIPE       Path to a sparsification recipe, can also be a
                         SparseZoo recipe stub, if provided the recipe
                         stored with the checkpoint is ignored
-  --override_checkpoint_epoch OVERRIDE_CHECKPOINT_EPOCH
-                        True to to override epoch # saved in the checkpoint
-                        and start from 0
+  --use_checkpoint_epoch USE_CHECKPOINT_EPOCH
+                        True to to override epoch # saved in the checkpoint.
+                        default start epoch is 0
   --fp16                flag to switch off fp16 while training
   --wandb               Flag to use wandb logging, needs `pip install
                         wandb`
@@ -211,10 +211,9 @@ parser.add_argument('--recipe', type=str, default=None,
                          "SparseZoo recipe stub, if provided the recipe "
                          "stored with the checkpoint is ignored"
                     )
-parser.add_argument('--override_checkpoint_epoch',
-                    default=True,
-                    type=bool,
-                    help="True to to override epoch # saved in the checkpoint and start from 0"
+parser.add_argument('--use_checkpoint_epoch',
+                    action="store_true",
+                    help="True to to override epoch # saved in the checkpoint. default start epoch is 0"
                     )
 parser.add_argument('--fp16',
                     action='store_true',
@@ -362,7 +361,7 @@ def train():
         start_epoch = 0
         if checkpoint_epoch and args.cont:
             start_epoch = checkpoint_epoch
-        if args.override_checkpoint_epoch:
+        if not args.use_checkpoint_epoch:
             start_epoch = 0
         args.recipe = args.recipe or checkpoint_recipe
         if args.start_iter == -1:
@@ -451,10 +450,6 @@ def train():
             for datum in data_loader:
                 # Stop if we've reached an epoch if we're resuming from start_iter
                 if iteration == (epoch+1)*epoch_size:
-                    break
-
-                # Stop at the configured number of iterations even if mid-epoch
-                if iteration == cfg.max_iter:
                     break
 
                 # Change a config setting if we've reached the specified iteration
@@ -602,10 +597,7 @@ def get_eta(data_loader, epoch, iteration, max_steps, num_epochs, time_avg):
         data_loader)
     eta_current_setup = datetime.timedelta(
         seconds=((remaining_iterations * time_avg.get_avg())))
-    eta_max = datetime.timedelta(
-        seconds=((max_steps - iteration) * time_avg.get_avg()))
-    eta_str = str(min(eta_current_setup, eta_max)).split('.')[0]
-    return eta_str
+    return eta_current_setup
 
 
 def set_lr(optimizer, new_lr):
