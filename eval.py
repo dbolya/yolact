@@ -1459,7 +1459,7 @@ if __name__ == '__main__':
                                     batch_size=args.batch_size
                                     )
         elif args.engine == Engine.ORT:
-            net = ORTWrapper(filepath=args.trained_model, cfg=cfg)
+            net = ORTWrapper(filepath=args.trained_model, cfg=cfg, batch_size = args.batch_size)
         else:
             net = Yolact()
             net.load_checkpoint(args.trained_model)

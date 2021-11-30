@@ -1,7 +1,11 @@
+import os
 from abc import ABC, abstractmethod
 import contextlib
 
+import onnx
+
 from layers import Detect
+from sparseml.onnx.utils import override_model_batch_size
 from yolact import FastMaskIoUNet
 
 with contextlib.suppress(ModuleNotFoundError):
@@ -11,6 +15,7 @@ with contextlib.suppress(ModuleNotFoundError):
     import onnxruntime as ort
 
 import torch
+import tempfile
 
 
 def _convert_tensors_to_numpy(inputs):
@@ -84,9 +89,15 @@ class ORTWrapper(YOLACTWrapper):
     """
     Inference Wrapper for YOLACT that uses ONNX Runtime Engine
     """
-    def __init__(self, filepath, cfg):
+    def __init__(self, filepath, cfg, batch_size):
         super().__init__(cfg)
-        self.engine = ort.InferenceSession(filepath)
+        model_proto = onnx.load(filepath)
+        override_model_batch_size(model_proto, batch_size)
+        temp_dir_path = tempfile.mkdtemp()
+        temp_file_path = os.path.join(temp_dir_path, f'temp-model-{batch_size}.onnx')
+        onnx.save_model(model_proto, temp_file_path)
+        self.engine = ort.InferenceSession(temp_file_path)
+
 
     def forward(self, inputs):
         return self.engine.run(None, {'input': inputs})
