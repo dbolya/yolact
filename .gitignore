@@ -158,3 +158,10 @@ vid/
 vidres/
 
 _.py
+
+
+# Weights
+*.pth
+
+# Notebooks
+scratch.ipynb

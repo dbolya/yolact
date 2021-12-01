@@ -4,7 +4,7 @@
 # TODO: you must additionally install nVidia drivers, eg. on Ubuntu linux 
 # `apt install nvidia-driver-440` (change the 440 for whatever version you need/have).
 #
-name: yolact-env
+name: YOLACT
 #prefix: /your/custom/path/envs/yolact-env
 channels:
   - conda-forge
