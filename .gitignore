@@ -159,6 +159,8 @@ vidres/
 
 _.py
 
+# Video Files
+*.mp4
 
 # Weights
 *.pth
