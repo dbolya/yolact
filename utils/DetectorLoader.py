@@ -17,8 +17,9 @@ class YOLACT(object):
         config (str): name of the base-network upon which the model is built
         device (str): device to use the model, default is cuda, can be specified as CPU
 
-
-
+        Returns
+        --------------------------------
+        Loaded model on device. 
     '''
     def __init__(self, 
                 weights_file = '../weights/yolact_resnet50_54_800000.pth',
@@ -63,8 +64,14 @@ class YOLACT(object):
         if mask_proto_debug:
             self.model.detect.mask_proto_debug = mask_proto_debug
     
+    @classmethod
     def detect(args):
         '''
+        Class method for running a model detection
+        def detect():
 
+            Arguments
+            --------------------------------
+            
         '''
         
