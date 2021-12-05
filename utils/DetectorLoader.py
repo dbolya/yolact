@@ -76,7 +76,7 @@ class YOLACT(object):
             classes, scores, boxes, masks = [x[idx].cpu().numpy() for x in tensor]
             return classes, scores, boxes, masks
     
-    def detect(self, image):
+    def predict(self, image):
         '''
         Class method for running a model detection
         def detect():
@@ -99,4 +99,9 @@ class YOLACT(object):
         self.batch = FastBaseTransform()(self.frame.unsqueeze(0))
         self.preds = self.model(self.batch)
         self.classes, self.scores, self.bboxes, self.masks = self.prep_prediction(self.preds, self.frame, None, None, self.threshold)
+        #TODO 
+        #Add a method to merge np.ndarrays of similar class, relabeling the pixel value to a new integer
+        #Update to return merged pixelwise map.   
         return self.classes, self.scores, self.bboxes, self.masks
+
+    
