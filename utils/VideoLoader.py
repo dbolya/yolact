@@ -1,4 +1,6 @@
 # Define a class for working on videos
+
+import cv2
 class VideoReader(object):
     '''
     Class docstring for VideoReader():

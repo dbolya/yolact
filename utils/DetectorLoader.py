@@ -1,10 +1,9 @@
 from yolact import Yolact
 import torch
-from data import cfg, set_cfg
 import torch.backends.cudnn as cudnn
-
-__author__ = 'Ajay Bhargava'
-__version__ = '0.1'
+from data import cfg, set_cfg
+from utils.augmentations import FastBaseTransform
+from layers import output_utils
 
 class YOLACT(object):
     '''
@@ -24,14 +23,17 @@ class YOLACT(object):
     def __init__(self, 
                 weights_file = '../weights/yolact_resnet50_54_800000.pth',
                 config = 'yolact_resnet50_config',
-                device = 'cuda', 
+                device = 'cuda',
+                threshold = 0.1, 
                 fast_nms = True,
                 detect = False,
-                cross_class_nms = False, 
-                mask_proto_debug = False):
+                cross_class_nms = False):
 
         # Declare Configs
         set_cfg(config)
+
+        # Set Threshold
+        self.threshold = threshold
 
         # Set Detection
         if detect:
@@ -61,17 +63,40 @@ class YOLACT(object):
         if cross_class_nms:
             self.model.detect.use_cross_class_nms = cross_class_nms
 
-        if mask_proto_debug:
-            self.model.detect.mask_proto_debug = mask_proto_debug
+    @staticmethod
+    def prep_prediction(dets_out, img, h, w, thresh):
+        '''
+    Docstring for prep_display()
+    Prepares a predicted image for use elsewhere. 
+    '''
+        with torch.no_grad():
+            h, w, _ = img.shape
+            tensor = output_utils.postprocess(dets_out, w, h, visualize_lincomb = False, crop_masks = True, score_threshold = thresh)
+            idx = tensor[1].argsort(0, descending=True)
+            classes, scores, boxes, masks = [x[idx].cpu().numpy() for x in tensor]
+            return classes, scores, boxes, masks
     
-    @classmethod
-    def detect(args):
+    def detect(self, image):
         '''
         Class method for running a model detection
         def detect():
 
             Arguments
             --------------------------------
-            
+            image (np.ndarray): Image to which a model inference is conducted.
+
+            Returns
+            --------------------------------
+            classes (np.ndarray): Class identities of the predicted instances.
+            scores (np.ndarray): Class scores of the predicted instances.
+            bboxes (np.ndarray): Bounding boxes of the predicted instances.
+            masks (np.ndarray): Pixelwise masks for the predicted instances. 
+
         '''
-        
+        cfg.mask_proto_debug = False
+        # Convert Image to 'Frame' Object 
+        self.frame = torch.from_numpy(image).cuda().float()
+        self.batch = FastBaseTransform()(self.frame.unsqueeze(0))
+        self.preds = self.model(self.batch)
+        self.classes, self.scores, self.bboxes, self.masks = self.prep_prediction(self.preds, self.frame, None, None, self.threshold)
+        return self.classes, self.scores, self.bboxes, self.masks
