@@ -4,10 +4,11 @@ import torch.backends.cudnn as cudnn
 from data import cfg, set_cfg
 from utils.augmentations import FastBaseTransform
 from layers import output_utils
+from utils import VideoReaders
 
 class YOLACT(object):
     '''
-    Class for handling YOLACT model.
+    SuperClass for YOLACT model.
     def __init__():
         
         Arguments
@@ -21,18 +22,18 @@ class YOLACT(object):
         Loaded model on device. 
     '''
     def __init__(self, 
-                weights_file = '../weights/yolact_resnet50_54_800000.pth',
+                weights_file = './weights/yolact_resnet50_54_800000.pth',
                 config = 'yolact_resnet50_config',
                 device = 'cuda',
-                threshold = 0.1, 
+                threshold = 0.1,
                 fast_nms = True,
                 detect = False,
                 cross_class_nms = False):
-
+        super(YOLACT, self).__init__()
         # Declare Configs
         set_cfg(config)
 
-        # Set Threshold
+        # Set Threshold - move to subclass 
         self.threshold = threshold
 
         # Set Detection
@@ -66,9 +67,9 @@ class YOLACT(object):
     @staticmethod
     def prep_prediction(dets_out, img, h, w, thresh):
         '''
-    Docstring for prep_display()
-    Prepares a predicted image for use elsewhere. 
-    '''
+        Docstring for prep_display()
+        Prepares a predicted image for use elsewhere. 
+        '''
         with torch.no_grad():
             h, w, _ = img.shape
             tensor = output_utils.postprocess(dets_out, w, h, visualize_lincomb = False, crop_masks = True, score_threshold = thresh)
@@ -99,9 +100,7 @@ class YOLACT(object):
         self.batch = FastBaseTransform()(self.frame.unsqueeze(0))
         self.preds = self.model(self.batch)
         self.classes, self.scores, self.bboxes, self.masks = self.prep_prediction(self.preds, self.frame, None, None, self.threshold)
-        #TODO 
+        #TODO (06/12/21)
         #Add a method to merge np.ndarrays of similar class, relabeling the pixel value to a new integer
         #Update to return merged pixelwise map.   
         return self.classes, self.scores, self.bboxes, self.masks
-
-    

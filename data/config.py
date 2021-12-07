@@ -421,7 +421,7 @@ coco_base_config = Config({
     'max_iter': 400000,
 
     # The maximum number of detections for evaluation
-    'max_num_detections': 100,
+    'max_num_detections': 100, # Change this, Ajay
 
     # dw' = momentum * dw - lr * (grad + decay * w)
     'lr': 1e-3,
@@ -456,7 +456,7 @@ coco_base_config = Config({
     # See mask_type for details.
     'mask_type': mask_type.direct,
     'mask_size': 16,
-    'masks_to_train': 100,
+    'masks_to_train': 100, # Change this, Ajay 
     'mask_proto_src': None,
     'mask_proto_net': [(256, 3, {}), (256, 3, {})],
     'mask_proto_bias': False,
