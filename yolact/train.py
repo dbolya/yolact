@@ -27,7 +27,7 @@ import argparse
 import datetime
 
 # Oof
-import eval as eval_script
+import yolact.eval as eval_script
 
 
 def str2bool(v):
