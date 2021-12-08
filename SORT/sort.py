@@ -40,7 +40,7 @@ def linear_assignment(cost_matrix):
     return np.array([[y[i],i] for i in x if i >= 0]) #
   except ImportError:
     from scipy.optimize import linear_sum_assignment
-    x, y = linear_sum_assignment(cost_matrix)
+    x, y = linear_sum_assignment(cost_matrix) # Linear Sum assignment parameters  ... LOOK HERE. 
     return np.array(list(zip(x, y)))
 
 
