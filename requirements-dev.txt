@@ -1,5 +1,8 @@
 -r requirements.txt
+scikit-learn
+scipy
 check-manifest
 twine
 black
 pylint
+wheel
