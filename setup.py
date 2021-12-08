@@ -1,6 +1,9 @@
 import os
 from setuptools import setup, find_packages
 
+from Cython.Build import cythonize
+import numpy as np
+
 from yolact import __version__
 
 
@@ -15,15 +18,15 @@ requirements = req + ["setuptools"]
 
 
 setup(
-    name='yolact',
+    name="yolact",
     version=__version__,
     author="Psycle Research",
     description="Fork of yolact",
     url="https://github.com/PsycleResearch/yolact",
     packages=find_packages(exclude=["tests"]),
     install_requires=requirements,
-    extras_require={
-        'dev': dev_req
-    },
-    python_requires=">=3.6"
+    ext_modules=cythonize(["yolact/**/*.pyx"], include_path=[np.get_include()]),
+    include_dirs=[np.get_include()],
+    extras_require={"dev": dev_req},
+    python_requires=">=3.6",
 )
