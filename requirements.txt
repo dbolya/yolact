@@ -1,0 +1,6 @@
+Cython
+opencv-python==4.4.0.42
+matplotlib==3.3.1
+numpy==1.19.1
+pycocotools==2.0.2
+torch>=1.8

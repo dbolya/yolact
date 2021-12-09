@@ -4,7 +4,7 @@ PIP = env/bin/pip
 PYTHON = env/bin/python
 VIRTUALENV = $(PYENV_ROOT)/versions/$(PYTHON_VERSION)/bin/virtualenv
 
-VERSION = $(shell sed -rn 's/^__version__\s*=\s*"(.+)"/\1/p' yolact/__init__.py)
+VERSION := $(shell sed -rn 's/^__version__\s*=\s*"(.+)"/\1/p' yolact/__init__.py)
 
 env:
 	pyenv install -s $(PYTHON_VERSION)  # make sure expected python version is available
