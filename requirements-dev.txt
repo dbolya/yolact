@@ -6,3 +6,4 @@ twine
 black
 pylint
 wheel
+h5py
