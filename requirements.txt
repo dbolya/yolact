@@ -1,6 +1,6 @@
-Cython
+Cython==0.29.25
 # opencv-python==4.4.0.42 # Only for x86
-matplotlib==3.3.1
-numpy==1.19.1
+matplotlib==3.5.1
+numpy==1.21.4
 pycocotools==2.0.2
 torch>=1.8
