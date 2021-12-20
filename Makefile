@@ -37,7 +37,7 @@ test:
 
 dist: clean
 	#check-manifest
-	$(PYTHON) setup.py sdist bdist_wheel
+	$(PYTHON) setup.py bdist_wheel
 	ls -l dist
 	env/bin/twine check dist/*
 

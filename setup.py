@@ -28,5 +28,6 @@ setup(
     ext_modules=cythonize(["yolact/**/*.pyx"], include_path=[np.get_include()]),
     include_dirs=[np.get_include()],
     extras_require={"dev": dev_req},
+    package_data={"yolact": ["**/*.pyx"]},
     python_requires=">=3.6",
 )
