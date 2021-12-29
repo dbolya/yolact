@@ -1,33 +1,29 @@
-from yolact.data import COCODetection, get_label_map, MEANS, COLORS
-from yolact.yolact import Yolact
-from yolact.utils.augmentations import BaseTransform, FastBaseTransform, Resize
-from yolact.utils.functions import MovingAverage, ProgressBar
-from yolact.layers.box_utils import jaccard, center_size, mask_iou
-from yolact.utils import timer
-from yolact.utils.functions import SavePath
-from yolact.layers.output_utils import postprocess, undo_image_transformation
-import pycocotools
+import argparse
+import json
+import os
+import pickle
+import random
+import time
+from collections import OrderedDict
+from collections import defaultdict
+from pathlib import Path
 
-from yolact.data import cfg, set_cfg, set_dataset
-
+import cv2
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.backends.cudnn as cudnn
 from torch.autograd import Variable
-import argparse
-import time
-import random
-import cProfile
-import pickle
-import json
-import os
-from collections import defaultdict
-from pathlib import Path
-from collections import OrderedDict
-from PIL import Image
 
-import matplotlib.pyplot as plt
-import cv2
+from yolact.data import COCODetection, get_label_map, COLORS
+from yolact.data import cfg, set_cfg, set_dataset
+from yolact.layers.box_utils import jaccard, mask_iou
+from yolact.layers.output_utils import postprocess, undo_image_transformation
+from yolact.utils import timer
+from yolact.utils.augmentations import BaseTransform, FastBaseTransform
+from yolact.utils.functions import MovingAverage, ProgressBar
+from yolact.utils.functions import SavePath
+from yolact.yolact import Yolact
 
 
 def str2bool(v):
@@ -71,18 +67,12 @@ def parse_args(argv=None):
                         help='If display not set, this resumes mAP calculations from the ap_data_file.')
     parser.add_argument('--max_images', default=-1, type=int,
                         help='The maximum number of images from the dataset to consider. Use -1 for all.')
-    parser.add_argument('--output_coco_json', dest='output_coco_json', action='store_true',
-                        help='If display is not set, instead of processing IoU values, this just dumps detections into the coco json file.')
     parser.add_argument('--bbox_det_file', default='results/bbox_detections.json', type=str,
                         help='The output file for coco bbox results if --coco_results is set.')
     parser.add_argument('--mask_det_file', default='results/mask_detections.json', type=str,
                         help='The output file for coco mask results if --coco_results is set.')
     parser.add_argument('--config', default=None,
                         help='The config object to use.')
-    parser.add_argument('--output_web_json', dest='output_web_json', action='store_true',
-                        help='If display is not set, instead of processing IoU values, this dumps detections for usage with the detections viewer web thingy.')
-    parser.add_argument('--web_det_path', default='web/dets/', type=str,
-                        help='If output_web_json is set, this is the path to dump detections into.')
     parser.add_argument('--no_bar', dest='no_bar', action='store_true',
                         help='Do not output the status bar. This is useful for when piping to a file.')
     parser.add_argument('--display_lincomb', default=False, type=str2bool,
@@ -116,7 +106,7 @@ def parse_args(argv=None):
     parser.add_argument('--emulate_playback', default=False, dest='emulate_playback', action='store_true',
                         help='When saving a video, emulate the framerate that you\'d get running in real-time mode.')
 
-    parser.set_defaults(no_bar=False, display=False, resume=False, output_coco_json=False, output_web_json=False,
+    parser.set_defaults(no_bar=False, display=False, resume=False,
                         shuffle=False,
                         benchmark=False, no_sort=False, no_hash=False, mask_proto_debug=False, crop=True, detect=False,
                         display_fps=False,
@@ -124,9 +114,6 @@ def parse_args(argv=None):
 
     global args
     args = parser.parse_args(argv)
-
-    if args.output_web_json:
-        args.output_coco_json = True
 
     if args.seed is not None:
         random.seed(args.seed)
@@ -389,19 +376,18 @@ def _bbox_iou(bbox1, bbox2, iscrowd=False):
 
 def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, num_crowd, image_id, detections: Detections = None):
     """ Returns a list of APs for this image, with each element being for a class  """
-    if not args.output_coco_json:
-        with timer.env('Prepare gt'):
-            gt_boxes = torch.Tensor(gt[:, :4])
-            gt_boxes[:, [0, 2]] *= w
-            gt_boxes[:, [1, 3]] *= h
-            gt_classes = list(gt[:, 4].astype(int))
-            gt_masks = torch.Tensor(gt_masks).view(-1, h * w)
+    with timer.env('Prepare gt'):
+        gt_boxes = torch.Tensor(gt[:, :4])
+        gt_boxes[:, [0, 2]] *= w
+        gt_boxes[:, [1, 3]] *= h
+        gt_classes = list(gt[:, 4].astype(int))
+        gt_masks = torch.Tensor(gt_masks).view(-1, h * w)
 
-            if num_crowd > 0:
-                split = lambda x: (x[-num_crowd:], x[:-num_crowd])
-                crowd_boxes, gt_boxes = split(gt_boxes)
-                crowd_masks, gt_masks = split(gt_masks)
-                crowd_classes, gt_classes = split(gt_classes)
+        if num_crowd > 0:
+            split = lambda x: (x[-num_crowd:], x[:-num_crowd])
+            crowd_boxes, gt_boxes = split(gt_boxes)
+            crowd_masks, gt_masks = split(gt_masks)
+            crowd_classes, gt_classes = split(gt_classes)
 
     with timer.env('Postprocess'):
         classes, scores, boxes, masks = postprocess(dets, w, h, crop_masks=args.crop,
@@ -421,16 +407,6 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, num_crowd, image_id, de
         masks = masks.view(-1, h * w).cuda()
         boxes = boxes.cuda()
 
-    if args.output_coco_json:
-        with timer.env('JSON Output'):
-            boxes = boxes.cpu().numpy()
-            masks = masks.view(-1, h, w).cpu().numpy()
-            for i in range(masks.shape[0]):
-                # Make sure that the bounding box actually makes sense and a mask was produced
-                if (boxes[i, 3] - boxes[i, 1]) * (boxes[i, 2] - boxes[i, 0]) > 0:
-                    detections.add_bbox(image_id, classes[i], boxes[i, :], box_scores[i])
-                    detections.add_mask(image_id, classes[i], masks[i, :, :], mask_scores[i])
-            return
 
     with timer.env('Eval Setup'):
         num_pred = len(classes)
@@ -993,19 +969,12 @@ def evaluate(net: Yolact, dataset, train_mode=False):
 
         if not args.display and not args.benchmark:
             print()
-            if args.output_coco_json:
-                print('Dumping detections...')
-                if args.output_web_json:
-                    detections.dump_web()
-                else:
-                    detections.dump()
-            else:
-                if not train_mode:
-                    print('Saving data...')
-                    with open(args.ap_data_file, 'wb') as f:
-                        pickle.dump(ap_data, f)
+            if not train_mode:
+                print('Saving data...')
+                with open(args.ap_data_file, 'wb') as f:
+                    pickle.dump(ap_data, f)
 
-                return calc_map(ap_data)
+            return calc_map(ap_data)
         elif args.benchmark:
             print()
             print()
