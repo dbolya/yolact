@@ -1,14 +1,13 @@
-import os
 import os.path as osp
-import sys
-import torch
-import torch.utils.data as data
-import torch.nn.functional as F
+import random
+
 import cv2
 import numpy as np
+import torch
+import torch.nn.functional as F
+import torch.utils.data as data
+
 from .config import cfg
-from pycocotools import mask as maskUtils
-import random
 
 
 def get_label_map():

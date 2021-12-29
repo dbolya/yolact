@@ -24,7 +24,7 @@ if __name__ == '__main__':
     st.title('Test weights file on image')
     weights_path = st.text_input("Weights file path")
     upload_image = st.file_uploader("Image")
-    confidence = st.slider('Confidence threshold', 0, 100, 1)
+    confidence = st.slider('Confidence threshold', 0, 100, 50)
     if st.button('Go') and weights_path and upload_image and confidence:
         # Image
         im = cv2.imdecode(np.asarray(bytearray(upload_image.read()), dtype=np.uint8), 1)
