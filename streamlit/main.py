@@ -9,9 +9,9 @@ def infer_segmentation(weights_path: str, im: np.ndarray, confidence: float):
         weights=weights_path,
         preprocessing_file_path=None,
         conf_thresh=confidence,
-        classes={'0': {'name': 'zero', 'color': [255, 0, 0]},
-                 '1': {'name': 'un', 'color': [0, 255, 0]},
-                 '2': {'name': 'deux', 'color': [0, 0, 255]}},
+        labels={'0': {'name': 'zero', 'color': [255, 0, 0]},
+                '1': {'name': 'un', 'color': [0, 255, 0]},
+                '2': {'name': 'deux', 'color': [0, 0, 255]}},
     )
     out = model.infer(im)
     im_out = model.draw(im, out, print_confidence=True, draw_center=True, with_rectangle=True)
@@ -30,4 +30,3 @@ if __name__ == '__main__':
         im = cv2.imdecode(np.asarray(bytearray(upload_image.read()), dtype=np.uint8), 1)
         im_out = infer_segmentation(weights_path, im, confidence / 100.)
         st.image(im_out, channels='BGR')
-
