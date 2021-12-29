@@ -9,7 +9,6 @@ from collections import defaultdict
 from pathlib import Path
 
 import cv2
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.backends.cudnn as cudnn
@@ -57,8 +56,6 @@ def parse_args(argv=None):
                         help='Whether or not to display text (class [score])')
     parser.add_argument('--display_scores', default=True, type=str2bool,
                         help='Whether or not to display scores in addition to classes')
-    parser.add_argument('--display', dest='display', action='store_true',
-                        help='Display qualitative results instead of quantitative ones.')
     parser.add_argument('--shuffle', dest='shuffle', action='store_true',
                         help='Shuffles the images when displaying them. Doesn\'t have much of an effect when display is off though.')
     parser.add_argument('--ap_data_file', default='results/ap_data.pkl', type=str,
@@ -106,7 +103,7 @@ def parse_args(argv=None):
     parser.add_argument('--emulate_playback', default=False, dest='emulate_playback', action='store_true',
                         help='When saving a video, emulate the framerate that you\'d get running in real-time mode.')
 
-    parser.set_defaults(no_bar=False, display=False, resume=False,
+    parser.set_defaults(no_bar=False, resume=False,
                         shuffle=False,
                         benchmark=False, no_sort=False, no_hash=False, mask_proto_debug=False, crop=True, detect=False,
                         display_fps=False,
@@ -305,18 +302,6 @@ class Detections:
             'image_id': int(image_id),
             'category_id': get_coco_cat(int(category_id)),
             'bbox': bbox,
-            'score': float(score)
-        })
-
-    def add_mask(self, image_id: int, category_id: int, segmentation: np.ndarray, score: float):
-        """ The segmentation should be the full mask, the size of the image and with size [h, w]. """
-        rle = pycocotools.mask.encode(np.asfortranarray(segmentation.astype(np.uint8)))
-        rle['counts'] = rle['counts'].decode('ascii')  # json.dump doesn't like bytes strings
-
-        self.mask_data.append({
-            'image_id': int(image_id),
-            'category_id': get_coco_cat(int(category_id)),
-            'segmentation': rle,
             'score': float(score)
         })
 
@@ -586,12 +571,7 @@ def evalimage(net: Yolact, path: str, save_path: str = None):
     if save_path is None:
         img_numpy = img_numpy[:, :, (2, 1, 0)]
 
-    if save_path is None:
-        plt.imshow(img_numpy)
-        plt.title(path)
-        plt.show()
-    else:
-        cv2.imwrite(save_path, img_numpy)
+    cv2.imwrite(save_path, img_numpy)
 
 
 def evalimages(net: Yolact, input_folder: str, output_folder: str):
@@ -889,7 +869,7 @@ def evaluate(net: Yolact, dataset, train_mode=False):
 
     print()
 
-    if not args.display and not args.benchmark:
+    if not args.benchmark:
         # For each class and iou, stores tuples (score, isPositive)
         # Index ap_data[type][iouIdx][classIdx]
         ap_data = {
@@ -939,9 +919,7 @@ def evaluate(net: Yolact, dataset, train_mode=False):
             with timer.env('Network Extra'):
                 preds = net(batch)
             # Perform the meat of the operation here depending on our mode.
-            if args.display:
-                img_numpy = prep_display(preds, img, h, w)
-            elif args.benchmark:
+            if args.benchmark:
                 prep_benchmark(preds, h, w)
             else:
                 prep_metrics(ap_data, preds, img, gt, gt_masks, h, w, num_crowd, dataset.ids[image_idx], detections)
@@ -951,13 +929,7 @@ def evaluate(net: Yolact, dataset, train_mode=False):
             if it > 1:
                 frame_times.add(timer.total_time())
 
-            if args.display:
-                if it > 1:
-                    print('Avg FPS: %.4f' % (1 / frame_times.get_avg()))
-                plt.imshow(img_numpy)
-                plt.title(str(dataset.ids[image_idx]))
-                plt.show()
-            elif not args.no_bar:
+            if not args.no_bar:
                 if it > 1:
                     fps = 1 / frame_times.get_avg()
                 else:
@@ -967,7 +939,7 @@ def evaluate(net: Yolact, dataset, train_mode=False):
                 print('\rProcessing Images  %s %6d / %6d (%5.2f%%)    %5.2f fps        '
                       % (repr(progress_bar), it + 1, dataset_size, progress, fps), end='')
 
-        if not args.display and not args.benchmark:
+        if not args.benchmark:
             print()
             if not train_mode:
                 print('Saving data...')
@@ -1064,7 +1036,7 @@ if __name__ == '__main__':
         else:
             torch.set_default_tensor_type('torch.FloatTensor')
 
-        if args.resume and not args.display:
+        if args.resume:
             with open(args.ap_data_file, 'rb') as f:
                 ap_data = pickle.load(f)
             calc_map(ap_data)
