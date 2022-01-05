@@ -20,14 +20,6 @@ In order to use YOLACT++, make sure you compile the DCNv2 code. (See [Installati
 #### For a real-time demo, check out our ICCV video:
 [![IMAGE ALT TEXT HERE](https://img.youtube.com/vi/0pMfmo8qfpQ/0.jpg)](https://www.youtube.com/watch?v=0pMfmo8qfpQ)
 
-Some examples from our YOLACT base model (33.5 fps on a Titan Xp and 29.8 mAP on COCO's `test-dev`):
-
-![Example 0](data/yolact_example_0.png)
-
-![Example 1](data/yolact_example_1.png)
-
-![Example 2](data/yolact_example_2.png)
-
 # Installation
  - Clone this repository and enter it:
    ```Shell

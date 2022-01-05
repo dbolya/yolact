@@ -128,6 +128,7 @@ dataset_base = Config({
     'label_map': None
 })
 
+
 coco2014_dataset = dataset_base.copy({
     'name': 'COCO 2014',
     
@@ -172,9 +173,19 @@ pascal_sbd_dataset = dataset_base.copy({
     'class_names': PASCAL_CLASSES,
 })
 
+SLIP_FALL_CLASSES = ("Person")
 
+slip_fall_dataset = dataset_base.copy({
+    'name': 'Slip and Fall',
+    'train_images': '../datasets/slip-fall/slip-fall-training/',
+    'valid_images': '../datasets/slip-fall/slip-fall-training/',
 
+    'train_info': '../datasets/slip-fall/slip-fall-training/slip-fall-annotations_train.json',
+    'valid_info': '../datasets/slip-fall/slip-fall-training/slip-fall-annotations_val.json',
 
+    'class_names': SLIP_FALL_CLASSES,
+    'label_map': {1: 1}
+})
 
 # ----------------------- TRANSFORMS ----------------------- #
 

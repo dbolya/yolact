@@ -1,0 +1,1 @@
+python3 train.py --save_folder weights/slip-fall/ --log_folder logs/slip-fall/ --config yolact_resnet50_config --resume weights/yolact_resnet50_54_800000.pth --only_last_layer --validation_size 100 --save_interval 50 --start_iter 0 --batch_size 8 --lr 1e-5 --momentum 0.9 --decay 5e-4 --gamma 0.1 --dataset slip_fall_dataset

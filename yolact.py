@@ -396,9 +396,10 @@ class Yolact(nn.Module):
         - pred_aspect_ratios: A list of lists of aspect ratios with len(selected_layers) (see PredictionModule)
     """
 
-    def __init__(self):
+    def __init__(self, only_last_layer=False):
         super().__init__()
 
+        self.only_last_layer = only_last_layer
         self.backbone = construct_backbone(cfg.backbone)
 
         if cfg.freeze_bn:
@@ -625,7 +626,10 @@ class Yolact(nn.Module):
                 if cfg.share_prediction_module and pred_layer is not self.prediction_layers[0]:
                     pred_layer.parent = [self.prediction_layers[0]]
 
-                p = pred_layer(pred_x)
+                if self.only_last_layer:
+                    p = pred_layer(pred_x.detach())
+                else:
+                    p = pred_layer(pred_x)
                 
                 for k, v in p.items():
                     pred_outs[k].append(v)

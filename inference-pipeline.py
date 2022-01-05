@@ -179,29 +179,33 @@ def detect_fall(path, video_output = False):
     else:
         return fall_ids
 
-# confidence_list = [0.1, 0.15, 0.20, 0.25, 0.3, 0.35, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
-# pathlist = sorted(glob.glob('../datasets/slip-fall/fall-database/*.mp4'))
-# for confidence_value in confidence_list:
-#     for path in pathlist:
-#         with warnings.catch_warnings():
-#             warnings.simplefilter("ignore")
-#             model = DetectorLoader.YOLACT('./weights/yolact_resnet50_54_800000.pth', threshold = confidence_value)
-#         path_out = os.path.basename(path)
-#         final_frames, fall_ids = detect_fall(path, video_output = True)
-#         fourcc = cv2.VideoWriter_fourcc(*'MP4V')
-#         converted_confidence_value = str(confidence_value).replace('.', '-')
-#         if not os.path.exists("./results/slip-videos/{}-confidence-threshold/".format(converted_confidence_value)):
-#             os.makedirs("./results/slip-videos/{}-confidence-threshold/".format(converted_confidence_value))
-#         writer = cv2.VideoWriter("./results/slip-videos/{}-confidence-threshold/{}".format(converted_confidence_value, path_out), 0x7634706d, 5.0, max([x.shape for x in final_frames])[:-1][::-1])
-#         for capture in final_frames:
-#             out_capture = (capture * 255).astype(np.uint8)
-#             writer.write(out_capture)
-#         writer.release()
-#         if not os.path.exists("./results/charts/slip-videos/{}-confidence-threshold/".format(converted_confidence_value)):
-#             os.makedirs("./results/charts/slip-videos/{}-confidence-threshold/".format(converted_confidence_value))
-#         fall_ids.to_csv('./results/charts/slip-videos/{}-confidence-threshold/{}.csv'.format(converted_confidence_value, os.path.splitext(path_out)[0]))
+confidence_list = [0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09]
+pathlist = sorted(glob.glob('../datasets/slip-fall/fall-database/*.mp4'))
+for confidence_value in confidence_list:
+    for path in pathlist:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            model = DetectorLoader.YOLACT('./weights/yolact_resnet50_54_800000.pth', threshold = confidence_value)
+        path_out = os.path.basename(path)
+        final_frames, fall_ids = detect_fall(path, video_output = True)
+        fourcc = cv2.VideoWriter_fourcc(*'MP4V')
+        converted_confidence_value = str(confidence_value).replace('.', '-')
+        if not os.path.exists("./results/slip-videos/{}-confidence-threshold/".format(converted_confidence_value)):
+            os.makedirs("./results/slip-videos/{}-confidence-threshold/".format(converted_confidence_value))
+        writer = cv2.VideoWriter("./results/slip-videos/{}-confidence-threshold/{}".format(converted_confidence_value, path_out), 0x7634706d, 5.0, max([x.shape for x in final_frames])[:-1][::-1])
+        for capture in final_frames:
+            out_capture = (capture * 255).astype(np.uint8)
+            writer.write(out_capture)
+        writer.release()
+        if not os.path.exists("./results/charts/slip-videos/{}-confidence-threshold/".format(converted_confidence_value)):
+            os.makedirs("./results/charts/slip-videos/{}-confidence-threshold/".format(converted_confidence_value))
+        fall_ids.to_csv('./results/charts/slip-videos/{}-confidence-threshold/{}.csv'.format(converted_confidence_value, os.path.splitext(path_out)[0]))
 
-confidence_list = [0.20, 0.25, 0.3, 0.35, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+        vars = ['final_frames', 'fall_ids', 'model']
+        for v in vars:
+            del v
+
+confidence_list = [0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09]
 pathlist = sorted(glob.glob('../datasets/slip-fall/no-fall-database/*.mp4'))
 for confidence_value in confidence_list:
     for path in pathlist:
