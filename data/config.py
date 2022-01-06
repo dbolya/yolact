@@ -183,8 +183,8 @@ slip_fall_dataset = dataset_base.copy({
     'train_info': '../datasets/slip-fall/slip-fall-training/slip-fall-annotations_train.json',
     'valid_info': '../datasets/slip-fall/slip-fall-training/slip-fall-annotations_val.json',
 
-    'class_names': SLIP_FALL_CLASSES,
-    'label_map': {1: 1}
+    'class_names': COCO_CLASSES,
+    'label_map': COCO_LABEL_MAP,
 })
 
 # ----------------------- TRANSFORMS ----------------------- #

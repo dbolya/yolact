@@ -22,6 +22,7 @@ import argparse
 import datetime
 import eval as eval_script
 import wandb
+import json
 
 wandb.init(project = 'YOLACT Slip and Fall')
 
@@ -261,8 +262,7 @@ def train():
     global loss_types # Forms the print order
     loss_avgs  = { k: MovingAverage(100) for k in loss_types }
 
-    print('Begin training!')
-    print()
+    print('Begin training with {} labelled images!'.format(len(dataset)))
     # try-except so you can use ctrl+c to save early and stop training
     try:
         for epoch in range(num_epochs):
@@ -345,8 +345,6 @@ def train():
                     wandb.log({"Class Confidence Loss train": loss_labels[3]})
                     wandb.log({"Class Existence  Loss train": loss_labels[5]})
                     wandb.log({"Orientation Loss train": loss_labels[7]})
-                    wandb.log({"Dimension Loss train": loss_labels[9]})
-                    wandb.log({"Road Semantic Segmentation Loss": loss_labels[11]})
 
                 if args.log:
                     precision = 5
@@ -503,42 +501,19 @@ def compute_validation_loss(net, data_loader, criterion):
         except Exception as e:
             print(e)
 
-# def compute_validation_map(epoch, iteration, yolact_net, dataset, log:Log=None):
-#     with torch.no_grad():
-#         yolact_net.eval()
-        
-#         start = time.time()
-#         print()
-#         print("Computing validation mAP (this may take a while)...", flush=True)
-#         val_info = eval_script.evaluate(yolact_net, dataset, train_mode=True)
-#         end = time.time()
-
-#         if log is not None:
-#             log.log('val', val_info, elapsed=(end - start), epoch=epoch, iter=iteration)
-
-#         yolact_net.train()
-
-def compute_validation_map(yolact_net, dataset):
+def compute_validation_map(epoch, iteration, yolact_net, dataset, log:Log=None):
     with torch.no_grad():
         yolact_net.eval()
+        
+        start = time.time()
         print()
-        print("Computing validation mAP (this may take a while)...", flush=True)
-        all_maps, accuracyOrient, accuracyDim = eval_script.evaluate(yolact_net, dataset, train_mode=True)
+        print("Computing validation mAP on {} images.".format(len(dataset)), flush=True)
+        val_info = eval_script.evaluate(yolact_net, dataset, train_mode=True)
+        end = time.time()
 
-        for class_name in cfg.dataset.class_names:
-            wandb.log({"mAP all "+class_name: all_maps['box'][cfg.dataset.class_names.index(class_name)]['all']})
-            wandb.log({"mAP .50 "+class_name: all_maps['box'][cfg.dataset.class_names.index(class_name)][50]})
-            wandb.log({"mAP .55 "+class_name: all_maps['box'][cfg.dataset.class_names.index(class_name)][55]})
-            wandb.log({"mAP .60 "+class_name: all_maps['box'][cfg.dataset.class_names.index(class_name)][60]})
-            wandb.log({"mAP .65 "+class_name: all_maps['box'][cfg.dataset.class_names.index(class_name)][65]})
-            wandb.log({"mAP .70 "+class_name: all_maps['box'][cfg.dataset.class_names.index(class_name)][70]})
-            wandb.log({"mAP .75 "+class_name: all_maps['box'][cfg.dataset.class_names.index(class_name)][75]})
-            wandb.log({"mAP .80 "+class_name: all_maps['box'][cfg.dataset.class_names.index(class_name)][80]})
-            wandb.log({"mAP .85 "+class_name: all_maps['box'][cfg.dataset.class_names.index(class_name)][85]})
-            wandb.log({"mAP .90 "+class_name: all_maps['box'][cfg.dataset.class_names.index(class_name)][90]})
-            wandb.log({"mAP .95 "+class_name: all_maps['box'][cfg.dataset.class_names.index(class_name)][95]})
-        wandb.log({"Accuracy orientation": accuracyOrient})
-        wandb.log({"Accuracy 3d dimensions": accuracyDim})
+        if log is not None:
+            log.log('val', val_info, elapsed=(end - start), epoch=epoch, iter=iteration)
+
         yolact_net.train()
 
 def setup_eval():

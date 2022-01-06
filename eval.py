@@ -25,6 +25,7 @@ from collections import defaultdict
 from pathlib import Path
 from collections import OrderedDict
 from PIL import Image
+import wandb
 
 import matplotlib.pyplot as plt
 import cv2
@@ -386,7 +387,7 @@ def _bbox_iou(bbox1, bbox2, iscrowd=False):
 def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, num_crowd, image_id, detections:Detections=None):
     """ Returns a list of APs for this image, with each element being for a class  """
     if not args.output_coco_json:
-        with timer.env('Prepare gt'):
+        with timer.env('Prepare GT'):
             gt_boxes = torch.Tensor(gt[:, :4])
             gt_boxes[:, [0, 2]] *= w
             gt_boxes[:, [1, 3]] *= h
@@ -1036,6 +1037,7 @@ def print_maps(all_maps):
     make_row = lambda vals: (' %5s |' * len(vals)) % tuple(vals)
     make_sep = lambda n:  ('-------+' * n)
 
+    wandb.log(all_maps)
     print()
     print(make_row([''] + [('.%d ' % x if isinstance(x, int) else x + ' ') for x in all_maps['box'].keys()]))
     print(make_sep(len(all_maps['box']) + 1))
@@ -1043,8 +1045,6 @@ def print_maps(all_maps):
         print(make_row([iou_type] + ['%.2f' % x if x < 100 else '%.1f' % x for x in all_maps[iou_type].values()]))
     print(make_sep(len(all_maps['box']) + 1))
     print()
-
-
 
 if __name__ == '__main__':
     parse_args()
