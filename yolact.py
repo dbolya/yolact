@@ -329,7 +329,7 @@ class FPN(ScriptModuleWrapper):
 
             if j < len(convouts) - 1:
                 _, _, h, w = convouts[j].size()
-                x = F.interpolate(x, size=(h, w), mode=self.interpolation_mode, align_corners=False)
+                x = F.interpolate(x, size=(h, w), mode=self.interpolation_mode)
             
             x = x + lat_layer(convouts[j])
             out[j] = x

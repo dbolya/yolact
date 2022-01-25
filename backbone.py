@@ -1,6 +1,9 @@
 import torch
 import torch.nn as nn
 import pickle
+import math
+from pycls.models.regnet import RegNet
+from pycls.core.config import _C
 
 from collections import OrderedDict
 
@@ -442,8 +445,58 @@ class VGGBackbone(nn.Module):
         self.in_channels = conv_channels*2
         self.channels.append(self.in_channels)
         self.layers.append(layer)
-        
-                
+
+
+
+
+
+
+class RegNetxBackbone(RegNet):
+    def __init__(self, extra_args=[]):
+        yaml_cfg = extra_args
+        _C.merge_from_file(yaml_cfg)
+        super(RegNetxBackbone, self).__init__()
+        if "1.6GF" in yaml_cfg:
+            self.channels = [72, 168, 408, 912]
+        elif "800MF" in yaml_cfg:
+            self.channels = [64, 128, 288, 672]
+        elif "600MF" in yaml_cfg:
+            self.channels = [48, 96, 240, 528]
+        self.lrs = [2, 2, 2, 2]
+        self.channels_per_layers = [[ci] * li for (ci, li) in zip(self.channels, self.lrs)]
+        self.backbone_modules = [m for m in self.modules() if isinstance(m, nn.Conv2d)]
+        self.children_blocks =  [i for i in self.children()]
+        self.layers = self.children_blocks[1:-1]
+
+    def init_backbone(self, path):
+        state_dict = torch.load(path)
+        self.load_state_dict(state_dict['model_state'])
+
+    def forward(self, x):
+        x = self.stem(x)
+        outs = []
+        for layer in self.layers:
+            x = layer(x)
+            outs.append(x)
+        return tuple(outs)
+
+    def _make_layer(self, i, in_channels):
+        layer_list = []
+        channels_per_stage = self.channels_per_layers[i]
+        stage = nn.Sequential()
+        for j, out_channels in enumerate(channels_per_stage):
+            stride = 2 if (j == 0) and (i != 0) else 1
+            stage.add_module("unit{}".format(j + 1), ResNeXtUnit(in_channels=in_channels, out_channels=out_channels, stride=stride, cardinality=32, bottleneck_width=4))
+            in_channels = out_channels
+        self.layers.append(stage)
+
+    def add_layer(self, conv_channels=1024, downsample=2, depth=1, block=Bottleneck):
+        """ Add a downsample layer to the backbone as per what SSD does. """
+        self._make_layer(block, conv_channels // block.expansion, blocks=depth, stride=downsample)
+
+
+
+
 
 
 def construct_backbone(cfg):
