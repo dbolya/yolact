@@ -43,6 +43,8 @@ COCO_CLASSES = ('person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus',
                 'toaster', 'sink', 'refrigerator', 'book', 'clock', 'vase',
                 'scissors', 'teddy bear', 'hair drier', 'toothbrush')
 
+XXX_CLASSES = ('banana', 'ceiling_fan', 'computer_mouse', 'electric_fan', 'key', 'keyboard', 'laptop', 'microwave', 'monitor', 'pen', 'perfume', 'pillow', 'pizza', 'plate', 'printer', 'sock', 'spoon', 'stove', 'television', 'vase', 'apple', 'bed', 'book', 'bowl', 'car', 'chair', 'couch', 'dog', 'oven', 'refrigerator', 'sink', 'bird', 'bottle', 'cake', 'cat', 'clock', 'cup', 'orange', 'person', 'remote', 'truck', 'suitcase', 'toaster', 'sandwich', 'knife', 'fork', 'carrot', 'broccoli', 'backpack', 'watch', 'wine', 'wallet', 'towel', 'strawberry', 'stapler', 'stool', 'sandal', 'scale', 'packet', 'microphone', 'lamp', 'guitar', 'newspaper', 'purse', 'drawer', 'coin', 'flashdrive', 'landline_phone', 'hat', 'dog_collar', 'painting', 'sticker', 'gift_card', 'envelope', 'food_menu', 'magazine', 'curtain', 'speaker', 'sign', 'cash', 'dial', 'house', 'rug', 'cell_phone', 'cereal_box', 'tube', 'shoe', 'bar', 'calculator', 'receipt', 'piano', 'crockpot', 'vacuum', 'ramen', 'laundry_machine', 'bracelet', 'ring', 'album', 'sweatshirt', 'ipad')
+
 COCO_LABEL_MAP = { 1:  1,  2:  2,  3:  3,  4:  4,  5:  5,  6:  6,  7:  7,  8:  8,
                    9:  9, 10: 10, 11: 11, 13: 12, 14: 13, 15: 14, 16: 15, 17: 16,
                   18: 17, 19: 18, 20: 19, 21: 20, 22: 21, 23: 22, 24: 23, 25: 24,
@@ -54,7 +56,7 @@ COCO_LABEL_MAP = { 1:  1,  2:  2,  3:  3,  4:  4,  5:  5,  6:  6,  7:  7,  8:  8
                   74: 65, 75: 66, 76: 67, 77: 68, 78: 69, 79: 70, 80: 71, 81: 72,
                   82: 73, 84: 74, 85: 75, 86: 76, 87: 77, 88: 78, 89: 79, 90: 80}
 
-
+XXX_LABEL_MAP = {0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 9, 10: 10, 11: 11, 12: 12, 13: 13, 14: 14, 15: 15, 16: 16, 17: 17, 18: 18, 19: 19, 20: 20, 21: 21, 22: 22, 23: 23, 24: 24, 25: 25, 26: 26, 27: 27, 28: 28, 29: 29, 30: 30, 31: 31, 32: 32, 33: 33, 34: 34, 35: 35, 36: 36, 37: 37, 38: 38, 39: 39, 40: 40, 41: 41, 42: 42, 43: 43, 44: 44, 45: 45, 46: 46, 47: 47, 48: 48, 49: 49, 50: 50, 51: 51, 52: 52, 53: 53, 54: 54, 55: 55, 56: 56, 57: 57, 58: 58, 59: 59, 60: 60, 61: 61, 62: 62, 63: 63, 64: 64, 65: 65, 66: 66, 67: 67, 68: 68, 69: 69, 70: 70, 71: 71, 72: 72, 73: 73, 74: 74, 75: 75, 76: 76, 77: 77, 78: 78, 79: 79, 80: 80, 81: 81, 82: 82, 83: 83, 84: 84, 85: 85, 86: 86, 87: 87, 88: 88, 89: 89, 90: 90, 91: 91, 92: 92, 93: 93, 94: 94, 95: 95, 96: 96, 97: 97, 98: 98, 99: 99, 100:100}
 
 # ----------------------- CONFIG CLASS ----------------------- #
 
@@ -62,7 +64,6 @@ class Config(object):
     """
     Holds the configuration for anything you want it to.
     To get the currently active config, call get_cfg().
-
     To use, just do cfg.x instead of cfg['x'].
     I made this because doing cfg['x'] all the time is dumb.
     """
@@ -153,6 +154,266 @@ coco2017_testdev_dataset = dataset_base.copy({
     'has_gt': False,
 
     'label_map': COCO_LABEL_MAP
+})
+
+# --------------------------------------
+# XXX Dataset, Base classes for training
+# --------------------------------------
+
+xxx_dataset_fold_0_base = dataset_base.copy({
+    'name': 'XXX BASE F0',
+    'train_images': './data/xxx/images/',
+    'train_info':   './data/xxx/annotations/annotations_fold_0_base.json',
+    'valid_images': './data/xxx/images/',
+    'valid_info':   './data/xxx/annotations/annotations_fold_0_base.json',
+    'class_names': XXX_CLASSES,
+    'label_map': XXX_LABEL_MAP
+})
+
+xxx_dataset_fold_1_base = dataset_base.copy({
+    'name': 'XXX BASE F1',
+    'train_images': './data/xxx/images/',
+    'train_info':   './data/xxx/annotations/annotations_fold_1_base.json',
+    'valid_images': './data/xxx/images/',
+    'valid_info':   './data/xxx/annotations/annotations_fold_1_base.json',
+    'class_names': XXX_CLASSES,
+    'label_map': XXX_LABEL_MAP
+})
+
+xxx_dataset_fold_2_base = dataset_base.copy({
+    'name': 'XXX BASE F2',
+    'train_images': './data/xxx/images/',
+    'train_info':   './data/xxx/annotations/annotations_fold_2_base.json',
+    'valid_images': './data/xxx/images/',
+    'valid_info':   './data/xxx/annotations/annotations_fold_2_base.json',
+    'class_names': XXX_CLASSES,
+    'label_map': XXX_LABEL_MAP
+})
+
+xxx_dataset_fold_3_base = dataset_base.copy({
+    'name': 'XXX BASE F3',
+    'train_images': './data/xxx/images/',
+    'train_info':   './data/xxx/annotations/annotations_fold_3_base.json',
+    'valid_images': './data/xxx/images/',
+    'valid_info':   './data/xxx/annotations/annotations_fold_3_base.json',
+    'class_names': XXX_CLASSES,
+    'label_map': XXX_LABEL_MAP
+})
+
+# --------------------------------------------------------
+# XXX Dataset, novel classes for fine-tuning (support set)
+# --------------------------------------------------------
+
+# =========== 1 shot ============
+
+xxx_dataset_fold_0_support_1_shot = dataset_base.copy({
+    'name': 'XXX SUPPORT F0 1SHOT',
+    'train_images': './data/xxx/images/',
+    'train_info':   './data/xxx/annotations/annotations_fold_0_support_1_shot.json',
+    'valid_images': './data/xxx/images/',
+    'valid_info':   './data/xxx/annotations/annotations_fold_0_query.json',
+    'class_names': XXX_CLASSES,
+    'label_map': XXX_LABEL_MAP
+})
+
+xxx_dataset_fold_1_support_1_shot = dataset_base.copy({
+    'name': 'XXX SUPPORT F1 1SHOT',
+    'train_images': './data/xxx/images/',
+    'train_info':   './data/xxx/annotations/annotations_fold_1_support_1_shot.json',
+    'valid_images': './data/xxx/images/',
+    'valid_info':   './data/xxx/annotations/annotations_fold_1_query.json',
+    'class_names': XXX_CLASSES,
+    'label_map': XXX_LABEL_MAP
+})
+
+xxx_dataset_fold_2_support_1_shot = dataset_base.copy({
+    'name': 'XXX SUPPORT F2 1SHOT',
+    'train_images': './data/xxx/images/',
+    'train_info':   './data/xxx/annotations/annotations_fold_2_support_1_shot.json',
+    'valid_images': './data/xxx/images/',
+    'valid_info':   './data/xxx/annotations/annotations_fold_2_query.json',
+    'class_names': XXX_CLASSES,
+    'label_map': XXX_LABEL_MAP
+})
+
+xxx_dataset_fold_3_support_1_shot = dataset_base.copy({
+    'name': 'XXX SUPPORT F3 1SHOT',
+    'train_images': './data/xxx/images/',
+    'train_info':   './data/xxx/annotations/annotations_fold_3_support_1_shot.json',
+    'valid_images': './data/xxx/images/',
+    'valid_info':   './data/xxx/annotations/annotations_fold_3_query.json',
+    'class_names': XXX_CLASSES,
+    'label_map': XXX_LABEL_MAP
+})
+
+# =========== 3 shot ============
+
+xxx_dataset_fold_0_support_3_shot = dataset_base.copy({
+    'name': 'XXX SUPPORT F0 3SHOT',
+    'train_images': './data/xxx/images/',
+    'train_info':   './data/xxx/annotations/annotations_fold_0_support_3_shot.json',
+    'valid_images': './data/xxx/images/',
+    'valid_info':   './data/xxx/annotations/annotations_fold_0_support_3_shot.json',
+    'class_names': XXX_CLASSES,
+    'label_map': XXX_LABEL_MAP
+})
+
+xxx_dataset_fold_1_support_3_shot = dataset_base.copy({
+    'name': 'XXX SUPPORT F1 3SHOT',
+    'train_images': './data/xxx/images/',
+    'train_info':   './data/xxx/annotations/annotations_fold_1_support_3_shot.json',
+    'valid_images': './data/xxx/images/',
+    'valid_info':   './data/xxx/annotations/annotations_fold_1_support_3_shot.json',
+    'class_names': XXX_CLASSES,
+    'label_map': XXX_LABEL_MAP
+})
+
+xxx_dataset_fold_2_support_3_shot = dataset_base.copy({
+    'name': 'XXX SUPPORT F2 3SHOT',
+    'train_images': './data/xxx/images/',
+    'train_info':   './data/xxx/annotations/annotations_fold_2_support_3_shot.json',
+    'valid_images': './data/xxx/images/',
+    'valid_info':   './data/xxx/annotations/annotations_fold_2_support_3_shot.json',
+    'class_names': XXX_CLASSES,
+    'label_map': XXX_LABEL_MAP
+})
+
+xxx_dataset_fold_3_support_3_shot = dataset_base.copy({
+    'name': 'XXX SUPPORT F3 3SHOT',
+    'train_images': './data/xxx/images/',
+    'train_info':   './data/xxx/annotations/annotations_fold_3_support_3_shot.json',
+    'valid_images': './data/xxx/images/',
+    'valid_info':   './data/xxx/annotations/annotations_fold_3_support_3_shot.json',
+    'class_names': XXX_CLASSES,
+    'label_map': XXX_LABEL_MAP
+})
+
+# =========== 5 shot ============
+
+xxx_dataset_fold_0_support_5_shot = dataset_base.copy({
+    'name': 'XXX SUPPORT F0 5SHOT',
+    'train_images': './data/xxx/images/',
+    'train_info':   './data/xxx/annotations/annotations_fold_0_support_5_shot.json',
+    'valid_images': './data/xxx/images/',
+    'valid_info':   './data/xxx/annotations/annotations_fold_0_query.json',
+    'class_names': XXX_CLASSES,
+    'label_map': XXX_LABEL_MAP
+})
+
+xxx_dataset_fold_1_support_5_shot = dataset_base.copy({
+    'name': 'XXX SUPPORT F1 5SHOT',
+    'train_images': './data/xxx/images/',
+    'train_info':   './data/xxx/annotations/annotations_fold_1_support_5_shot.json',
+    'valid_images': './data/xxx/images/',
+    'valid_info':   './data/xxx/annotations/annotations_fold_1_query.json',
+    'class_names': XXX_CLASSES,
+    'label_map': XXX_LABEL_MAP
+})
+
+xxx_dataset_fold_2_support_5_shot = dataset_base.copy({
+    'name': 'XXX SUPPORT F2 5SHOT',
+    'train_images': './data/xxx/images/',
+    'train_info':   './data/xxx/annotations/annotations_fold_2_support_5_shot.json',
+    'valid_images': './data/xxx/images/',
+    'valid_info':   './data/xxx/annotations/annotations_fold_2_query.json',
+    'class_names': XXX_CLASSES,
+    'label_map': XXX_LABEL_MAP
+})
+
+xxx_dataset_fold_3_support_5_shot = dataset_base.copy({
+    'name': 'XXX SUPPORT F3 5SHOT',
+    'train_images': './data/xxx/images/',
+    'train_info':   './data/xxx/annotations/annotations_fold_3_support_5_shot.json',
+    'valid_images': './data/xxx/images/',
+    'valid_info':   './data/xxx/annotations/annotations_fold_3_query.json',
+    'class_names': XXX_CLASSES,
+    'label_map': XXX_LABEL_MAP
+})
+
+# =========== 10 shot ============
+
+xxx_dataset_fold_0_support_10_shot = dataset_base.copy({
+    'name': 'XXX SUPPORT F0 10SHOT',
+    'train_images': './data/xxx/images/',
+    'train_info':   './data/xxx/annotations/annotations_fold_0_support_10_shot.json',
+    'valid_images': './data/xxx/images/',
+    'valid_info':   './data/xxx/annotations/annotations_fold_0_support_10_shot.json',
+    'class_names': XXX_CLASSES,
+    'label_map': XXX_LABEL_MAP
+})
+
+xxx_dataset_fold_1_support_10_shot = dataset_base.copy({
+    'name': 'XXX SUPPORT F1 10SHOT',
+    'train_images': './data/xxx/images/',
+    'train_info':   './data/xxx/annotations/annotations_fold_1_support_10_shot.json',
+    'valid_images': './data/xxx/images/',
+    'valid_info':   './data/xxx/annotations/annotations_fold_1_support_10_shot.json',
+    'class_names': XXX_CLASSES,
+    'label_map': XXX_LABEL_MAP
+})
+
+xxx_dataset_fold_2_support_10_shot = dataset_base.copy({
+    'name': 'XXX SUPPORT F2 10SHOT',
+    'train_images': './data/xxx/images/',
+    'train_info':   './data/xxx/annotations/annotations_fold_2_support_10_shot.json',
+    'valid_images': './data/xxx/images/',
+    'valid_info':   './data/xxx/annotations/annotations_fold_2_support_10_shot.json',
+    'class_names': XXX_CLASSES,
+    'label_map': XXX_LABEL_MAP
+})
+
+xxx_dataset_fold_3_support_10_shot = dataset_base.copy({
+    'name': 'XXX SUPPORT F3 10SHOT',
+    'train_images': './data/xxx/images/',
+    'train_info':   './data/xxx/annotations/annotations_fold_3_support_10_shot.json',
+    'valid_images': './data/xxx/images/',
+    'valid_info':   './data/xxx/annotations/annotations_fold_3_support_10_shot.json',
+    'class_names': XXX_CLASSES,
+    'label_map': XXX_LABEL_MAP
+})
+
+# ------------------------------------------------------
+# XXX Dataset, novel classes for inferencing (query set)
+# ------------------------------------------------------
+
+xxx_dataset_fold_0_query = dataset_base.copy({
+    'name': 'XXX QUERY F0',
+    'train_images': './data/xxx/images/',
+    'train_info':   './data/xxx/annotations/annotations_fold_0_query.json',
+    'valid_images': './data/xxx/images/',
+    'valid_info':   './data/xxx/annotations/annotations_fold_0_query.json',
+    'class_names': XXX_CLASSES,
+    'label_map': XXX_LABEL_MAP
+})
+
+xxx_dataset_fold_1_query = dataset_base.copy({
+    'name': 'XXX QUERY F1',
+    'train_images': './data/xxx/images/',
+    'train_info':   './data/xxx/annotations/annotations_fold_1_query.json',
+    'valid_images': './data/xxx/images/',
+    'valid_info':   './data/xxx/annotations/annotations_fold_1_query.json',
+    'class_names': XXX_CLASSES,
+    'label_map': XXX_LABEL_MAP
+})
+
+xxx_dataset_fold_2_query = dataset_base.copy({
+    'name': 'XXX QUERY F2',
+    'train_images': './data/xxx/images/',
+    'train_info':   './data/xxx/annotations/annotations_fold_2_query.json',
+    'valid_images': './data/xxx/images/',
+    'valid_info':   './data/xxx/annotations/annotations_fold_2_query.json',
+    'class_names': XXX_CLASSES,
+    'label_map': XXX_LABEL_MAP
+})
+
+xxx_dataset_fold_3_query = dataset_base.copy({
+    'name': 'XXX QUERY F3',
+    'train_images': './data/xxx/images/',
+    'train_info':   './data/xxx/annotations/annotations_fold_3_query.json',
+    'valid_images': './data/xxx/images/',
+    'valid_info':   './data/xxx/annotations/annotations_fold_3_query.json',
+    'class_names': XXX_CLASSES,
+    'label_map': XXX_LABEL_MAP
 })
 
 PASCAL_CLASSES = ("aeroplane", "bicycle", "bird", "boat", "bottle",
@@ -424,7 +685,7 @@ coco_base_config = Config({
     'max_num_detections': 100,
 
     # dw' = momentum * dw - lr * (grad + decay * w)
-    'lr': 1e-3,
+    'lr':  2e-4,
     'momentum': 0.9,
     'decay': 5e-4,
 
@@ -648,9 +909,6 @@ coco_base_config = Config({
 })
 
 
-
-
-
 # ----------------------- YOLACT v1.0 CONFIGS ----------------------- #
 
 yolact_base_config = coco_base_config.copy({
@@ -702,6 +960,202 @@ yolact_base_config = coco_base_config.copy({
 
     'use_semantic_segmentation_loss': True,
 })
+
+# ---------------------------------------
+# XXX Dataset Config, Base Class Training
+# ---------------------------------------
+
+xxx_train_base_config = yolact_base_config.copy({
+    # Training params
+    'lr_steps': (140000, 240000, 300000, 350000),
+    'max_iter': 400000,
+})
+
+fold_0_base_config_xxx = xxx_train_base_config.copy({
+    'name': 'fold_0_base_train',
+    'dataset': xxx_dataset_fold_0_base,
+    'num_classes': 101,
+})
+
+fold_1_base_config_xxx = xxx_train_base_config.copy({
+    'name': 'fold_1_base_train',
+    'dataset': xxx_dataset_fold_1_base,
+    'num_classes': 101,
+})
+
+fold_2_base_config_xxx = xxx_train_base_config.copy({
+    'name': 'fold_2_base_train',
+    'dataset': xxx_dataset_fold_2_base,
+    'num_classes': 101,
+})
+
+fold_3_base_config_xxx = xxx_train_base_config.copy({
+    'name': 'fold_3_base_train',
+    'dataset': xxx_dataset_fold_3_base,
+    'num_classes': 101,
+})
+
+# -------------------------------------------
+# XXX Dataset Config, Novel Class Fine-Tuning
+# -------------------------------------------
+
+xxx_test_fine_tune_config = yolact_base_config.copy({
+    # Training params
+    'lr_steps': (5000, 8000, 10000, 15000),
+    'max_iter': 20000,
+})
+
+# =========== 1 shot ============
+
+fold_0_fine_tune_1_shot_config_xxx = xxx_test_fine_tune_config.copy({
+    'name': 'fold_0_fine_tune_1_shot',
+    'dataset': xxx_dataset_fold_0_support_1_shot,
+    'num_classes': 101,
+    'max_iter': 20000,
+})
+
+fold_1_fine_tune_1_shot_config_xxx = xxx_test_fine_tune_config.copy({
+    'name': 'fold_1_fine_tune_1_shot',
+    'dataset': xxx_dataset_fold_1_support_1_shot,
+    'num_classes': 101,
+    'max_iter': 1000,
+})
+
+fold_2_fine_tune_1_shot_config_xxx = xxx_test_fine_tune_config.copy({
+    'name': 'fold_2_fine_tune_1_shot',
+    'dataset': xxx_dataset_fold_2_support_1_shot,
+    'num_classes': 101,
+    'max_iter': 1000,
+})
+
+fold_3_fine_tune_1_shot_config_xxx = xxx_test_fine_tune_config.copy({
+    'name': 'fold_3_fine_tune_1_shot',
+    'dataset': xxx_dataset_fold_3_support_1_shot,
+    'num_classes': 101,
+    'max_iter': 1000,
+})
+
+# =========== 3 shot ============
+
+fold_0_fine_tune_3_shot_config_xxx = xxx_test_fine_tune_config.copy({
+    'name': 'fold_0_fine_tune_3_shot',
+    'dataset': xxx_dataset_fold_0_support_3_shot,
+    'num_classes': 101,
+    'max_iter': 20000,
+})
+
+fold_1_fine_tune_3_shot_config_xxx = xxx_test_fine_tune_config.copy({
+    'name': 'fold_1_fine_tune_3_shot',
+    'dataset': xxx_dataset_fold_1_support_3_shot,
+    'num_classes': 101,
+    'max_iter': 2000,
+})
+
+fold_2_fine_tune_3_shot_config_xxx = xxx_test_fine_tune_config.copy({
+    'name': 'fold_2_fine_tune_3_shot',
+    'dataset': xxx_dataset_fold_2_support_3_shot,
+    'num_classes': 101,
+    'max_iter': 2000,
+})
+
+fold_3_fine_tune_3_shot_config_xxx = xxx_test_fine_tune_config.copy({
+    'name': 'fold_3_fine_tune_3_shot',
+    'dataset': xxx_dataset_fold_3_support_3_shot,
+    'num_classes': 101,
+    'max_iter': 2000,
+})
+
+# =========== 5 shot ============
+
+fold_0_fine_tune_5_shot_config_xxx = xxx_test_fine_tune_config.copy({
+    'name': 'fold_0_fine_tune_5_shot',
+    'dataset': xxx_dataset_fold_0_support_5_shot,
+    'num_classes': 101,
+    'max_iter': 20000,
+})
+
+fold_1_fine_tune_5_shot_config_xxx = xxx_test_fine_tune_config.copy({
+    'name': 'fold_1_fine_tune_5_shot',
+    'dataset': xxx_dataset_fold_1_support_5_shot,
+    'num_classes': 101,
+    'max_iter': 2500,
+})
+
+fold_2_fine_tune_5_shot_config_xxx = xxx_test_fine_tune_config.copy({
+    'name': 'fold_2_fine_tune_5_shot',
+    'dataset': xxx_dataset_fold_2_support_5_shot,
+    'num_classes': 101,
+    'max_iter': 2500,
+})
+
+fold_3_fine_tune_5_shot_config_xxx = xxx_test_fine_tune_config.copy({
+    'name': 'fold_3_fine_tune_5_shot',
+    'dataset': xxx_dataset_fold_3_support_5_shot,
+    'num_classes': 101,
+    'max_iter': 2500,
+})
+
+# =========== 10 shot ============
+
+fold_0_fine_tune_10_shot_config_xxx = xxx_test_fine_tune_config.copy({
+    'name': 'fold_0_fine_tune_10_shot',
+    'dataset': xxx_dataset_fold_0_support_10_shot,
+    'num_classes': 101,
+    'max_iter': 20000,
+})
+
+fold_1_fine_tune_10_shot_config_xxx = xxx_test_fine_tune_config.copy({
+    'name': 'fold_1_fine_tune_10_shot',
+    'dataset': xxx_dataset_fold_1_support_10_shot,
+    'num_classes': 101,
+    'max_iter': 2500,
+})
+
+fold_2_fine_tune_10_shot_config_xxx = xxx_test_fine_tune_config.copy({
+    'name': 'fold_2_fine_tune_10_shot',
+    'dataset': xxx_dataset_fold_2_support_10_shot,
+    'num_classes': 101,
+    'max_iter': 2500,
+})
+
+fold_3_fine_tune_10_shot_config_xxx = xxx_test_fine_tune_config.copy({
+    'name': 'fold_3_fine_tune_10_shot',
+    'dataset': xxx_dataset_fold_3_support_10_shot,
+    'num_classes': 101,
+    'max_iter': 2500,
+})
+
+
+# -------------------------------------------
+# XXX Dataset Config, Novel Class Inferencing
+# -------------------------------------------
+
+fold_0_query_config_xxx = xxx_test_fine_tune_config.copy({
+    'name': 'fold_0_novel_query',
+    'dataset': xxx_dataset_fold_0_query,
+    'num_classes': 101,
+})
+
+fold_1_query_config_xxx = xxx_test_fine_tune_config.copy({
+    'name': 'fold_1_novel_query',
+    'dataset': xxx_dataset_fold_1_query,
+    'num_classes': 101,
+})
+
+fold_2_query_config_xxx = xxx_test_fine_tune_config.copy({
+    'name': 'fold_2_novel_query',
+    'dataset': xxx_dataset_fold_2_query,
+    'num_classes': 101,
+})
+
+fold_3_query_config_xxx = xxx_test_fine_tune_config.copy({
+    'name': 'fold_3_novel_query',
+    'dataset': xxx_dataset_fold_3_query,
+    'num_classes': 101,
+})
+
+# ----------------------------------------------------------------------------
+# ----------------------------------------------------------------------------
 
 yolact_im400_config = yolact_base_config.copy({
     'name': 'yolact_im400',
@@ -823,4 +1277,3 @@ def set_cfg(config_name:str):
 def set_dataset(dataset_name:str):
     """ Sets the dataset of the current config. """
     cfg.dataset = eval(dataset_name)
-    

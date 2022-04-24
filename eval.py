@@ -267,6 +267,7 @@ def prep_benchmark(dets_out, h, w):
 
     with timer.env('Copy'):
         classes, scores, boxes, masks = [x[:args.top_k] for x in t]
+        print('out mask shape', masks.shape)
         if isinstance(scores, list):
             box_scores = scores[0].cpu().numpy()
             mask_scores = scores[1].cpu().numpy()
@@ -275,6 +276,7 @@ def prep_benchmark(dets_out, h, w):
         classes = classes.cpu().numpy()
         boxes = boxes.cpu().numpy()
         masks = masks.cpu().numpy()
+        print('output mask', masks.shape)
     
     with timer.env('Sync'):
         # Just in case
@@ -401,6 +403,20 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, num_crowd, image_id, de
 
     with timer.env('Postprocess'):
         classes, scores, boxes, masks = postprocess(dets, w, h, crop_masks=args.crop, score_threshold=args.score_threshold)
+        #my_masks = masks.cpu().numpy()
+        #print(type(my_masks))
+        #print('image_id', image_id)
+        #out_mask_name = str(image_id)
+        #out_mask_name = './temp_results_1/' + out_mask_name
+        #print(out_mask_name)
+        #for ind, mask in enumerate(my_masks):
+        #    print('min', mask.min(), 'max', mask.max(), 'type', mask.dtype)
+        #    mask = mask*255
+        #    print('min', mask.min(), 'max', mask.max(), 'type', mask.dtype)
+        #    out_mask_name_ = out_mask_name + '_' + str(ind) + '.png'
+        #    print(out_mask_name_)
+        #    cv2.imwrite(out_mask_name_, mask)
+
 
         if classes.size(0) == 0:
             return

@@ -246,9 +246,10 @@ def train():
     # Which learning rate adjustment step are we on? lr' = lr * gamma ^ step_index
     step_index = 0
 
+    # print('args.num_workers', args.num_workers)
     data_loader = data.DataLoader(dataset, args.batch_size,
                                   num_workers=args.num_workers,
-                                  shuffle=True, collate_fn=detection_collate,
+                                  shuffle=False, collate_fn=detection_collate, # eve shuffle=True
                                   pin_memory=True)
     
     
@@ -314,8 +315,10 @@ def train():
 
                 # Backprop
                 loss.backward() # Do this to free up vram even if loss is not finite
+
                 if torch.isfinite(loss).item():
                     optimizer.step()
+                #    print('step')
                 
                 # Add the loss to the moving average for bookkeeping
                 for k in losses:

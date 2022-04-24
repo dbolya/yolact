@@ -64,6 +64,8 @@ class COCODetection(data.Dataset):
     def __init__(self, image_path, info_file, transform=None,
                  target_transform=None,
                  dataset_name='MS COCO', has_gt=True):
+        print('image_path', image_path)
+        print('info_file', info_file)
         # Do this here because we have too many things named COCO
         from pycocotools.coco import COCO
         
@@ -138,6 +140,8 @@ class COCODetection(data.Dataset):
             file_name = file_name.split('_')[-1]
 
         path = osp.join(self.root, file_name)
+        # path = './data/xxx/images/' + path.split('/')[-1] # eve editted for xxx only
+        # print(path)
         assert osp.exists(path), 'Image path does not exist: {}'.format(path)
         
         img = cv2.imread(path)
@@ -148,6 +152,14 @@ class COCODetection(data.Dataset):
             masks = [self.coco.annToMask(obj).reshape(-1) for obj in target]
             masks = np.vstack(masks)
             masks = masks.reshape(-1, height, width)
+            out_mask_name = path.split('/')[-1]
+            out_mask_name = './temp_results/' + out_mask_name
+            #for ind, mask in enumerate(masks):
+            #    mask = mask*255
+            #    print('min', mask.min(), 'max', mask.max(), 'type', mask.dtype)
+            #    out_mask_name_ = out_mask_name[:-4] + '_' + str(ind) + '.png'
+            #    print(out_mask_name_)
+            #    cv2.imwrite(out_mask_name_, mask)
 
         if self.target_transform is not None and len(target) > 0:
             target = self.target_transform(target, width, height)
