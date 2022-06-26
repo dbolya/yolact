@@ -109,11 +109,11 @@ dataset_base = Config({
     'name': 'Base Dataset',
 
     # Training images and annotations
-    'train_images': './data/coco/images/',
+    'train_images': '/workspace/data/coco/images/',
     'train_info':   'path_to_annotation_file',
 
     # Validation images and annotations.
-    'valid_images': './data/coco/images/',
+    'valid_images': '/workspace/data/coco/images/',
     'valid_info':   'path_to_annotation_file',
 
     # Whether or not to load GT. If this is False, eval.py quantitative evaluation won't work.
@@ -131,8 +131,8 @@ dataset_base = Config({
 coco2014_dataset = dataset_base.copy({
     'name': 'COCO 2014',
     
-    'train_info': './data/coco/annotations/instances_train2014.json',
-    'valid_info': './data/coco/annotations/instances_val2014.json',
+    'train_info': '/workspace/data/coco/annotations/instances_train2014.json',
+    'valid_info': '/workspace/data/coco/annotations/instances_val2014.json',
 
     'label_map': COCO_LABEL_MAP
 })
@@ -140,8 +140,8 @@ coco2014_dataset = dataset_base.copy({
 coco2017_dataset = dataset_base.copy({
     'name': 'COCO 2017',
     
-    'train_info': './data/coco/annotations/instances_train2017.json',
-    'valid_info': './data/coco/annotations/instances_val2017.json',
+    'train_info': '/workspace/data/coco/annotations/instances_train2017.json',
+    'valid_info': '/workspace/data/coco/annotations/instances_val2017.json',
 
     'label_map': COCO_LABEL_MAP
 })
@@ -149,7 +149,7 @@ coco2017_dataset = dataset_base.copy({
 coco2017_testdev_dataset = dataset_base.copy({
     'name': 'COCO 2017 Test-Dev',
 
-    'valid_info': './data/coco/annotations/image_info_test-dev2017.json',
+    'valid_info': '/workspace/data/coco/annotations/image_info_test-dev2017.json',
     'has_gt': False,
 
     'label_map': COCO_LABEL_MAP
@@ -163,11 +163,11 @@ PASCAL_CLASSES = ("aeroplane", "bicycle", "bird", "boat", "bottle",
 pascal_sbd_dataset = dataset_base.copy({
     'name': 'Pascal SBD 2012',
 
-    'train_images': './data/sbd/img',
-    'valid_images': './data/sbd/img',
+    'train_images': '/workspace/data/sbd/img',
+    'valid_images': '/workspace/data/sbd/img',
     
-    'train_info': './data/sbd/pascal_sbd_train.json',
-    'valid_info': './data/sbd/pascal_sbd_val.json',
+    'train_info': '/workspace/data/sbd/pascal_sbd_train.json',
+    'valid_info': '/workspace/data/sbd/pascal_sbd_val.json',
 
     'class_names': PASCAL_CLASSES,
 })
