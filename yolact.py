@@ -1,11 +1,12 @@
 import torch, torchvision
 import torch.nn as nn
 import torch.nn.functional as F
+from sparseml.pytorch.optim import ScheduledModifierManager
 from torchvision.models.resnet import Bottleneck
 import numpy as np
 from itertools import product
 from math import sqrt
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 from collections import defaultdict
 
 from data.config import cfg, mask_type
@@ -478,22 +479,39 @@ class Yolact(nn.Module):
         checkpoint = {
                          'epoch': epoch,
                          'model_state_dict': self.state_dict(),
-                         'recipe': recipe,
+                         'checkpoint_recipe': recipe,
                      }
         torch.save(checkpoint, path)
 
-    def load_checkpoint(self, path, recipe=None, resume: bool = False) -> Tuple[Optional[int], Optional[str], SparseMLWrapper]:
+    def load_checkpoint(
+        self,
+        path: str,
+        train_recipe: Optional[str] = None,
+        resume: bool = False,
+        metadata: Optional[Dict[str, any]] = None,
+    ) -> Tuple[Optional[int], Optional[str], SparseMLWrapper]:
         """ Loads weights into the current Yolact object.
 
-        :return: A tuple containing the epoch and the recipe if
+        :param path: local path to the checkpoint
+        :param train_recipe: A train recipe if different from checkpoint recipe
+        :param resume: True if resuming a last run
+        :param metadata: Optional metadata to be stored with recipe
+        :return: A tuple containing the epoch and the checkpoint_recipe if
             found in the checkpoint, and a SparseML Wrapper instance
         """
 
-        checkpoint = torch.load(path)
-        epoch = checkpoint.get('epoch')
-        recipe = recipe or checkpoint.get('recipe')
-        state_dict = checkpoint.get('model_state_dict', checkpoint)
-        sparseml_wrapper = SparseMLWrapper(self, recipe)
+        loaded_checkpoint = torch.load(path)
+        checkpoint_epoch = loaded_checkpoint.get('epoch', float('inf'))
+        checkpoint_recipe = loaded_checkpoint.get('checkpoint_recipe')
+        state_dict = loaded_checkpoint.get('model_state_dict', loaded_checkpoint)
+
+        sparseml_wrapper = SparseMLWrapper(
+            model=self,
+            recipe=train_recipe,
+            checkpoint_recipe=checkpoint_recipe,
+            checkpoint_epoch=float('inf') if not resume else checkpoint_epoch,
+            metadata=metadata,
+        )
 
         # For backward compatability, remove these (the new variable is called layers)
         for key in list(state_dict.keys()):
@@ -514,10 +532,20 @@ class Yolact(nn.Module):
                 self.load_state_dict(state_dict)
 
                 loaded = True
-            sparseml_wrapper.initialize(start_epoch=epoch or 0 if resume else 0)
+            start_epoch = 0
+
+            if resume and checkpoint_epoch != float('inf'):
+                start_epoch = checkpoint_epoch
+
+            sparseml_wrapper.initialize(start_epoch=start_epoch)
         if not loaded:
             self.load_state_dict(state_dict=state_dict)
-        return epoch or 0, recipe, sparseml_wrapper
+
+        start_epoch = 0
+        if resume and checkpoint_epoch != float('inf'):
+            start_epoch = checkpoint_epoch
+
+        return start_epoch, train_recipe, sparseml_wrapper
 
     def init_weights(self, backbone_path):
         """ Initialize weights for training. """

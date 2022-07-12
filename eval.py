@@ -365,7 +365,12 @@ def parse_args(argv=None):
     parser.add_argument('--num_iterations', default=0, type=int, help="The num of iterations to run the engine for, defaults to the validation set")
     parser.add_argument('--batch_size', default=1, type=int, help="The batch size to use the engine for, defaults to 1. Only available for benchmark mode")
     parser.add_argument('--engine', default=None, choices=Engine.supported(), help=f'Engine to use for evaluation choices are {Engine.supported()}')
-
+    parser.add_argument('--validation_info', default=None, type=str,
+                        help='If specified, override the validation info json  path '
+                             'specified in the config with this one.')
+    parser.add_argument('--validation_images', default=None, type=str,
+                        help='If specified, override the validation images path path '
+                             'specified in the config with this one.')
     parser.set_defaults(no_bar=False, display=False, resume=False, output_coco_json=False, output_web_json=False, shuffle=False,
                         benchmark=False, no_sort=False, no_hash=False, mask_proto_debug=False, crop=True, detect=False, display_fps=False,
                         emulate_playback=False)
@@ -1393,7 +1398,8 @@ def get_engine(model_filepath: str, engine=None):
     )
 
 
-if __name__ == '__main__':
+def main():
+    global args
     parse_args()
     if args.config is not None:
         set_cfg(args.config)
@@ -1442,14 +1448,19 @@ if __name__ == '__main__':
 
         if args.image is None and args.video is None and args.images is None:
             if not args.benchmark:
-                dataset = COCODetection(cfg.dataset.valid_images, cfg.dataset.valid_info,
-                                    transform=BaseTransform(), has_gt=cfg.dataset.has_gt)
+                cfg.dataset.valid_images = args.validation_images or cfg.dataset.valid_images
+                cfg.dataset.valid_info = args.validation_info or cfg.dataset.valid_info
+
+                dataset = COCODetection(cfg.dataset.valid_images,
+                                        cfg.dataset.valid_info,
+                                        transform=BaseTransform(),
+                                        has_gt=cfg.dataset.has_gt)
                 prep_coco_cats()
             else:
                 zoo_model = zoo_yolo_v3()
                 dataset = load_numpy_list(zoo_model.data_originals.downloaded_path())
         else:
-            dataset = None        
+            dataset = None
 
         print('Loading model...', end='')
 
@@ -1459,7 +1470,8 @@ if __name__ == '__main__':
                                     batch_size=args.batch_size
                                     )
         elif args.engine == Engine.ORT:
-            net = ORTWrapper(filepath=args.trained_model, cfg=cfg, batch_size = args.batch_size)
+            net = ORTWrapper(filepath=args.trained_model, cfg=cfg,
+                             batch_size=args.batch_size)
         else:
             net = Yolact()
             net.load_checkpoint(args.trained_model)
@@ -1470,5 +1482,9 @@ if __name__ == '__main__':
             net = net.cuda()
 
         evaluate(net, dataset)
+
+
+if __name__ == '__main__':
+    main()
 
 

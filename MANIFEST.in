@@ -1,0 +1,7 @@
+include *.md
+include LICENSE
+include setup.py
+recursive-include yolact/scripts *
+recursive-include yolact/external *
+recursive-include yolact/web *
+include yolact/requirements.txt

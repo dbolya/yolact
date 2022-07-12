@@ -219,6 +219,10 @@ def export(args: ExportArgs):
     logging.info(f"Model checkpoint exported to {args.name}")
 
 
-if __name__ == "__main__":
+def main():
     export_args = parse_args()
     export(export_args)
+
+
+if __name__ == "__main__":
+    main()

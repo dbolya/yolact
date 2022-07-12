@@ -122,6 +122,7 @@ Some Useful Model Stubs:
 
 """
 import logging
+from pathlib import Path
 
 from sparseml.pytorch.utils import TensorBoardLogger
 from torch.cuda import amp
@@ -196,6 +197,14 @@ parser.add_argument('--keep_latest_interval', default=100000, type=int,
                     help='When --keep_latest is on, don\'t delete the latest file at these intervals. This should be a multiple of save_interval or 0.')
 parser.add_argument('--dataset', default=None, type=str,
                     help='If specified, override the dataset specified in the config with this one (example: coco2017_dataset).')
+parser.add_argument('--train_info', default=None, type=str,
+                    help='If specified, override the train info json  path specified in the config with this one.')
+parser.add_argument('--validation_info', default=None, type=str,
+                    help='If specified, override the validation info json  path specified in the config with this one.')
+parser.add_argument('--train_images', default=None, type=str,
+                    help='If specified, override the train images  path specified in the config with this one.')
+parser.add_argument('--validation_images', default=None, type=str,
+                    help='If specified, override the validation images path path specified in the config with this one.')
 parser.add_argument('--no_log', dest='log', action='store_false',
                     help='Don\'t log per iteration information into log_folder.')
 parser.add_argument('--log_gpu', dest='log_gpu', action='store_true',
@@ -314,12 +323,19 @@ def train():
     if not os.path.exists(args.save_folder):
         os.mkdir(args.save_folder)
 
+    cfg.dataset.train_images = args.train_images or cfg.dataset.train_images
+    cfg.dataset.train_info = args.train_info or cfg.dataset.train_info
+
     dataset = COCODetection(image_path=cfg.dataset.train_images,
                             info_file=cfg.dataset.train_info,
                             transform=SSDAugmentation(MEANS))
-    
+
+
     if args.validation_epoch > 0:
         setup_eval()
+        cfg.dataset.valid_images = args.validation_images or cfg.dataset.valid_images
+        cfg.dataset.valid_info = args.validation_info or cfg.dataset.valid_info
+
         val_dataset = COCODetection(image_path=cfg.dataset.valid_images,
                                     info_file=cfg.dataset.valid_info,
                                     transform=BaseTransform(MEANS))
@@ -328,6 +344,13 @@ def train():
     yolact_net = Yolact()
     net = yolact_net
     net.train()
+
+    metadata = {
+        "batch_size": args.batch_size,
+        "train_info": Path(cfg.dataset.train_info).name,
+        "validation_info": Path(cfg.dataset.valid_info).name,
+        "config": cfg.name,
+    }
 
     if args.log:
         log = Log(cfg.name, args.log_folder, dict(args._get_kwargs()),
@@ -352,21 +375,25 @@ def train():
 
     if args.resume and args.resume.lower() not in ("no", "false", "f", "0"):
         print('Resuming training, loading checkpoint {}...'.format(args.resume))
-        checkpoint_epoch, checkpoint_recipe, sparseml_wrapper = yolact_net.load_checkpoint(args.resume, args.recipe, resume=args.cont)
-        start_epoch = 0
-        if checkpoint_epoch and args.cont:
-            start_epoch = checkpoint_epoch
-        if not args.use_checkpoint_epoch:
-            start_epoch = 0
-        args.recipe = args.recipe or checkpoint_recipe
+        start_epoch, train_recipe, sparseml_wrapper = yolact_net.load_checkpoint(
+            path=args.resume,
+            train_recipe=args.recipe,
+            resume=args.cont,
+            metadata=metadata,
+        )
+        args.recipe = train_recipe
         if args.start_iter == -1:
             args.start_iter = SavePath.from_str(args.resume).iteration
     else:
         print('Initializing weights...')
         yolact_net.init_weights(backbone_path=args.save_folder + cfg.backbone.path)
-        start_epoch= 0
-        sparseml_wrapper = SparseMLWrapper(yolact_net, args.recipe)
-        sparseml_wrapper.initialize(start_epoch=start_epoch)
+        sparseml_wrapper = SparseMLWrapper(
+            model=yolact_net,
+            recipe=args.recipe,
+            metadata=metadata,
+        )
+        # A new run always starts from epoch 0
+        sparseml_wrapper.initialize(start_epoch=0)
 
     optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=args.momentum,
                           weight_decay=args.decay)
@@ -428,6 +455,10 @@ def train():
 
     # try-except so you can use ctrl+c to save early and stop training
     # SparseML Integration
+    last_stage_epoch = 0
+
+    if sparseml_wrapper.checkpoint_recipe_manager:
+        last_stage_epoch = sparseml_wrapper.checkpoint_recipe_manager.max_epochs or 0
 
     try:
         for epoch in range(start_epoch, num_epochs):
@@ -439,7 +470,7 @@ def train():
                 half_precision = False
 
             # Resume from start_iter
-            if (epoch+1)*epoch_size < iteration:
+            if (epoch+1) * epoch_size < iteration:
                 continue
             
             for datum in data_loader:
@@ -546,7 +577,8 @@ def train():
                     yolact_net.save_checkpoint(
                         save_path(epoch, iteration),
                         recipe=sparseml_wrapper.state_dict().get('recipe'),
-                        epoch=epoch)
+                        epoch=epoch + last_stage_epoch,
+                    )
 
                     if args.keep_latest and latest is not None:
                         if args.keep_latest_interval <= 0 or iteration % args.keep_latest_interval != args.save_interval:
@@ -569,14 +601,14 @@ def train():
             yolact_net.save_checkpoint(
                 save_path(epoch, repr(iteration) +'_interrupt'),
                 recipe=sparseml_wrapper.state_dict().get('recipe'),
-                epoch=epoch,
+                epoch=epoch + last_stage_epoch,
             )
         exit()
 
     yolact_net.save_checkpoint(
         save_path(epoch, iteration),
         recipe=sparseml_wrapper.state_dict().get('recipe'),
-        epoch=epoch,
+        epoch=epoch + last_stage_epoch,
     )
     # Compute validation mAP after training is finished
     print("Computing val mAP after training:")
@@ -710,5 +742,9 @@ def compute_validation_map(epoch, iteration, yolact_net, dataset, log:Log=None):
 def setup_eval():
     eval_script.parse_args(['--no_bar', '--max_images='+str(args.validation_size)])
 
-if __name__ == '__main__':
+
+def main():
     train()
+
+if __name__ == '__main__':
+    main()
