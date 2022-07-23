@@ -22,7 +22,8 @@ from utils.functions import MovingAverage, make_net
 torch.cuda.current_device()
 
 # As of March 10, 2019, Pytorch DataParallel still doesn't support JIT Script Modules
-use_jit = torch.cuda.device_count() <= 1
+
+use_jit = not cfg.export_onnx
 if not use_jit:
     print('Multiple GPUs detected! Turning off JIT.')
 
@@ -370,8 +371,10 @@ class FastMaskIoUNet(ScriptModuleWrapper):
 
     def forward(self, x):
         x = self.maskiou_net(x)
-        maskiou_p = F.max_pool2d(x, kernel_size=x.size()[2:]).squeeze(-1).squeeze(-1)
-
+        if not cfg.export_onnx:
+            maskiou_p = F.max_pool2d(x, kernel_size=x.size()[2:]).squeeze(-1).squeeze(-1)
+        else:
+            maskiou_p = F.max_pool2d(x, kernel_size=(3,3)).squeeze(-1).squeeze(-1)
         return maskiou_p
 
 
@@ -477,12 +480,16 @@ class Yolact(nn.Module):
     def load_weights(self, path):
         """ Loads weights from a compressed save file. """
         state_dict = torch.load(path)
-
+ 
         # For backward compatability, remove these (the new variable is called layers)
         for key in list(state_dict.keys()):
             if key.startswith('backbone.layer') and not key.startswith('backbone.layers'):
                 del state_dict[key]
-        
+ 
+            if "conv2.conv_offset_mask" in key:
+                new_key = key.replace("conv2.conv_offset_mask", "conv2.conv_offset", 1)
+                state_dict[new_key] = state_dict[key]
+                del state_dict[key]
             # Also for backward compatibility with v1.0 weights, do this check
             if key.startswith('fpn.downsample_layers.'):
                 if cfg.fpn is not None and int(key.split('.')[2]) >= cfg.fpn.num_downsample:
@@ -672,11 +679,10 @@ class Yolact(nn.Module):
                     
                 else:
                     pred_outs['conf'] = F.softmax(pred_outs['conf'], -1)
-
-            return self.detect(pred_outs, self)
-
-
-
+            if cfg.export_onnx:
+                return pred_outs
+            else:
+                return self.detect(pred_outs, self)
 
 # Some testing code
 if __name__ == '__main__':

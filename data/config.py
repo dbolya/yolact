@@ -625,6 +625,7 @@ coco_base_config = Config({
 
     # Use command-line arguments to set this.
     'no_jit': False,
+    'export_onnx':False
 
     'backbone': None,
     'name': 'base_config',
