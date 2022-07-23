@@ -54,14 +54,42 @@ Some examples from our YOLACT base model (33.5 fps on a Titan Xp and 29.8 mAP on
    ```Shell
    sh data/scripts/COCO_test.sh
    ```
- - If you want to use YOLACT++, compile deformable convolutional layers (from [DCNv2](https://github.com/CharlesShang/DCNv2/tree/pytorch_1.0)).
+ - If you want to use YOLACT++, compile deformable convolutional layers.
    Make sure you have the latest CUDA toolkit installed from [NVidia's Website](https://developer.nvidia.com/cuda-toolkit).
+   
+   Case 1: Only need to use pytorch code
    ```Shell
-   cd external/DCNv2
-   python setup.py build develop
+   pip install mmcv-full
+   ```
+   Case 2: If you'd like to inference using onnx models. Follow - https://mmcv.readthedocs.io/en/latest/deployment/onnxruntime_op.html
+   ```Shell
+   wget https://github.com/microsoft/onnxruntime/releases/download/v1.8.1/onnxruntime-linux-x64-1.8.1.tgz
+
+   tar -zxvf onnxruntime-linux-x64-1.8.1.tgz
+   cd onnxruntime-linux-x64-1.8.1
+   export ONNXRUNTIME_DIR=$(pwd)
+   export LD_LIBRARY_PATH=$ONNXRUNTIME_DIR/lib:$LD_LIBRARY_PATH
+   ```
+   ```Shell
+   cd ..
+   git clone https://github.com/open-mmlab/mmcv.git
+   cd mmcv ## to MMCV root directory
+   MMCV_WITH_OPS=1 MMCV_WITH_ORT=1 python setup.py develop
+   ```
+   ```Shell
+   pip install onnxruntime==1.8.1
    ```
 
+## ONNX export and Inference (tested for yolact_plus for image with size 550, supports batch-size=1)
+For pytorch model to ONNX conversion 
+```Shell
+python3 yolact2onnx.py --config yolact_plus_base_config --ckpt_path yolact_plus_base_159_180000.pth --onnx_paths yolact_plus.onnx maskiou_net.onnx --score_threshold 0.5
+```
 
+For ONNX inference
+```Shell
+python3 onnx_inference.py --config yolact_plus_base_config --img_path 15387869.jpg --onnx_paths yolact_plus.onnx maskiou_net.onnx --score_threshold 0.5
+```
 # Evaluation
 Here are our YOLACT models (released on April 5th, 2019) along with their FPS on a Titan Xp and mAP on `test-dev`:
 
