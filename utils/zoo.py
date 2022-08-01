@@ -1,5 +1,5 @@
 from pathlib import Path
-from sparsezoo import Zoo
+from sparsezoo import Model
 from functools import wraps
 
 
@@ -16,29 +16,25 @@ def check_stub_before_invoke(func):
     def wrapper(stub: str, *args, **kwargs):
         if is_valid_stub(stub):
             return func(stub, *args, **kwargs)
-        raise ValueError("Invalid Stub, Check for typo!!!")
+        raise ValueError(f"Invalid Stub: {stub}")
 
     return wrapper
 
 
 def _get_model_framework_file(model, path: str):
+    available_files = model.training.default.files
     transfer_request = 'recipe_type=transfer' in path
-    checkpoint_available = any(
-        file.checkpoint for file in model.framework_files
-    )
-    final_available = any(
-        not file.checkpoint for file in model.framework_files
-    )
+    checkpoint_available = any([".ckpt" in file.name for file in available_files])
+    final_available = any([not ".ckpt" in file.name for file in available_files])
 
     if transfer_request and checkpoint_available:
         # checkpoints are saved for transfer learning use cases,
         # return checkpoint if avaiable and requested
-        return [file for file in model.framework_files if file.checkpoint][0]
+        return [file for file in available_files if ".ckpt" in file.name][0]
 
     elif final_available:
         # default to returning final state, if available
-        return [file for file in model.framework_files if not
-        file.checkpoint][0]
+        return [file for file in available_files if ".ckpt" not in file.name][0]
 
     raise ValueError(f"Could not find a valid framework file for {path}")
 
@@ -51,8 +47,8 @@ def get_model_onnx_from_stub(stub: str):
     :param stub: SparseZoo stub for the model
     :return: path to model.onnx for the specified stub
     """
-    model = Zoo.load_model_from_stub(stub=stub)
-    return model.onnx_file.downloaded_path()
+    model = Model(stub)
+    return model.onnx_model.path
 
 
 @check_stub_before_invoke
@@ -67,7 +63,6 @@ def get_checkpoint_from_stub(stub: str) -> str:
     :return: path to model checkpoint (after downloading from SparseZoo)
     """
 
-    model = Zoo.load_model_from_stub(stub=stub)
+    model = Model(stub)
     file = _get_model_framework_file(model, stub)
-    path = file.downloaded_path()
-    return path
+    return file.path

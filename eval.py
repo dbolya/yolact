@@ -248,9 +248,8 @@ from utils import timer
 from utils.functions import SavePath
 from layers.output_utils import postprocess, undo_image_transformation
 import pycocotools
-from sparsezoo.models.detection import yolo_v3 as zoo_yolo_v3
 from data import cfg, set_cfg, set_dataset
-
+from sparsezoo import Model
 import numpy as np
 import torch
 import torch.backends.cudnn as cudnn
@@ -1457,8 +1456,8 @@ def main():
                                         has_gt=cfg.dataset.has_gt)
                 prep_coco_cats()
             else:
-                zoo_model = zoo_yolo_v3()
-                dataset = load_numpy_list(zoo_model.data_originals.downloaded_path())
+                zoo_model = Model(args.trained_model)
+                dataset = load_numpy_list(zoo_model.sample_inputs.path)
         else:
             dataset = None
 
