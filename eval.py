@@ -880,7 +880,6 @@ def evalimages(net:Yolact, input_folder:str, output_folder:str):
     if not os.path.exists(output_folder):
         os.mkdir(output_folder)
 
-    print()
     for p in Path(input_folder).glob('*'): 
         path = str(p)
         name = os.path.basename(path)
@@ -1141,17 +1140,19 @@ def evalvideo(net:Yolact, path:str, out_path:str=None):
     cleanup_and_exit()
 
 
-def load_benchmark_batch(dataset, image_idx):
+def load_benchmark_batch(dataset, image_idx, device):
     img = dataset[image_idx]['arr_0']
     TARGET_SIZE = 550, 550
-    img = cv2.resize(img, TARGET_SIZE)
+    img = cv2.resize(img.transpose(1,2,0), TARGET_SIZE)
     img = np.moveaxis(img, -1, 0) # put channels in front
     _, h, w = img.shape
     batch = torch.from_numpy(np.ascontiguousarray(img[np.newaxis], dtype=np.float32))
+    batch = batch.to(device)
+
     return batch, h, w
 
 
-def evaluate(net:Yolact, dataset, train_mode=False):
+def evaluate(net:Yolact, dataset, device, train_mode=False):
     net.detect.use_fast_nms = args.fast_nms
     net.detect.use_cross_class_nms = args.cross_class_nms
     cfg.mask_proto_debug = args.mask_proto_debug
@@ -1178,8 +1179,6 @@ def evaluate(net:Yolact, dataset, train_mode=False):
 
     frame_times = MovingAverage()
     dataset_size = len(dataset) if args.max_images < 0 else min(args.max_images, len(dataset))
-
-    print()
 
     if not args.display and not args.benchmark:
         # For each class and iou, stores tuples (score, isPositive)
@@ -1239,7 +1238,7 @@ def evaluate(net:Yolact, dataset, train_mode=False):
                                                                        image_idx)
                 else:
 
-                    batch, h, w = load_benchmark_batch(dataset, image_idx)
+                    batch, h, w = load_benchmark_batch(dataset, image_idx, device)
                     gt, gt_masks, num_crowd, img = None, None, None, None
                 if args.batch_size > 1:
                     # build batch
@@ -1404,17 +1403,17 @@ def main():
         set_cfg(args.config)
 
     if args.trained_model == 'interrupt':
-        args.trained_model = SavePath.get_interrupt('weights/')
+        trained_model_weights = SavePath.get_interrupt('weights/')
     elif args.trained_model == 'latest':
-        args.trained_model = SavePath.get_latest('weights/', cfg.name)
+        trained_model_weights= SavePath.get_latest('weights/', cfg.name)
     elif is_valid_stub(args.trained_model):
         if args.engine == 'torch':
-            args.trained_model = get_checkpoint_from_stub(args.trained_model)
+            trained_model_weights = get_checkpoint_from_stub(args.trained_model)
         else:
-            args.trained_model = get_model_onnx_from_stub(args.trained_model)
+            trained_model_weights = get_model_onnx_from_stub(args.trained_model)
 
     args.engine = get_engine(
-        model_filepath=args.trained_model,
+        model_filepath=trained_model_weights,
         engine=args.engine,
     )
 
@@ -1423,6 +1422,8 @@ def main():
 
     if args.dataset is not None:
         set_dataset(args.dataset)
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     with torch.no_grad():
         if not os.path.exists('results'):
@@ -1456,6 +1457,9 @@ def main():
                                         has_gt=cfg.dataset.has_gt)
                 prep_coco_cats()
             else:
+                if not is_valid_stub(args.trained_model):
+                    raise ValueError("Attempting to create a dataset from sparsezoo model. Expected to "
+                                     f"receive a sparsezoo stub, but received instead: {args.trained_model}")
                 zoo_model = Model(args.trained_model)
                 dataset = load_numpy_list(zoo_model.sample_inputs.path)
         else:
@@ -1464,23 +1468,23 @@ def main():
         print('Loading model...', end='')
 
         if args.engine == Engine.DEEPSPARSE:
-            net = DeepSparseWrapper(filepath=args.trained_model, cfg=cfg,
+            net = DeepSparseWrapper(filepath=trained_model_weights, cfg=cfg,
                                     num_cores=args.num_cores,
                                     batch_size=args.batch_size
                                     )
         elif args.engine == Engine.ORT:
-            net = ORTWrapper(filepath=args.trained_model, cfg=cfg,
+            net = ORTWrapper(filepath=trained_model_weights, cfg=cfg,
                              batch_size=args.batch_size)
         else:
             net = Yolact()
-            net.load_checkpoint(args.trained_model)
+            net.load_checkpoint(trained_model_weights)
             net.eval()
         print(' Done.')
 
         if args.cuda:
             net = net.cuda()
 
-        evaluate(net, dataset)
+        evaluate(net, dataset, device)
 
 
 if __name__ == '__main__':

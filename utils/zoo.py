@@ -1,6 +1,7 @@
 from pathlib import Path
 from sparsezoo import Model
 from functools import wraps
+from re import search
 
 
 def is_valid_stub(stub: str) -> bool:
@@ -23,13 +24,13 @@ def check_stub_before_invoke(func):
 
 def _get_model_framework_file(model, path: str):
     available_files = model.training.default.files
-    transfer_request = 'recipe_type=transfer' in path
+    transfer_request = search("recipe(.*)transfer", path)
     checkpoint_available = any([".ckpt" in file.name for file in available_files])
     final_available = any([not ".ckpt" in file.name for file in available_files])
 
     if transfer_request and checkpoint_available:
         # checkpoints are saved for transfer learning use cases,
-        # return checkpoint if avaiable and requested
+        # return checkpoint if available and requested
         return [file for file in available_files if ".ckpt" in file.name][0]
 
     elif final_available:
