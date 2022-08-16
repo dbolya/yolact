@@ -609,6 +609,7 @@ class Yolact(nn.Module):
 
         if cfg.freeze_bn:
             self.freeze_bn()
+        return self
 
     def freeze_bn(self, enable=False):
         """ Adapted from https://discuss.pytorch.org/t/how-to-train-with-frozen-batchnorm/12106/8 """
