@@ -3,4 +3,4 @@ opencv-python
 pycocotools
 matplotlib
 torchvision<=0.8.2
-sparseml[torchvision]>=0.9
+sparseml[torchvision]>=1.1
