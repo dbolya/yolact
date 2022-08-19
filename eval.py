@@ -1411,7 +1411,8 @@ def main():
             trained_model_weights = get_checkpoint_from_stub(args.trained_model)
         else:
             trained_model_weights = get_model_onnx_from_stub(args.trained_model)
-
+    else:
+        trained_model_weights = args.trained_model
     args.engine = get_engine(
         model_filepath=trained_model_weights,
         engine=args.engine,

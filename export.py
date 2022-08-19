@@ -209,7 +209,7 @@ def export(args: ExportArgs):
     model = Yolact()
     model.export = True
     logging.debug(f"Loading state dict from checkpoint {args.checkpoint}")
-    model.load_checkpoint(args.checkpoint, recipe=args.recipe)
+    model.load_checkpoint(args.checkpoint, train_recipe=args.recipe)
     export_onnx(
         module=model,
         sample_batch=torch.randn(*batch_shape),
