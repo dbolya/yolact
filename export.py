@@ -72,7 +72,7 @@ from typing import Iterable
 import torch
 from data import set_cfg
 from yolact import Yolact
-from sparseml.pytorch.utils import export_onnx
+from sparseml.pytorch.utils import ModuleExporter
 
 
 logging.basicConfig(level=logging.INFO)
@@ -210,13 +210,16 @@ def export(args: ExportArgs):
     model.export = True
     logging.debug(f"Loading state dict from checkpoint {args.checkpoint}")
     model.load_checkpoint(args.checkpoint, train_recipe=args.recipe)
-    export_onnx(
-        module=model,
+    exporter = ModuleExporter(module= model, output_dir = args.save_dir)
+    exporter.export_onnx(
         sample_batch=torch.randn(*batch_shape),
-        file_path=str(args.name),
+        name=str(args.name),
         convert_qat=not args.skip_qat_convert,
     )
     logging.info(f"Model checkpoint exported to {args.name}")
+
+    exporter.create_deployment_folder()
+
 
 
 def main():
