@@ -482,6 +482,7 @@ class Yolact(nn.Module):
                          'checkpoint_recipe': recipe,
                      }
         torch.save(checkpoint, path)
+        print(f"Checkpoint saved to {path}")
 
     def load_checkpoint(
         self,
