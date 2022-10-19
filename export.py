@@ -52,7 +52,7 @@ optional arguments:
 
 ##########
 Example usage:
-python export.py --checkpoint ./checkpoints/yolact_darknet53_pruned.pth \
+python export.py --checkpoint ./checkpoints/yolact_darknet53_pruned.pth
 
 ##########
 Example Two:
@@ -62,18 +62,23 @@ python export.py --checkpoint ./quantized-checkpoint/yolact_darknet53_1_10.pth \
     --batch-size 1 \
     --image-shape 3 550 550 \
     --config yolact_darknet53_config
+
+##########
+Example Three:
+python export.py --checkpoint ./checkpoints/yolact_darknet53_pruned.pth \
+    --one-shot yolact-quant-recipe.md
 """
 
 import argparse
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Optional
 import torch
 from data import set_cfg
 from yolact import Yolact
 from sparseml.pytorch.utils import ModuleExporter
-
+from sparseml.pytorch.optim import ScheduledModifierManager
 
 logging.basicConfig(level=logging.INFO)
 
@@ -91,6 +96,7 @@ class ExportArgs:
     batch_size: int
     image_shape: Iterable
     name: Path
+    one_shot: Optional[str]
 
     def __post_init__(self):
         """
@@ -162,6 +168,14 @@ def parse_args() -> ExportArgs:
         help="Path or SparseZoo stub to the recipe used for training, "
         " If no recipe given, the checkpoint recipe is applied if present",
     )
+    parser.add_argument(
+        "--one-shot",
+        "-o",
+        type=str,
+        default=None,
+        help="Path or SparseZoo stub to a recipe that should be applied in"
+             "one-shot manner before exporting",
+    )
 
     parser.add_argument(
         "--skip-qat-convert",
@@ -210,7 +224,10 @@ def export(args: ExportArgs):
     model.export = True
     logging.debug(f"Loading state dict from checkpoint {args.checkpoint}")
     model.load_checkpoint(args.checkpoint, train_recipe=args.recipe)
-    exporter = ModuleExporter(module= model, output_dir = args.save_dir)
+    if args.one_shot:
+        one_shot_manager = ScheduledModifierManager.from_yaml(file_path=args.one_shot)
+        one_shot_manager.apply(module=model)
+    exporter = ModuleExporter(module=model, output_dir=args.save_dir)
     exporter.export_onnx(
         sample_batch=torch.randn(*batch_shape),
         name=str(args.name),
