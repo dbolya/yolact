@@ -128,6 +128,21 @@ dataset_base = Config({
     'label_map': None
 })
 
+kaggle_dataset_coco = dataset_base.copy({
+    'name': 'Kaggle Input',
+    
+    'train_info': '/kaggle/input/car-damage-coco/train/_annotations.coco.json',
+    'train_images': '/kaggle/input/car-damage-coco/train/',
+    'valid_info': '/kaggle/input/car-damage-coco/train/_annotations.coco.json',
+    'valid_images': '/kaggle/input/car-damage-coco/train/',
+
+    'class_names': ('No Damage', 'Damage'),
+
+    'label_map': [0, 1]
+
+    'label_map': COCO_LABEL_MAP
+})
+
 coco2014_dataset = dataset_base.copy({
     'name': 'COCO 2014',
     
