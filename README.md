@@ -138,9 +138,9 @@ python eval.py --help
 # Training
 By default, we train on COCO. Make sure to download the entire dataset using the commands above.
  - To train, grab an imagenet-pretrained model and put it in `./weights`.
-   - For Resnet101, download `resnet101_reducedfc.pth` from [here](https://drive.google.com/file/d/1tvqFPd4bJtakOlmn-uIA492g2qurRChj/view?usp=sharing).
-   - For Resnet50, download `resnet50-19c8e357.pth` from [here](https://drive.google.com/file/d/1Jy3yCdbatgXa5YYIdTCRrSV0S9V5g1rn/view?usp=sharing).
-   - For Darknet53, download `darknet53.pth` from [here](https://drive.google.com/file/d/17Y431j4sagFpSReuPNoFcj9h7azDTZFf/view?usp=sharing).
+   - For Resnet101, download `resnet101_reducedfc.pth` from [here](https://huggingface.co/dbolya/yolact-initial-weights/resolve/main/resnet101_reducedfc.pth?download=true).
+   - For Resnet50, download `resnet50-19c8e357.pth` from [here](https://huggingface.co/dbolya/yolact-initial-weights/resolve/main/resnet50-19c8e357.pth?download=true).
+   - For Darknet53, download `darknet53.pth` from [here](https://huggingface.co/dbolya/yolact-initial-weights/resolve/main/darknet53.pth?download=true).
  - Run one of the training commands below.
    - Note that you can press ctrl+c while training and it will save an `*_interrupt.pth` file at the current iteration.
    - All weights are saved in the `./weights` directory by default with the file name `<config>_<epoch>_<iter>.pth`.
