@@ -12,7 +12,7 @@ from utils.augmentations import Resize
 from utils import timer
 from .box_utils import crop, sanitize_coordinates
 
-def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear',
+def postprocess(det_output, w, h, maskiou_net=None, batch_idx=0, interpolation_mode='bilinear',
                 visualize_lincomb=False, crop_masks=True, score_threshold=0):
     """
     Postprocesses the output of Yolact on testing mode into a format that makes sense,
@@ -31,10 +31,12 @@ def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear',
         - boxes   [num_det, 4]: The bounding box for each detection in absolute point form.
         - masks   [num_det, h, w]: Full image masks for each detection.
     """
-    
     dets = det_output[batch_idx]
-    net = dets['net']
-    dets = dets['detection']
+    if not maskiou_net:
+        net = dets['net']
+        dets = dets['detection']
+    else:
+        dets = dets['detection']
 
     if dets is None:
         return [torch.Tensor()] * 4 # Warning, this is 4 copies of the same thing
@@ -79,7 +81,11 @@ def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear',
         if cfg.use_maskiou:
             with timer.env('maskiou_net'):                
                 with torch.no_grad():
-                    maskiou_p = net.maskiou_net(masks.unsqueeze(1))
+                    if maskiou_net is not None:
+                        maskiou_p = maskiou_net.run(None, {"input": masks.unsqueeze(1).numpy()})
+                        maskiou_p = torch.from_numpy(maskiou_p[0])
+                    else:
+                        maskiou_p = net.maskiou_net(masks.unsqueeze(1))
                     maskiou_p = torch.gather(maskiou_p, dim=1, index=classes.unsqueeze(1)).squeeze(1)
                     if cfg.rescore_mask:
                         if cfg.rescore_bbox:

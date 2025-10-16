@@ -5,7 +5,7 @@ import pickle
 from collections import OrderedDict
 
 try:
-    from dcn_v2 import DCN
+    from mmcv.ops import ModulatedDeformConv2dPack as DCN
 except ImportError:
     def DCN(*args, **kwdargs):
         raise Exception('DCN could not be imported. If you want to use YOLACT++ models, compile DCN. Check the README for instructions.')
@@ -21,9 +21,6 @@ class Bottleneck(nn.Module):
         if use_dcn:
             self.conv2 = DCN(planes, planes, kernel_size=3, stride=stride,
                                 padding=dilation, dilation=dilation, deformable_groups=1)
-            self.conv2.bias.data.zero_()
-            self.conv2.conv_offset_mask.weight.data.zero_()
-            self.conv2.conv_offset_mask.bias.data.zero_()
         else:
             self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=stride,
                                 padding=dilation, bias=False, dilation=dilation)
