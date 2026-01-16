@@ -15,12 +15,15 @@ def gpu_info() -> list:
     gpu_count = len(gpus)
 
     lines = _run_cmd(['nvidia-smi'])
-    selected_lines = lines[7:7 + 3 * gpu_count]
+
+    selected_lines = lines[7:7 + 3 * gpu_count + 1]
+    selected_lines = [s for s in selected_lines if 'MiB' in s]
+
     for i in range(gpu_count):
         mem_used, mem_total = [int(m.strip().replace('MiB', '')) for m in
-                               selected_lines[3 * i + 1].split('|')[2].strip().split('/')]
+                               selected_lines[i].split('|')[2].strip().split('/')]
         
-        pw_tmp_info, mem_info, util_info = [x.strip() for x in selected_lines[3 * i + 1].split('|')[1:-1]]
+        pw_tmp_info, mem_info, util_info = [x.strip() for x in selected_lines[i].split('|')[1:-1]]
         
         pw_tmp_info = [x[:-1] for x in pw_tmp_info.split(' ') if len(x) > 0]
         fan_speed, temperature, pwr_used, pwr_cap = [int(pw_tmp_info[i]) for i in (0, 1, 3, 5)]
@@ -52,8 +55,6 @@ def visible_gpus() -> list:
         return list(range(len(gpu_info())))
     else:
         return [int(x.strip()) for x in os.environ['CUDA_VISIBLE_DEVICES'].split(',')]
-
-
 
 
 def _run_cmd(cmd:list) -> list:
