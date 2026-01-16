@@ -207,7 +207,7 @@ class Detect(object):
             
             preds = torch.cat([boxes[conf_mask], cls_scores[:, None]], dim=1).cpu().numpy()
             keep = cnms(preds, iou_threshold)
-            keep = torch.Tensor(keep, device=boxes.device).long()
+            keep = torch.Tensor(keep).to(boxes.device).long()
 
             idx_lst.append(idx[keep])
             cls_lst.append(keep * 0 + _cls)
