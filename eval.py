@@ -4,7 +4,7 @@ from utils.augmentations import BaseTransform, FastBaseTransform, Resize
 from utils.functions import MovingAverage, ProgressBar
 from layers.box_utils import jaccard, center_size, mask_iou
 from utils import timer
-from utils.functions import SavePath
+from utils.functions import SavePath, download_file_from_google_drive
 from layers.output_utils import postprocess, undo_image_transformation
 import pycocotools
 
@@ -1045,6 +1045,38 @@ def print_maps(all_maps):
     print()
 
 
+def check_model(model_path):
+    model_path = str(model_path)
+    print(model_path)
+
+    model_url_dict = {"yolact_resnet50_54_800000.pth": "1yp7ZbbDwvMiFJEq4ptVKTYTI2VeRDXl0",
+                      "yolact_darknet53_54_800000.pth": "1dukLrTzZQEuhzitGkHaGjphlmRJOjVnP",
+                      "yolact_base_54_800000.pth": "1UYy3dMapbH1BnmtZU4WH1zbYgOzzHHf_",
+                      "yolact_im700_54_800000.pth": "1lE4Lz5p25teiXV-6HdTiOJSnS7u7GBzg",
+                      "yolact_plus_resnet50_54_800000.pth": "1ZPu1YR2UzGHQD0o1rEqy-j5bmEm3lbyP",
+                      "yolact_plus_base_54_800000.pth": "15id0Qq5eqRbkD-N3ZjDZXdCvRyIaHpFB"
+                      }
+
+    if not os.path.isfile(model_path):
+        print("Model not found, trying to download it...")
+        url = ''
+
+        # Create folder if missing
+        folder=os.path.dirname(model_path)
+        if not os.path.exists(folder):
+            os.makedirs(folder)
+
+        # Look for the model URL from the known models
+        for model_candidate in model_url_dict:
+            if model_candidate in model_path:
+                url = model_url_dict[model_candidate]
+                break
+        if url == '':
+            print("No candidate for download found")
+            exit(1)
+        output = model_path
+        download_file_from_google_drive(url, output)
+
 
 if __name__ == '__main__':
     parse_args()
@@ -1058,6 +1090,7 @@ if __name__ == '__main__':
         args.trained_model = SavePath.get_latest('weights/', cfg.name)
 
     if args.config is None:
+        check_model(args.trained_model)
         model_path = SavePath.from_str(args.trained_model)
         # TODO: Bad practice? Probably want to do a name lookup instead.
         args.config = model_path.model_name + '_config'

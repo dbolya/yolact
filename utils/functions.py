@@ -5,6 +5,7 @@ import math
 from collections import deque
 from pathlib import Path
 from layers.interpolate import InterpolateModule
+import requests
 
 class MovingAverage():
     """ Keeps an average window of the specified number of items. """
@@ -211,3 +212,28 @@ def make_net(in_channels, conf, include_last_relu=True):
         net = net[:-1]
 
     return nn.Sequential(*(net)), in_channels
+
+
+def download_file_from_google_drive(id, destination):
+    #https://stackoverflow.com/a/39225039/7036639
+    def get_confirm_token(response):
+        for key, value in response.cookies.items():
+            if key.startswith('download_warning'):
+                return value
+        return None
+
+    def save_response_content(response, destination):
+        CHUNK_SIZE = 32768
+        with open(destination, "wb") as f:
+            for chunk in response.iter_content(CHUNK_SIZE):
+                if chunk: # filter out keep-alive new chunks
+                    f.write(chunk)
+
+    URL = "https://docs.google.com/uc?export=download"
+    session = requests.Session()
+    response = session.get(URL, params = { 'id' : id }, stream = True)
+    token = get_confirm_token(response)
+    if token:
+        params = { 'id' : id, 'confirm' : token }
+        response = session.get(URL, params = params, stream = True)
+    save_response_content(response, destination)
