@@ -470,6 +470,10 @@ class Yolact(nn.Module):
         self.detect = Detect(cfg.num_classes, bkg_label=0, top_k=cfg.nms_top_k,
             conf_thresh=cfg.nms_conf_thresh, nms_thresh=cfg.nms_thresh)
 
+        # Warn on inappropriate parameters
+        if cfg.max_size < 350:
+          print("Segmentation does not work with too low-res images. Try providing input images with size atleast 350pix.")
+
     def save_weights(self, path):
         """ Saves the model's weights using compression because the file sizes were getting too big. """
         torch.save(self.state_dict(), path)
