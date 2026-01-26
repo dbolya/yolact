@@ -1,32 +1,18 @@
-# Installs dependencies for YOLACT managed by Anaconda. 
-# Advantage is you get working CUDA+cuDNN+pytorch+torchvison versions.
+# Lightweight conda environment for YOLACT.
 #
-# TODO: you must additionally install nVidia drivers, eg. on Ubuntu linux 
-# `apt install nvidia-driver-440` (change the 440 for whatever version you need/have).
-#
+# Note: this environment does not try to pin CUDA / PyTorch builds. Install a
+# system-appropriate `torch` / `torchvision` first (CUDA vs CPU), then install
+# this repo as a package.
 name: yolact-env
-#prefix: /your/custom/path/envs/yolact-env
 channels:
   - conda-forge
-  - pytorch
   - defaults
 dependencies:
-  - python==3.7
+  - python==3.12
   - pip
-  - cython 
-  - pytorch::torchvision
-  - pytorch::pytorch >=1.0.1
-  - cudatoolkit
-  - cudnn
-  - pytorch::cuda100
-  - matplotlib
-  - git # to download COCO dataset
-  - curl # to download COCO dataset
+  - git   # to download COCO dataset
+  - curl  # to download COCO dataset
   - unzip # to download COCO dataset
   - conda-forge::bash # to download COCO dataset
   - pip:
-    - opencv-python 
-    - pillow <7.0 # bug PILLOW_VERSION in torchvision, must be < 7.0 until torchvision is upgraded
-    - pycocotools 
-    - PyQt5 # needed on KDE/Qt envs for matplotlib
-
+    - -e .

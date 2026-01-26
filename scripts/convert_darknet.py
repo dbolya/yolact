@@ -1,4 +1,4 @@
-from backbone import DarkNetBackbone
+from yolact.backbone import DarkNetBackbone
 import h5py
 import torch
 
@@ -45,4 +45,3 @@ for i, layer_key in zip(range(1, len(layer_keys) + 1), layer_keys):
 			sd[weight_key] = yolo_weight
 
 torch.save(sd, 'weights/darknet53.pth')
-

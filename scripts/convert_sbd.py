@@ -40,7 +40,7 @@ for t in types:
         seg = ann[0]
 
         for idx in range(len(classes)):
-            mask = (seg == (idx + 1)).astype(np.float)
+            mask = (seg == (idx + 1)).astype(np.float32)
 
             rle = pycocotools.mask.encode(np.asfortranarray(mask.astype(np.uint8)))
             rle['counts'] = rle['counts'].decode('ascii')
@@ -85,4 +85,3 @@ for t in types:
             'licenses': {},
             'categories': categories
         }, f)
-

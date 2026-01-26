@@ -1,6 +1,6 @@
 """
 Runs the coco-supplied cocoeval script to evaluate detections
-outputted by using the output_coco_json flag in eval.py.
+outputted by using the output_coco_json flag in yolact-eval.
 """
 
 
@@ -44,6 +44,5 @@ if __name__ == '__main__':
 		bbox_eval.evaluate()
 		bbox_eval.accumulate()
 		bbox_eval.summarize()
-
 
 

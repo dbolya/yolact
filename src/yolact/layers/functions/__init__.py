@@ -1,4 +1,3 @@
 from .detection import Detect
 
-
-__all__ = ['Detect']
+__all__ = ["Detect"]

@@ -28,8 +28,8 @@ def render():
 	if disable_render:
 		return
 
-	x = np.tile(np.array(list(range(grid_w)), dtype=np.float).reshape(1, grid_w), [grid_h, 1]) - grid_w * center_x
-	y = np.tile(np.array(list(range(grid_h)), dtype=np.float).reshape(grid_h, 1), [1, grid_w]) - grid_h * center_y
+	x = np.tile(np.array(list(range(grid_w)), dtype=np.float32).reshape(1, grid_w), [grid_h, 1]) - grid_w * center_x
+	y = np.tile(np.array(list(range(grid_h)), dtype=np.float32).reshape(grid_h, 1), [1, grid_w]) - grid_h * center_y
 
 	x /= scale
 	y /= scale

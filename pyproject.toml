@@ -1,0 +1,99 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "yolact"
+version = "1.2.0"
+description = "YOLACT: real-time instance segmentation"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = "==3.12.*"
+dependencies = [
+  "torch>=2.9.1",
+  "torchvision",
+  "numpy",
+  "opencv-python",
+  "pillow",
+  "pycocotools",
+  "matplotlib",
+]
+
+[project.optional-dependencies]
+dev = [
+  "basedpyright>=1.28.1",
+  "ruff>=0.9.9",
+]
+
+[project.scripts]
+yolact-train = "yolact.cli.train:main"
+yolact-eval = "yolact.cli.eval:main"
+yolact-coco-eval = "yolact.cli.coco_eval:main"
+
+[project.urls]
+Repository = "https://github.com/dbolya/yolact"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"yolact.data" = ["grid.npy"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+extend-exclude = ["external", "scripts", "web/scripts"]
+
+[tool.ruff.lint]
+select = [
+  "E",        # pycodestyle errors
+  "F",        # pyflakes
+  "W",        # pycodestyle warnings
+  "I",        # isort
+  "UP",       # pyupgrade
+  "B",        # flake8-bugbear
+  "PLR0402",  # from-import instead of alias
+]
+ignore = [
+  "E302",  # expected 2 blank lines
+  "E305",  # expected 2 blank lines after class/function
+  "E501",  # line length (formatter handles)
+]
+fixable = ["ALL"]
+
+[tool.ruff.format]
+docstring-code-format = true
+docstring-code-line-length = "dynamic"
+
+[tool.ruff.lint.per-file-ignores]
+"**/__init__.py" = [
+  "PLC0414", # useless-import-alias
+]
+"src/yolact/cli/**/*.py" = [
+  "INP001", # implicit-namespace-package
+]
+
+[tool.basedpyright]
+pythonVersion = "3.12"
+venv = ".venv"
+include = ["src"]
+exclude = ["external", "scripts", "web"]
+typeCheckingMode = "off"
+reportMissingTypeStubs = false
+reportMissingImports = false
+reportMissingModuleSource = false
+reportAttributeAccessIssue = false
+reportArgumentType = false
+reportCallIssue = false
+reportUnknownArgumentType = false
+reportUnknownLambdaType = false
+reportUnknownMemberType = false
+reportUnknownParameterType = false
+reportUnknownVariableType = false
+allowedUntypedLibraries = [
+  "torch",
+  "torchvision",
+]

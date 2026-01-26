@@ -38,13 +38,12 @@ Some examples from our YOLACT base model (33.5 fps on a Titan Xp and 29.8 mAP on
    - Using [Anaconda](https://www.anaconda.com/distribution/)
      - Run `conda env create -f environment.yml`
    - Manually with pip
-     - Set up a Python3 environment (e.g., using virtenv).
-     - Install [Pytorch](http://pytorch.org/) 1.0.1 (or higher) and TorchVision.
-     - Install some other packages:
+     - Create a Python 3.12+ environment (e.g., using `venv`).
+     - Install PyTorch / TorchVision for your system (see the PyTorch website).
+     - Install YOLACT as a package:
        ```Shell
-       # Cython needs to be installed before pycocotools
-       pip install cython
-       pip install opencv-python pillow pycocotools matplotlib 
+       pip install -U pip
+       pip install -e .
        ```
  - If you'd like to train YOLACT, download the COCO dataset and the 2014/2017 annotations. Note that this script will take a while and dump 21gb of files into `./data/coco`.
    ```Shell
@@ -84,54 +83,54 @@ To evalute the model, put the corresponding weights file in the `./weights` dire
 ```Shell
 # Quantitatively evaluate a trained model on the entire validation set. Make sure you have COCO downloaded as above.
 # This should get 29.92 validation mask mAP last time I checked.
-python eval.py --trained_model=weights/yolact_base_54_800000.pth
+yolact-eval --trained_model=weights/yolact_base_54_800000.pth
 
 # Output a COCOEval json to submit to the website or to use the run_coco_eval.py script.
 # This command will create './results/bbox_detections.json' and './results/mask_detections.json' for detection and instance segmentation respectively.
-python eval.py --trained_model=weights/yolact_base_54_800000.pth --output_coco_json
+yolact-eval --trained_model=weights/yolact_base_54_800000.pth --output_coco_json
 
-# You can run COCOEval on the files created in the previous command. The performance should match my implementation in eval.py.
-python run_coco_eval.py
+# You can run COCOEval on the files created in the previous command.
+yolact-coco-eval
 
 # To output a coco json file for test-dev, make sure you have test-dev downloaded from above and go
-python eval.py --trained_model=weights/yolact_base_54_800000.pth --output_coco_json --dataset=coco2017_testdev_dataset
+yolact-eval --trained_model=weights/yolact_base_54_800000.pth --output_coco_json --dataset=coco2017_testdev_dataset
 ```
 ## Qualitative Results on COCO
 ```Shell
 # Display qualitative results on COCO. From here on I'll use a confidence threshold of 0.15.
-python eval.py --trained_model=weights/yolact_base_54_800000.pth --score_threshold=0.15 --top_k=15 --display
+yolact-eval --trained_model=weights/yolact_base_54_800000.pth --score_threshold=0.15 --top_k=15 --display
 ```
 ## Benchmarking on COCO
 ```Shell
 # Run just the raw model on the first 1k images of the validation set
-python eval.py --trained_model=weights/yolact_base_54_800000.pth --benchmark --max_images=1000
+yolact-eval --trained_model=weights/yolact_base_54_800000.pth --benchmark --max_images=1000
 ```
 ## Images
 ```Shell
 # Display qualitative results on the specified image.
-python eval.py --trained_model=weights/yolact_base_54_800000.pth --score_threshold=0.15 --top_k=15 --image=my_image.png
+yolact-eval --trained_model=weights/yolact_base_54_800000.pth --score_threshold=0.15 --top_k=15 --image=my_image.png
 
 # Process an image and save it to another file.
-python eval.py --trained_model=weights/yolact_base_54_800000.pth --score_threshold=0.15 --top_k=15 --image=input_image.png:output_image.png
+yolact-eval --trained_model=weights/yolact_base_54_800000.pth --score_threshold=0.15 --top_k=15 --image=input_image.png:output_image.png
 
 # Process a whole folder of images.
-python eval.py --trained_model=weights/yolact_base_54_800000.pth --score_threshold=0.15 --top_k=15 --images=path/to/input/folder:path/to/output/folder
+yolact-eval --trained_model=weights/yolact_base_54_800000.pth --score_threshold=0.15 --top_k=15 --images=path/to/input/folder:path/to/output/folder
 ```
 ## Video
 ```Shell
 # Display a video in real-time. "--video_multiframe" will process that many frames at once for improved performance.
 # If you want, use "--display_fps" to draw the FPS directly on the frame.
-python eval.py --trained_model=weights/yolact_base_54_800000.pth --score_threshold=0.15 --top_k=15 --video_multiframe=4 --video=my_video.mp4
+yolact-eval --trained_model=weights/yolact_base_54_800000.pth --score_threshold=0.15 --top_k=15 --video_multiframe=4 --video=my_video.mp4
 
 # Display a webcam feed in real-time. If you have multiple webcams pass the index of the webcam you want instead of 0.
-python eval.py --trained_model=weights/yolact_base_54_800000.pth --score_threshold=0.15 --top_k=15 --video_multiframe=4 --video=0
+yolact-eval --trained_model=weights/yolact_base_54_800000.pth --score_threshold=0.15 --top_k=15 --video_multiframe=4 --video=0
 
 # Process a video and save it to another file. This uses the same pipeline as the ones above now, so it's fast!
-python eval.py --trained_model=weights/yolact_base_54_800000.pth --score_threshold=0.15 --top_k=15 --video_multiframe=4 --video=input_video.mp4:output_video.mp4
+yolact-eval --trained_model=weights/yolact_base_54_800000.pth --score_threshold=0.15 --top_k=15 --video_multiframe=4 --video=input_video.mp4:output_video.mp4
 ```
-As you can tell, `eval.py` can do a ton of stuff. Run the `--help` command to see everything it can do.
+As you can tell, `yolact-eval` can do a ton of stuff. Run the `--help` command to see everything it can do.
 ```Shell
-python eval.py --help
+yolact-eval --help
 ```
 
 
@@ -146,16 +145,16 @@ By default, we train on COCO. Make sure to download the entire dataset using the
    - All weights are saved in the `./weights` directory by default with the file name `<config>_<epoch>_<iter>.pth`.
 ```Shell
 # Trains using the base config with a batch size of 8 (the default).
-python train.py --config=yolact_base_config
+yolact-train --config=yolact_base_config
 
 # Trains yolact_base_config with a batch_size of 5. For the 550px models, 1 batch takes up around 1.5 gigs of VRAM, so specify accordingly.
-python train.py --config=yolact_base_config --batch_size=5
+yolact-train --config=yolact_base_config --batch_size=5
 
 # Resume training yolact_base with a specific weight file and start from the iteration specified in the weight file's name.
-python train.py --config=yolact_base_config --resume=weights/yolact_base_10_32100.pth --start_iter=-1
+yolact-train --config=yolact_base_config --resume=weights/yolact_base_10_32100.pth --start_iter=-1
 
 # Use the help option to see a description of all available command line arguments
-python train.py --help
+yolact-train --help
 ```
 
 ## Multi-GPU Support
@@ -170,7 +169,7 @@ YOLACT now supports multiple GPUs seamlessly during training:
    - If you want to allocate the images per GPU specific for different GPUs, you can use `--batch_alloc=[alloc]` where [alloc] is a comma seprated list containing the number of images on each GPU. This must sum to `batch_size`.
 
 ## Logging
-YOLACT now logs training and validation information by default. You can disable this with `--no_log`. A guide on how to visualize these logs is coming soon, but now you can look at `LogVizualizer` in `utils/logger.py` for help.
+YOLACT now logs training and validation information by default. You can disable this with `--no_log`. A guide on how to visualize these logs is coming soon, but now you can look at `LogVizualizer` in `src/yolact/utils/logger.py` for help.
 
 ## Pascal SBD
 We also include a config for training on Pascal SBD annotations (for rapid experimentation or comparing with other methods). To train on Pascal SBD, proceed with the following steps:
@@ -191,7 +190,7 @@ You can also train on your own dataset by following these steps:
    - `liscense`
    - Under `image`: `license, flickr_url, coco_url, date_captured`
    - `categories` (we use our own format for categories, see below)
- - Create a definition for your dataset under `dataset_base` in `data/config.py` (see the comments in `dataset_base` for an explanation of each field):
+ - Create a definition for your dataset under `dataset_base` in `src/yolact/data/config.py` (see the comments in `dataset_base` for an explanation of each field):
 ```Python
 my_custom_dataset = dataset_base.copy({
     'name': 'My Dataset',
@@ -208,7 +207,7 @@ my_custom_dataset = dataset_base.copy({
 ```
  - A couple things to note:
    - Class IDs in the annotation file should start at 1 and increase sequentially on the order of `class_names`. If this isn't the case for your annotation file (like in COCO), see the field `label_map` in `dataset_base`.
-   - If you do not want to create a validation split, use the same image path and annotations file for validation. By default (see `python train.py --help`), `train.py` will output validation mAP for the first 5000 images in the dataset every 2 epochs.
+   - If you do not want to create a validation split, use the same image path and annotations file for validation. By default (see `yolact-train --help`), training will output validation mAP for the first 5000 images in the dataset every 2 epochs.
  - Finally, in `yolact_base_config` in the same file, change the value for `'dataset'` to `'my_custom_dataset'` or whatever you named the config object above. Then you can use any of the training commands in the previous section.
 
 #### Creating a Custom Dataset from Scratch
